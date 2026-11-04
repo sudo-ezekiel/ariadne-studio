@@ -33,9 +33,6 @@ anywhere Maestro runs. Nothing in it needs Ariadne.
 
 ## Install
 
-> **The npm package is not published yet**, so `npx ariadne-studio` does not work today. The desktop
-> app is on the [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) page.
-
 You need an Android emulator or a USB phone, and `adb` from the Android SDK platform-tools.
 Run also needs the
 [Maestro CLI](https://docs.maestro.dev/maestro-cli/how-to-install-maestro-cli) and Java 17 or

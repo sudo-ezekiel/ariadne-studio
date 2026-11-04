@@ -86,10 +86,6 @@ From now on, work on `public-main`. Never merge `main` into it.
 2. **Check the release workflow** on the next tag. For v0.1.0 its macOS job never got a machine and
    the draft step was skipped, so the release was made by hand from that run's files. macOS is now
    out of the matrix, and the draft step has not yet run for real.
-3. **Remove the "not published" notes** once the first release is out, in `README.md`,
-   `site/index.html`, `apps/docs/guides/install.md` and `apps/docs/guides/introduction.md`. In
-   `site/index.html`, point the download link and `downloadUrl` back at `releases/latest`, then
-   publish the site with `pnpm site:deploy`.
 
 ## Every release
 
@@ -136,5 +132,8 @@ From now on, work on `public-main`. Never merge `main` into it.
     npm publish ariadne-studio-0.1.1.tgz
     ```
 
-    This needs an npm login on the `ariadne-studio` package.
+    This needs an npm login on the `ariadne-studio` package and a passkey on that account (npm
+    no longer accepts new authenticator apps). Run it in a real terminal: npm prints a link to
+    approve on the device that holds the passkey, and without a terminal it refuses with a 403.
+    The new version can take a few minutes to appear.
 11. **Check it landed.** `npx ariadne-studio@0.1.1 --version` from an empty folder.

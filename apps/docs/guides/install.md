@@ -15,10 +15,6 @@ Ariadne Studio comes three ways. All three run the same studio and read and writ
 | A developer who wants to try it | the [npm package](#npm-package): `npx ariadne-studio` |
 | Working on Ariadne itself | [the repository](/contribute/develop): `pnpm dev` |
 
-::: info The npm package is not published yet
-`npx ariadne-studio` does not work today. The desktop app is on the [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) page, and there is no macOS build yet.
-:::
-
 ## Prerequisites
 
 - **An Android emulator or a USB phone** with USB debugging, visible in `adb devices`.

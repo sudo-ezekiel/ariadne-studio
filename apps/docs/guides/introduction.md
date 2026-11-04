@@ -82,6 +82,6 @@ Ariadne runs on your machine against your own emulator or phone, and it has no a
 
 ## Status
 
-Ariadne is early, and it is Android only. The desktop app is on the [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) page, and the npm package is not published yet, see [Install and set up](/guides/install).
+Ariadne is early, and it is Android only. The desktop app is on the [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) page and the npm package is `ariadne-studio`, see [Install and set up](/guides/install).
 
 Next: [Install and set up](/guides/install).
