@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DriverInstallRefused, type DeviceSnapshot, type MaestroRunner, type OpenOptions, type PhoneInput, type PhoneInputTools, type Point, type Rect, type XiaomiPhone } from '@ariadne/core';
 import { buildServer } from '../src/server/index.ts';
 import { checkSetup, type SetupTools } from '../src/server/setup.ts';
+import { defaultInstallIo, ToolInstaller } from '../src/server/tool-install.ts';
 import type { DeviceLike } from '../src/server/state.ts';
 
 type Node = DeviceSnapshot['nodes'][number];
@@ -1059,6 +1060,8 @@ describe('setup check marks Xiaomi phones', () => {
       spawnDetached: () => undefined,
       androidHome: () => '/sdk',
       findMaestro: () => '/opt/maestro/bin/maestro',
+      javaBin: () => 'java',
+      installer: new ToolInstaller(defaultInstallIo(() => '/sdk', {}, 'linux', 'x64')),
       platform: 'linux',
       path: '',
       exists: (candidate) => candidate === ADB,

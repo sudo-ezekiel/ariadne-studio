@@ -638,6 +638,26 @@ button.menu-item {
   height: 100%;
 }
 
+/* A secure screen's picture is black, so its elements stand in for it. */
+.secure-element {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, #ffffff 35%, transparent);
+  border-radius: 3px;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 1.15;
+  pointer-events: none;
+}
+
+.secure-element span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Outlines are drawn inside the element so the rounded screen does not clip them. */
 .outline {
   position: absolute;
@@ -2285,6 +2305,126 @@ button.icon-button {
 .avds button {
   height: 26px;
   font-size: 12px;
+}
+
+.walk {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  list-style: none;
+  overflow: hidden;
+}
+
+.walk-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.walk-step:last-child {
+  border-bottom: none;
+}
+
+.walk-now {
+  background: var(--panel-2);
+}
+
+.walk-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.walk-now .walk-mark {
+  background: var(--navy);
+  color: var(--on-navy);
+}
+
+.walk-done .walk-mark {
+  background: var(--pass-soft);
+  color: var(--pass);
+}
+
+.walk-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.walk-title {
+  font-weight: 600;
+}
+
+.walk-later .walk-title {
+  color: var(--ink-3);
+}
+
+.walk-done .walk-title {
+  color: var(--ink-2);
+}
+
+.walk-body p {
+  margin: 6px 0 0;
+}
+
+.walk-guide {
+  margin-top: 8px;
+}
+
+.walk-guide li {
+  margin-bottom: 6px;
+}
+
+.tools-panel {
+  margin-top: 10px;
+}
+
+.tools-panel > p {
+  margin: 8px 0 0;
+}
+
+.tools-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.tool-busy {
+  background: var(--panel-2);
+}
+
+.tool-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin-top: 6px;
+  accent-color: var(--navy-text);
+}
+
+.setup-more {
+  margin-top: 16px;
+}
+
+.setup-more summary {
+  color: var(--sea);
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .guide-tabs {

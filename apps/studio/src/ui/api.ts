@@ -27,6 +27,7 @@ import type {
   StepPatch,
   SuiteView,
   SwipeRequest,
+  ToolInstallStatus,
 } from '../shared/api-types.ts';
 
 export class ApiError extends Error {
@@ -114,7 +115,10 @@ export const api = {
   runAll: (retryFailed: boolean) => request<SuiteView>('POST', '/api/suite/run', { retryFailed }),
   stopSuite: () => request<SuiteView>('POST', '/api/suite/stop'),
   currentSuite: () => request<SuiteView | null>('GET', '/api/suite/current'),
+  refreshScreen: () => request<ScreenState>('POST', '/api/screen/refresh'),
   setup: () => request<SetupInfo>('GET', '/api/setup'),
+  installStatus: () => request<ToolInstallStatus>('GET', '/api/setup/install'),
+  startInstall: () => request<ToolInstallStatus>('POST', '/api/setup/install', { acceptTerms: true }),
   startEmulator: (name: string) => request<{ ok: true; name: string }>('POST', '/api/setup/emulator', { name }),
   caseExportUrl: (caseId: string, format: ExportFormat) => `${caseUrl(caseId)}/export?format=${format}`,
   projectExportUrl: (format: ExportFormat) => `/api/export?format=${format}`,

@@ -1,6 +1,6 @@
 // What a first start does on Windows, with no phone attached, for the CI job on
 // a real Windows machine. The CLI spawns adb and agent-device's daemon there,
-// and neither has been seen working on Windows: under Wine the daemon stalled.
+// and the daemon can stall at start: under Wine it always did.
 // Starts the built CLI, asks the questions the studio asks when it opens, and
 // fails if any stays unanswered.
 //   pnpm --filter ariadne-studio build && node scripts/windows-check.mjs

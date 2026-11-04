@@ -17,6 +17,7 @@ import {
   TouchReader,
   describeDeviceError,
   focusedField,
+  SYSTEM_UI,
   foregroundApp,
   percentOfScreen,
   readGesture,
@@ -58,7 +59,6 @@ const MAX_SNAPSHOT_FAILURES = 25;
 /** A touch read against a snapshot older than this may be against an old screen. */
 const STALE_SNAPSHOT_MS = 1000;
 /** The notification shade: not part of the app, though it covers it. */
-const SYSTEM_UI = 'com.android.systemui';
 
 type SeenScreen = PhoneScreen & { app?: string; outside: boolean };
 

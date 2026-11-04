@@ -39,6 +39,7 @@ type Props = {
   onBack: () => void;
   onScroll: (direction: ScrollDirection) => void;
   onRelaunch: () => void;
+  onRefresh: () => void;
   onHideKeyboard: () => void;
   onOpenLink: (url: string) => void;
   onLongPress: (point: Point) => void;
@@ -68,6 +69,45 @@ function boxStyle(rect: Rect, screen: ScreenState) {
     width: `${(rect.width / screen.width) * 100}%`,
     height: `${(rect.height / screen.height) * 100}%`,
   };
+}
+
+/** Browsers by the name people know them by; any other app is shown by its package. */
+const BROWSERS: Record<string, string> = {
+  'com.android.chrome': 'Chrome',
+  'com.sec.android.app.sbrowser': 'Samsung Internet',
+  'org.mozilla.firefox': 'Firefox',
+  'com.microsoft.emmx': 'Edge',
+  'com.opera.browser': 'Opera',
+};
+
+/** Above the screen: when the phone is not on the app the case starts from. The app id is where a case starts, not a limit. */
+function ElsewhereNote({ elsewhere, appId }: { elsewhere: NonNullable<ScreenState['elsewhere']>; appId: string | undefined }) {
+  return (
+    <p className="phone-banner" role="status">
+      {elsewhere.home ? (
+        <>The phone is on its home screen, not in {appId}. Relaunch app brings it back.</>
+      ) : (
+        <>
+          {BROWSERS[elsewhere.app] ?? elsewhere.app} is in front, which is fine: an app that hands over to a website or another app is part of the case, so carry on here. The app id is only
+          where a case starts.
+        </>
+      )}
+    </p>
+  );
+}
+
+/** A secure screen's picture is black, so its elements are drawn where the picture would be. */
+function SecureElements({ screen }: { screen: ScreenState }) {
+  const shown = screen.nodes.filter((node) => node.rect && !node.systemBar && (node.label ?? node.contentDescription));
+  return (
+    <>
+      {shown.map((node, index) => (
+        <div key={node.ref ?? index} className="secure-element" style={boxStyle(node.rect!, screen)}>
+          <span>{node.label ?? node.contentDescription}</span>
+        </div>
+      ))}
+    </>
+  );
 }
 
 function caption(node: SnapshotNodeLite): string {
@@ -248,6 +288,17 @@ export function Mirror(props: Props) {
     <section className="mirror">
       <StageBar {...props} />
       {props.phonePrompt && <PhonePrompt when={props.phonePrompt} />}
+      {props.screen?.hidden && (
+        <p className="phone-banner phone-banner-prompt" role="status">
+          The phone's screen is off or locked, so there is nothing to record. Wake it and unlock it, and the screen comes back here by itself.
+        </p>
+      )}
+      {screen?.secure && (
+        <p className="phone-banner phone-banner-prompt" role="status">
+          This screen blocks screenshots, as banks and ID apps often do, so its picture stays black. Its text and buttons are drawn here instead: click them as usual. The step's screenshot will be black.
+        </p>
+      )}
+      {screen?.elsewhere && <ElsewhereNote elsewhere={screen.elsewhere} appId={props.appId} />}
       {usingPhone && (
         <p className={`phone-banner ${props.phone.paused ? 'phone-banner-paused' : ''}`} role="status">
           {props.phone.paused
@@ -275,6 +326,7 @@ export function Mirror(props: Props) {
               }}
             >
               <img src={screen.imageUrl} alt="Device screen" draggable={false} />
+              {screen.secure && <SecureElements screen={screen} />}
               {hover?.rect && !busy && (
                 <div className={`outline ${expectMode ? 'outline-expect' : 'outline-hover'}`} style={boxStyle(hover.rect, screen)} />
               )}
@@ -341,6 +393,9 @@ export function Mirror(props: Props) {
           </button>
         </form>
         <div className="mirror-controls">
+          <button type="button" onClick={props.onRefresh} disabled={!sessionOpen || busy} title="Look at the phone again now. The screen here also follows it by itself.">
+            Refresh
+          </button>
           <button type="button" onClick={props.onRelaunch} disabled={inputOff} title="Close the app and start it again">
             Relaunch app
           </button>

@@ -35,7 +35,7 @@ adb reports `no permissions`. Install your distribution's Android udev rules (`a
 
 ### No prompt and no device on a USB cable
 
-Use a cable that carries data, because some only charge. On Windows, install the phone maker's USB driver.
+Use a cable that carries data, because some only charge. On Windows, if the phone still does not show up, install its maker's USB driver, which needs admin rights.
 
 ### The first start on Windows takes over a minute
 
@@ -83,9 +83,23 @@ The screen only runs in portrait, such as the launcher. Rotate on a screen that 
 
 ## adb and the Android SDK
 
+### "The phone's screen is off or locked"
+
+Ariadne cannot see anything on the phone, so it does not press or record anything: a step recorded now would have no element and a black picture. Wake the phone and unlock it, and the screen comes back by itself. If nobody can reach the phone, the Power button under the screen still works. Turn on **Stay awake** in Developer options so it does not sleep in the middle of a recording.
+
+A screen that is black here because the app hides it from screenshots, as banking apps do, is different: its elements still come through, so it records as usual.
+
+### "Could not download ..." in Device setup
+
+Check the internet connection and press **Try again**. On a company computer, ask your IT team to allow `dl.google.com` and `github.com`, or use the manual steps under **All checks and manual steps**. A proxy can also get in the way: Ariadne does not use one.
+
+### "Ariadne downloaded ..., but Windows would not start it"
+
+The file arrived and passed its check, but Windows did not let it run. A company computer may block programs in user folders. Ask your IT team to allow the folder the message names. **Help > Show logs** has the reason Windows gave.
+
 ### Android tools (adb) not found
 
-Install Android Studio, then restart Ariadne. If the Android SDK is somewhere unusual, set `ANDROID_HOME` to it. Ariadne also reads `ANDROID_SDK_ROOT`, and looks in `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS and `%LOCALAPPDATA%\Android\Sdk` on Windows.
+On Windows, open **Device setup** and press **Agree and set up**. Otherwise install Android Studio, then restart Ariadne. If the Android SDK is somewhere unusual, set `ANDROID_HOME` to it. Ariadne also reads `ANDROID_SDK_ROOT`, and looks in `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS and `%LOCALAPPDATA%\Android\Sdk` on Windows.
 
 ### "The Android emulator is not installed."
 
@@ -99,7 +113,7 @@ Started from the Dock or a launcher, an app gets a bare `PATH`, so the app adds 
 
 ### "Maestro CLI not found"
 
-Install it from [Maestro's guide](https://docs.maestro.dev/maestro-cli/how-to-install-maestro-cli). The studio looks in `~/.maestro/bin` and on `PATH`, and on Windows in `C:\maestro\bin` too. Set `MAESTRO_BIN` to name the file. Recording works without Maestro.
+On Windows, **Device setup** can fetch it for you. Otherwise install it from [Maestro's guide](https://docs.maestro.dev/maestro-cli/how-to-install-maestro-cli). The studio looks in `~/.maestro/bin` and on `PATH`, and on Windows in `C:\maestro\bin` too. Set `MAESTRO_BIN` to name the file. Recording works without Maestro.
 
 ### "Could not run Maestro"
 

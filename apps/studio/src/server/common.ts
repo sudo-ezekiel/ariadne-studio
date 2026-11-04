@@ -1,14 +1,18 @@
 // Helpers shared by the route modules.
 import { createReadStream } from 'node:fs';
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { FastifyReply } from 'fastify';
 import {
   agentDeviceReplays,
+  SYSTEM_UI,
   caseToFlow,
+  foregroundApp,
+  looksLikeHomeApp,
   pointOnScreen,
   relocateFlow,
   replaySegments,
+  screenView,
   toMaestroYaml,
   type DirectAction,
   type MaestroFlow,
@@ -77,7 +81,11 @@ export async function projectEnv(state: ServerState): Promise<Record<string, str
 
 /** Captures the screen into `path` and makes it the latest screen. */
 export async function captureInto(state: ServerState, path: string): Promise<Latest> {
-  state.latest = await state.session.capture(path);
+  const capture = await state.session.capture(path);
+  const view = screenView(capture.nodes, await readFile(capture.screenshotPath).catch(() => new Uint8Array()));
+  const front = view === 'hidden' ? undefined : foregroundApp(capture);
+  const elsewhere = front && front !== state.session.appId && front !== SYSTEM_UI ? { app: front, home: looksLikeHomeApp(front) } : undefined;
+  state.latest = { ...capture, ...(view === 'hidden' ? { hidden: true } : {}), ...(view === 'secure' ? { secure: true } : {}), ...(elsewhere ? { elsewhere } : {}) };
   return state.latest;
 }
 

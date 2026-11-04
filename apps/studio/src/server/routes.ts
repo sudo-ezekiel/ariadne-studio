@@ -30,6 +30,7 @@ import {
   type PhoneKey,
   type Point,
   type TestCase,
+  hasAppElements,
 } from '@ariadne/core';
 import type {
   ActionResponse,
@@ -317,10 +318,29 @@ async function freshLatest(state: ServerState): Promise<Latest> {
   let latest = state.latest;
   if (!latest || Date.now() - Date.parse(latest.takenAt) > STALE_SNAPSHOT_MS) {
     const fresh = await state.session.snapshot();
+    // Nothing of an app: it needs a picture too, in case the phone went to sleep on this screen.
+    if (!hasAppElements(fresh.nodes)) return captureScratch(state);
     latest = { ...fresh, screenshotPath: latest?.screenshotPath ?? scratchScreenshot(state) };
     state.latest = latest;
   }
   return latest;
+}
+
+/**
+ * A press on a screen that shows nothing lands somewhere nobody can see, and
+ * would record a step with no element and a black picture. The click was aimed
+ * at that black picture too, so it is refused even if the phone has woken since.
+ */
+async function refuseHiddenScreen(state: ServerState): Promise<void> {
+  if (!state.latest?.hidden) return;
+  const now = await captureScratch(state);
+  throw new HttpError(
+    409,
+    'SCREEN_HIDDEN',
+    now.hidden
+      ? "The phone's screen is off or locked, so nothing was pressed or recorded. Wake it and unlock it, then try again."
+      : "The phone's screen is back. Nothing was pressed or recorded: have a look at it here, then try again.",
+  );
 }
 
 /**
@@ -334,6 +354,8 @@ async function recordedAction(
   kind?: CaseStep['kind'],
   text?: string,
 ): Promise<ActionResponse> {
+  // A key is not aimed at the screen, and Power is how a phone nobody can reach is woken.
+  if (kind !== 'pressKey') await refuseHiddenScreen(state);
   await act();
   let screenshotPath = scratchScreenshot(state);
   let step: CaseStep | undefined;
@@ -807,6 +829,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     requireSession(state);
     return enqueue(state, async () => {
       const latest = await freshLatest(state);
+      state.offered = latest;
       const candidates = expectationCandidates(latest.nodes, latest.viewport);
       const previous = state.editing?.mode === 'rerecord' ? state.editing.originalExpectations : [];
       const preselected = candidates
@@ -824,7 +847,8 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       const editing = state.editing;
       if (editing?.mode !== 'insert') {
         // Same snapshot as GET /api/case/candidates, so the same ids mean the same elements.
-        const candidates = state.latest ? expectationCandidates(state.latest.nodes, state.latest.viewport) : [];
+        const screen = state.offered ?? state.latest;
+        const candidates = screen ? expectationCandidates(screen.nodes, screen.viewport) : [];
         const chosen = picks.map((pick) => {
           const candidate = candidates[pick];
           if (!candidate) throw new HttpError(400, 'BAD_PICK', `There is no candidate ${pick} on the current screen.`);
@@ -848,6 +872,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       const saved = await saveCaseAndFlow(state, testCase);
       state.recorder = undefined;
       state.editing = undefined;
+      state.offered = undefined;
       return {
         caseId: testCase.id,
         flowPath: saved.flowPath,

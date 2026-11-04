@@ -17,6 +17,8 @@ Ariadne Studio comes three ways. All three run the same studio and read and writ
 
 ## Prerequisites
 
+On Windows, the studio can fetch adb, Java and Maestro for you: see [Set up this computer](#set-up-this-computer).
+
 - **An Android emulator or a USB phone** with USB debugging, visible in `adb devices`.
 - **The Android SDK platform-tools (`adb`)**, on `PATH` or in the Android SDK folder. Ariadne looks at `ANDROID_HOME` (or `ANDROID_SDK_ROOT`), then where Android Studio puts the SDK: `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS, `%LOCALAPPDATA%\Android\Sdk` on Windows.
 - **Java 17 or newer and the [Maestro CLI](https://docs.maestro.dev/maestro-cli/how-to-install-maestro-cli)**, to run cases. Recording works without them.
@@ -49,7 +51,7 @@ None are code signed yet, so macOS Gatekeeper and Windows SmartScreen warn on fi
 
 The Linux AppImage is tested end to end.
 
-The Windows build has only been run under Wine so far. The installer, the window, the studio server, Maestro's `maestro.bat` with awkward `.env` values, and stopping a run that timed out all work there. Wine lacks PowerShell, which agent-device uses on Windows to manage its background process, so connecting to a device and recording on Windows still need a real Windows machine to confirm.
+The Windows build has been tried on one real Windows 11 computer with a POCO F5 Pro over USB: installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and **Use the phone** have not been tried on Windows yet, so reports are welcome.
 
 The macOS build is configured but has not been built or tried.
 
@@ -67,7 +69,31 @@ It starts the studio on `http://127.0.0.1:4711` and opens it in the browser. Ctr
 
 ## Device setup
 
-**Device setup** checks everything above and walks you through what is missing. Open it from the Settings gear in the top bar, or from the link under Device. It checks again every few seconds while it is open, so plugging a phone in or allowing USB debugging shows up without a click.
+The first time you start the studio, **Device setup** opens by itself and takes you through it one step at a time: set up this computer, plug in your phone, allow this computer, connect. It checks again every few seconds, so each step moves on by itself when it is done. You can also open it from the Settings gear in the top bar, or from the link under Device.
+
+If the phone stays on "Allow USB debugging?" for 30 seconds, the guide shows what to do when the prompt does not come.
+
+### Set up this computer
+
+On Windows, **Agree and set up** fetches whatever is missing, so you need neither Android Studio nor a change to `PATH`:
+
+| Tool | Download | From |
+|---|---|---|
+| Android tools (`adb`) | 8 MB | Google |
+| Java 17 | 44 MB | Eclipse Temurin |
+| Maestro | 350 MB | Maestro's releases on GitHub |
+
+It needs no admin rights. Ariadne fetches one fixed version of each tool, checks the file against a fingerprint built into the app, and throws it away if it does not match. Then it starts the tool once to see that it runs. A tool you already have is left alone.
+
+The button accepts Google's [Android SDK terms](https://developer.android.com/studio/terms). They are why the Android tools are downloaded and not part of the installer.
+
+Recording works as soon as the Android tools are in, so you can carry on with the phone steps while Java and Maestro download.
+
+The Android tools go in `%LOCALAPPDATA%\Android\Sdk\platform-tools`, where Android Studio would put them. Java and Maestro go in `%LOCALAPPDATA%\Ariadne\tools` and are for Ariadne only. If that folder has letters outside plain ASCII, as with a Greek user name, they go in `%ProgramData%\Ariadne\tools` instead, because Java cannot always start from there. To remove them, delete those folders.
+
+On macOS and Linux, or if your company blocks the downloads, use the manual steps below.
+
+### All checks and manual steps
 
 ![The Device setup dialog with its checks](/shots/device-setup.png)
 
@@ -79,7 +105,7 @@ It lists:
 - Maestro, with the path it found. Recording works without it; Run needs it.
 - Java 17 or newer, for Maestro.
 
-Below the checks are two guides, **Emulator** and **Phone over USB**.
+Below the checks are two guides, **Phone over USB** and **Emulator**.
 
 ### Emulator
 
@@ -95,7 +121,7 @@ Below the checks are two guides, **Emulator** and **Phone over USB**.
 2. Turn on USB debugging in Settings, System, Developer options. Turn on Stay awake there too, so the screen does not lock in the middle of a recording.
 3. Plug the phone in with a cable that carries data. If the phone asks what the connection is for, choose File transfer.
 4. On the "Allow USB debugging?" prompt, tick "Always allow from this computer" and press Allow.
-5. Linux only: if Devices says the computer may not use the phone yet, install your distribution's Android udev rules (`android-udev` on Arch, `android-sdk-platform-tools-common` on Debian and Ubuntu), add yourself to the `adbusers` or `plugdev` group, then log out and back in. Windows needs the phone maker's USB driver. macOS needs nothing.
+5. Linux only: if Devices says the computer may not use the phone yet, install your distribution's Android udev rules (`android-udev` on Arch, `android-sdk-platform-tools-common` on Debian and Ubuntu), add yourself to the `adbusers` or `plugdev` group, then log out and back in. On Windows, if the phone does not show up, install its maker's USB driver, which needs admin rights. macOS needs nothing.
 6. Install the app, close the guide, pick the phone under Device, type the app id and press **Connect**. Keep the phone unlocked while you record.
 
 ### Xiaomi, Redmi and POCO phones

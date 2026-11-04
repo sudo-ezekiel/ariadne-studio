@@ -71,7 +71,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   // One line per request with timing; device actions take seconds, so this is
   // the first place to look when the studio feels slow.
   app.addHook('onResponse', async (request, reply) => {
-    if (request.url.startsWith('/api/screen/image') || request.url.startsWith('/api/evidence/')) return;
+    if (request.url.startsWith('/api/screen/image') || request.url.startsWith('/api/screen/refresh') || request.url.startsWith('/api/evidence/')) return;
     if (request.url.startsWith('/api/runs/')) return;
     if (!request.url.startsWith('/api/')) return;
     console.log(

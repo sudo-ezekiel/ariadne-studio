@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
+import { isPlainAscii, toolsJavaHome } from './maestro-bin.ts';
 import { parseMaestroRun, redactValues, type RunCommand } from './run-result.ts';
 import { spawnCommand } from './windows-command.ts';
 
@@ -53,15 +54,34 @@ function stopRun(child: ChildProcess): ReturnType<typeof setTimeout> | undefined
 /**
  * Maestro's environment. On Windows, Java writes to a pipe in the system code
  * page (cp1253 on Greek Windows), which would garble the output and keep a
- * non-ASCII .env value from being redacted, so it is told to write UTF-8.
- * maestro.bat passes MAESTRO_OPTS to java.
+ * non-ASCII .env value from being redacted, so it is told to write UTF-8. Java
+ * 19 and newer take stdout.encoding for that; Java 17, the one "Set up this
+ * computer" fetches, ignores it and only goes by file.encoding, and without it
+ * Greek text comes out as question marks. maestro.bat passes MAESTRO_OPTS to
+ * java. The Java runtime from "Set up this
+ * computer" wins over a JAVA_HOME the user has: it is only there because this
+ * computer had no Java new enough, and maestro.bat prefers JAVA_HOME to PATH.
  */
 export function maestroEnv(androidHome: string | undefined, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv {
-  const result: NodeJS.ProcessEnv = { ...env, ...(androidHome ? { ANDROID_HOME: androidHome } : {}) };
+  const javaHome = toolsJavaHome(env, platform);
+  const result: NodeJS.ProcessEnv = { ...env, ...(androidHome ? { ANDROID_HOME: androidHome } : {}), ...(javaHome ? { JAVA_HOME: javaHome } : {}) };
   if (platform === 'win32') {
-    result.MAESTRO_OPTS = [env.MAESTRO_OPTS, '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'].filter(Boolean).join(' ');
+    result.MAESTRO_OPTS = [env.MAESTRO_OPTS, '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'].filter(Boolean).join(' ');
   }
   return result;
+}
+
+/**
+ * A path as Maestro's command line should carry it. On Windows, Java reads its
+ * arguments in the system code page, so a folder that cannot spell, such as a
+ * Greek user name on English Windows, arrives as question marks and Maestro
+ * stops at once. Its working directory reaches it intact, so a path inside that
+ * folder goes relative. Everything else stays as it was.
+ */
+export function pathForMaestro(path: string, cwd: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform !== 'win32' || isPlainAscii(path)) return path;
+  const inside = win32.relative(cwd, path);
+  return isPlainAscii(inside) && !inside.startsWith('..') && !win32.isAbsolute(inside) ? inside : path;
 }
 
 /**
@@ -72,10 +92,10 @@ export function maestroEnv(androidHome: string | undefined, env: NodeJS.ProcessE
  */
 export async function runMaestro(options: RunMaestroOptions): Promise<MaestroRunResult> {
   await mkdir(options.debugDir, { recursive: true });
-  const args = ['--device', options.deviceId, 'test', '--no-ansi', '--debug-output', options.debugDir, '--flatten-debug-output'];
+  const args = ['--device', options.deviceId, 'test', '--no-ansi', '--debug-output', pathForMaestro(options.debugDir, options.cwd), '--flatten-debug-output'];
   if (options.keepDriver) args.push('--no-reinstall-driver');
   for (const [key, value] of Object.entries(options.env)) args.push('-e', `${key}=${value}`);
-  args.push(options.flowPath);
+  args.push(pathForMaestro(options.flowPath, options.cwd));
 
   const outputFile = join(options.debugDir, 'output.txt');
   const chunks: Buffer[] = [];

@@ -1,3 +1,4 @@
+export * from './device/hidden-screen.ts';
 export * from './device/hit-test.ts';
 export * from './device/phone-input.ts';
 export * from './device/phone-report.ts';
@@ -33,3 +34,4 @@ export * from './replay/maestro-run.ts';
 export * from './replay/run-result.ts';
 export * from './replay/run-video.ts';
 export * from './replay/suite.ts';
+export { spawnCommand } from './replay/windows-command.ts';

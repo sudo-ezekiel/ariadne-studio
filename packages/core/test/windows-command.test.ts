@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { maestroCandidates } from '../src/replay/maestro-bin.ts';
-import { maestroEnv } from '../src/replay/maestro-run.ts';
+import { maestroCandidates, toolsDir, toolsJavaHome } from '../src/replay/maestro-bin.ts';
+import { maestroEnv, pathForMaestro } from '../src/replay/maestro-run.ts';
 import { quoteWindowsArgument, spawnCommand } from '../src/replay/windows-command.ts';
 
 /** CommandLineToArgvW rules for the arguments after the program name. */
@@ -280,6 +280,75 @@ describe('spawnCommand', () => {
   });
 });
 
+describe('pathForMaestro', () => {
+  const project = 'C:\\Users\\Δημήτρης\\Documents\\Ariadne';
+
+  it('leaves a plain path alone', () => {
+    expect(pathForMaestro('C:\\Users\\jo\\Ariadne\\flows\\a.yaml', 'C:\\Users\\jo\\Ariadne', 'win32')).toBe('C:\\Users\\jo\\Ariadne\\flows\\a.yaml');
+  });
+
+  it('makes a path Java could not spell relative to the project', () => {
+    expect(pathForMaestro(`${project}\\runs\\run-1\\flow.yaml`, project, 'win32')).toBe('runs\\run-1\\flow.yaml');
+    expect(pathForMaestro(`${project}\\runs\\run-1`, project, 'win32')).toBe('runs\\run-1');
+  });
+
+  it('keeps the path when going relative would not help', () => {
+    const outside = 'C:\\Users\\Δημήτρης\\Elsewhere\\flow.yaml';
+    expect(pathForMaestro(outside, project, 'win32')).toBe(outside);
+    const greekInside = `${project}\\ροές\\a.yaml`;
+    expect(pathForMaestro(greekInside, project, 'win32')).toBe(greekInside);
+  });
+
+  it('changes nothing outside Windows, where Java reads paths as they are', () => {
+    expect(pathForMaestro('/home/Δημήτρης/project/flow.yaml', '/home/Δημήτρης/project', 'linux')).toBe('/home/Δημήτρης/project/flow.yaml');
+  });
+});
+
+describe('the tools of "Set up this computer"', () => {
+  const env = { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' };
+
+  it('live in the user\'s own folder on Windows, and nowhere elsewhere yet', () => {
+    expect(toolsDir(env, 'win32')).toBe('C:\\Users\\u\\AppData\\Local\\Ariadne\\tools');
+    expect(toolsDir({}, 'win32')).toBeUndefined();
+    expect(toolsDir(env, 'linux')).toBeUndefined();
+  });
+
+  it('stay out of a folder Java could not start from, such as a Greek user name on English Windows', () => {
+    const greek = { LOCALAPPDATA: 'C:\\Users\\Δημήτρης\\AppData\\Local', ProgramData: 'C:\\ProgramData' };
+    expect(toolsDir(greek, 'win32')).toBe('C:\\ProgramData\\Ariadne\\tools');
+    expect(toolsDir({ LOCALAPPDATA: greek.LOCALAPPDATA }, 'win32')).toBeUndefined();
+  });
+
+  it('do not mind a space in the user name', () => {
+    expect(toolsDir({ LOCALAPPDATA: 'C:\\Users\\Jo Bloggs\\AppData\\Local' }, 'win32')).toBe('C:\\Users\\Jo Bloggs\\AppData\\Local\\Ariadne\\tools');
+  });
+
+  it('are where Maestro is looked for, after the usual folders and before PATH', () => {
+    const candidates = maestroCandidates('win32', { ...env, PATH: 'C:\\a' }, 'C:\\Users\\u');
+    const tools = candidates.indexOf('C:\\Users\\u\\AppData\\Local\\Ariadne\\tools\\maestro\\bin\\maestro.bat');
+    expect(tools).toBeGreaterThan(candidates.indexOf('C:\\maestro\\bin\\maestro.bat'));
+    expect(tools).toBeLessThan(candidates.indexOf('C:\\a\\maestro.bat'));
+  });
+
+  it('leave JAVA_HOME alone when no Java was fetched', () => {
+    expect(toolsJavaHome(env, 'win32')).toBeUndefined();
+    expect(maestroEnv(undefined, { ...env, JAVA_HOME: 'C:\\mine' }, 'win32').JAVA_HOME).toBe('C:\\mine');
+  });
+
+  // The folder is a Windows path, so this needs a real one.
+  it.runIf(process.platform === 'win32')('win over a JAVA_HOME the user has, when Java was fetched', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'ariadne-java-'));
+    try {
+      const home = join(base, 'Ariadne', 'tools', 'java');
+      await mkdir(join(home, 'bin'), { recursive: true });
+      await writeFile(join(home, 'bin', 'java.exe'), '');
+      expect(maestroEnv(undefined, { LOCALAPPDATA: base, JAVA_HOME: 'C:\\old-java' }, 'win32').JAVA_HOME).toBe(home);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('maestroCandidates', () => {
   it('lists MAESTRO_BIN, the home install, then PATH entries on linux', () => {
     const env = { MAESTRO_BIN: '/opt/m/maestro', PATH: '/usr/bin:/usr/local/bin' };
@@ -352,11 +421,11 @@ describe('maestroEnv', () => {
   });
 
   it('sets MAESTRO_OPTS to UTF-8 output flags on win32', () => {
-    expect(maestroEnv(undefined, {}, 'win32').MAESTRO_OPTS).toBe('-Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8');
+    expect(maestroEnv(undefined, {}, 'win32').MAESTRO_OPTS).toBe('-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8');
   });
 
   it('appends to an existing MAESTRO_OPTS on win32', () => {
-    expect(maestroEnv(undefined, { MAESTRO_OPTS: '-Xmx2g' }, 'win32').MAESTRO_OPTS).toBe('-Xmx2g -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8');
+    expect(maestroEnv(undefined, { MAESTRO_OPTS: '-Xmx2g' }, 'win32').MAESTRO_OPTS).toBe('-Xmx2g -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8');
   });
 
   it.each<NodeJS.Platform>(['linux', 'darwin'])('leaves an absent MAESTRO_OPTS absent on %s', (platform) => {

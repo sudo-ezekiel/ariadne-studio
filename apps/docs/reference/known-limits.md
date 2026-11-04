@@ -10,13 +10,20 @@ What is not done, and what behaves in a way you might not expect.
 ## Platforms
 
 - Android only.
-- The desktop app is tested end to end on Linux only. The Windows build has been run under Wine: the installer, the window, the studio server, Maestro's `maestro.bat` with awkward `.env` values, and stopping a run that timed out all work there. Wine lacks PowerShell, which agent-device uses on Windows to manage its background process, so connecting to a device and recording on Windows still need a real Windows machine to confirm.
+- The desktop app is tested end to end on Linux. On one real Windows 11 computer with a POCO F5 Pro over USB, installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and **Use the phone** have not been tried on Windows yet.
 - The macOS build is configured but not built or tried.
+- On Windows, a project folder with letters the system code page cannot spell, such as a Greek user name on English Windows, runs fine. A folder with such letters inside the project, such as a flows folder of your own, stops Maestro at once: its Java receives that part of the path as question marks.
 
 ## One device at a time
 
 - One device session at a time, and Run blocks the studio until Maestro finishes.
 - Run all runs in the background but holds the device until it ends.
+
+## Other apps and websites
+
+- The screen in the studio is a new picture every few seconds, not video. It stops looking during an action, a run, the end check picker and **Use the phone**, and while the window is hidden. **Refresh** looks at once.
+- A step that needs the camera, such as a selfie or a photo of a document, cannot be replayed.
+- A one-time code or a link made for one session is different on every run, so a step that depends on it fails on the next run.
 
 ## Using the phone
 

@@ -38,6 +38,12 @@ export type ScreenState = {
   imageUrl: string;
   takenAt: string;
   nodes: SnapshotNodeLite[];
+  /** The phone shows nothing, because it is asleep or locked: nothing can be pressed or recorded until it is back. */
+  hidden?: boolean;
+  /** The screen blocks screenshots, so the picture is black, but its elements came through and can be recorded. */
+  secure?: boolean;
+  /** What is in front, when it is not the app the case starts from. */
+  elsewhere?: { app: string; home: boolean };
 };
 
 export type ApiErrorBody = { error: { code: string; message: string } };
@@ -255,6 +261,29 @@ export type SetupInfo = {
   /** Virtual devices created in Android Studio's Device Manager. */
   avds: string[];
   devices: AdbDevice[];
+};
+
+export type ToolId = 'adb' | 'java' | 'maestro';
+
+/** One tool of "Set up this computer". */
+export type ToolProgress = {
+  id: ToolId;
+  name: string;
+  state: 'waiting' | 'downloading' | 'unpacking' | 'checking' | 'done' | 'failed';
+  received: number;
+  total: number;
+  /** Why it failed, written for the tester. */
+  error?: string;
+};
+
+export type ToolInstallStatus = {
+  /** False where Ariadne cannot fetch the tools itself; the guide then shows the manual steps. */
+  available: boolean;
+  running: boolean;
+  /** What this computer can fetch, to say how much it is before the button. */
+  offered: Array<{ id: ToolId; name: string; bytes: number }>;
+  /** The current or last round. */
+  tools: ToolProgress[];
 };
 
 /** Recording from a finger on the phone. `revision` changes whenever steps or the screen have. */
