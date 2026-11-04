@@ -83,9 +83,9 @@ From now on, work on `public-main`. Never merge `main` into it.
 1. **Set up GitHub.** Turn on private vulnerability reporting (Settings, Advanced Security),
    because `SECURITY.md` and `CODE_OF_CONDUCT.md` send people there. Create the `bug` and
    `phone-report` labels.
-2. **Prove the release workflow** by tagging a pre-release such as `v0.1.0-rc.1`, with both package
-   versions set to match, and reading the draft it makes. It has never run. The macOS job has never
-   built, and Windows has only been built from Linux through Wine. Delete the draft and the tag.
+2. **Check the release workflow** on the next tag. For v0.1.0 its macOS job never got a machine and
+   the draft step was skipped, so the release was made by hand from that run's files. macOS is now
+   out of the matrix, and the draft step has not yet run for real.
 3. **Remove the "not published" notes** once the first release is out, in `README.md`,
    `site/index.html`, `apps/docs/guides/install.md` and `apps/docs/guides/introduction.md`. In
    `site/index.html`, point the download link and `downloadUrl` back at `releases/latest`, then
@@ -123,9 +123,8 @@ From now on, work on `public-main`. Never merge `main` into it.
    this release. Make the tag on `public-main`, because a tag on the old history would carry all
    of it.
 
-7. **Wait for the Release workflow.** It builds the desktop app on Ubuntu, Windows and macOS, then
-   attaches the installers to a draft release. A failed macOS build does not stop the draft, so
-   check which installers are there.
+7. **Wait for the Release workflow.** It builds the desktop app on Ubuntu and Windows, then attaches
+   the installers to a draft release.
 8. **Check the draft.** On the Releases page, download each installer and start it on the system it
    is for. Edit the notes to match the changelog, and repeat that the builds are unsigned.
 9. **Publish the draft.** This is the point where the desktop app goes public.

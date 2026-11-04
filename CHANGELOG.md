@@ -37,7 +37,7 @@ The first release. Android only.
 ### Known limits
 
 - Tested with real fingers on one phone (POCO F5 Pro, HyperOS 3) and over a remote link on one
-  (Samsung Galaxy A16). The Windows build has only run under Wine, and a macOS build is configured
-  but has never been built.
+  (Samsung Galaxy A16). On real Windows the tests and a start with no phone pass in CI, and
+  recording with a phone there is unconfirmed. There is no macOS build.
 
 [0.1.0]: https://github.com/sudo-ezekiel/ariadne-studio/releases/tag/v0.1.0

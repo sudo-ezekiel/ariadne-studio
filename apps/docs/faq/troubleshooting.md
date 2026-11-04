@@ -37,6 +37,10 @@ adb reports `no permissions`. Install your distribution's Android udev rules (`a
 
 Use a cable that carries data, because some only charge. On Windows, install the phone maker's USB driver.
 
+### The first start on Windows takes over a minute
+
+Ariadne's device helper sometimes stalls while starting on Windows. The studio notices after a minute, ends it and starts it again, so wait. It was seen on about one fresh machine in five, and the log says so when it happens.
+
 ### "The phone did not allow the install Ariadne needs"
 
 The phone refused the helper app Ariadne installs on Connect. On Xiaomi, Redmi and POCO phones it asks first: watch the phone, tap **Install**, and press Connect again. If there is no prompt, turn on Install via USB in Developer options.

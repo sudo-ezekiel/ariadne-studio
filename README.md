@@ -33,9 +33,8 @@ anywhere Maestro runs. Nothing in it needs Ariadne.
 
 ## Install
 
-> **Not published yet.** The npm package and the desktop installers have not been released.
-> Until the first release, build them from this repository with `pnpm cli` or
-> `pnpm desktop:dist`; see [CONTRIBUTING.md](CONTRIBUTING.md).
+> **The npm package is not published yet**, so `npx ariadne-studio` does not work today. The desktop
+> app is on the [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) page.
 
 You need an Android emulator or a USB phone, and `adb` from the Android SDK platform-tools.
 Run also needs the
@@ -46,8 +45,8 @@ walks you through what is missing.
 **Desktop app, for a BA or PM.** Download it from
 [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) and start it. It brings
 its own Node and opens the project folder `Documents/Ariadne`. There is a Linux AppImage and a
-Windows installer. A macOS build is configured but has never been built. Nothing is code
-signed, so Windows SmartScreen and macOS Gatekeeper warn on first start.
+Windows installer, and no macOS build yet. Nothing is code signed, so Windows SmartScreen warns
+on first start: press More info, then Run anyway.
 
 **npm package, for a developer.** Node 22.12 or newer:
 
@@ -109,9 +108,9 @@ is where it goes.
 ## Limits
 
 - Android only. No iOS.
-- The desktop app is tested end to end on Linux only. The Windows build has only run under
-  Wine, so Connect and recording on real Windows are unconfirmed. The macOS build has never
-  been built. Neither Windows nor macOS has been verified on real devices.
+- The desktop app is tested end to end on Linux only. On real Windows the tests and a start with
+  no phone pass in CI, so Connect and recording with a phone there are still unconfirmed. There
+  is no macOS build yet.
 - One device at a time. Run blocks the studio until Maestro finishes, with a limit of 5 minutes.
 - **Use the phone** needs a phone you can touch. Gesture navigation is unproven on a real
   phone, and other phones report touches differently, so expect some to need work.

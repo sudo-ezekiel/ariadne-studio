@@ -32,13 +32,12 @@ jobs:
     needs: version
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    # The macOS build is configured but has never been built, so a failure there
-    # leaves it out of the draft without holding up Linux and Windows.
-    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    # No macOS: that build has never run, and on v0.1.0 its job sat queued with no
+    # machine and took the draft down with it. Add it back when someone needs it.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     env:
       # Signing is not set up: stop electron-builder looking for a certificate.
       CSC_IDENTITY_AUTO_DISCOVERY: false

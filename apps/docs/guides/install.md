@@ -15,8 +15,8 @@ Ariadne Studio comes three ways. All three run the same studio and read and writ
 | A developer who wants to try it | the [npm package](#npm-package): `npx ariadne-studio` |
 | Working on Ariadne itself | [the repository](/contribute/develop): `pnpm dev` |
 
-::: info Not published yet
-Neither the npm package nor the desktop installers are published. Until they are, build them from the repository: `pnpm cli` for the command line, `pnpm desktop:dist` for an installer. See [Packaging and releases](/contribute/packaging).
+::: info The npm package is not published yet
+`npx ariadne-studio` does not work today. The desktop app is on the [Releases](https://github.com/sudo-ezekiel/ariadne-studio/releases) page, and there is no macOS build yet.
 :::
 
 ## Prerequisites
