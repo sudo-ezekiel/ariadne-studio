@@ -105,7 +105,8 @@ export function stalledDaemon(error: unknown): number | undefined {
   const details = normalizeAgentDeviceError(error).details as { kind?: unknown; reason?: unknown; daemonProcess?: { pid?: unknown } } | undefined;
   if (details?.kind !== 'daemon_startup_failed' || details.reason !== 'startup-stalled') return undefined;
   const pid = details.daemonProcess?.pid;
-  return typeof pid === 'number' ? pid : undefined;
+  // Zero and negative numbers would signal a whole process group, or everything.
+  return typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? pid : undefined;
 }
 
 async function stopProcess(pid: number): Promise<void> {
