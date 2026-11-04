@@ -40,7 +40,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r --no-bail test
       # These answer a different question from the tests, so they run either way.
-      - run: pnpm --filter ariadne-studio build
+      # With its dependencies: the CLI bundles the studio's UI.
+      - run: pnpm --filter ariadne-studio... build
         if: ${{ !cancelled() }}
       - run: node scripts/windows-check.mjs
         if: ${{ !cancelled() }}
