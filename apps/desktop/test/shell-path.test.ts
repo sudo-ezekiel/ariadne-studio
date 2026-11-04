@@ -51,7 +51,8 @@ describe('wellKnownToolDirs', () => {
   });
 
   it('skips the LOCALAPPDATA folder on win32 when it is not set', () => {
-    const dirs = wellKnownToolDirs('win32', home, undefined);
+    // An empty string, not undefined: undefined would use the default, this machine's own LOCALAPPDATA.
+    const dirs = wellKnownToolDirs('win32', home, '');
     expect(dirs).toEqual([join(home, '.maestro', 'bin'), join(home, 'Android', 'Sdk', 'platform-tools')]);
   });
 

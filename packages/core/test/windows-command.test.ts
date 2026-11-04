@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { maestroCandidates } from '../src/replay/maestro-bin.ts';
 import { maestroEnv } from '../src/replay/maestro-run.ts';
 import { quoteWindowsArgument, spawnCommand } from '../src/replay/windows-command.ts';
@@ -171,8 +171,28 @@ describe('spawnCommand', () => {
     expect(result.args[4]).toBe('""C:\\maestro\\bin\\maestro.bat""');
   });
 
-  it.each([undefined, ''])('falls back to cmd.exe when comspec is %j', (comspec) => {
-    expect(spawnCommand('C:\\m\\maestro.bat', [], 'win32', comspec).command).toBe('cmd.exe');
+  it('falls back to cmd.exe when comspec is empty', () => {
+    expect(spawnCommand('C:\\m\\maestro.bat', [], 'win32', '').command).toBe('cmd.exe');
+  });
+
+  describe('with no comspec argument', () => {
+    afterEach(() => vi.unstubAllEnvs());
+
+    // Passing undefined would use the default, process.env.ComSpec, which a real
+    // Windows process always has and whose name is case-insensitive there. So the
+    // variable itself is emptied, under both spellings, which behaves the same
+    // on Windows and on Linux.
+    it('falls back to cmd.exe when the ComSpec variable is empty', () => {
+      vi.stubEnv('ComSpec', '');
+      vi.stubEnv('COMSPEC', '');
+      expect(spawnCommand('C:\\m\\maestro.bat', [], 'win32').command).toBe('cmd.exe');
+    });
+
+    it('uses the ComSpec variable when it is set', () => {
+      vi.stubEnv('ComSpec', 'D:\\win\\cmd.exe');
+      vi.stubEnv('COMSPEC', 'D:\\win\\cmd.exe');
+      expect(spawnCommand('C:\\m\\maestro.bat', [], 'win32').command).toBe('D:\\win\\cmd.exe');
+    });
   });
 
   it.each(['a\nb', 'a\rb', 'a\r\nb'])('throws for a line break in an argument of a .bat file: %j', (arg) => {

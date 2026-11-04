@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseBlockFlow, type DeviceSnapshot, type MaestroRunResult, type OpenOptions, type RunMaestroOptions } from '@ariadne/core';
@@ -159,7 +159,8 @@ afterEach(async () => {
 });
 
 async function files(dir: string): Promise<string[]> {
-  return ((await readdir(dir, { recursive: true })) as string[]).sort();
+  // Recursive readdir uses the OS separator; compare with forward slashes.
+  return ((await readdir(dir, { recursive: true })) as string[]).map((name) => name.split(sep).join('/')).sort();
 }
 
 describe('a project beside a Maestro workspace', () => {

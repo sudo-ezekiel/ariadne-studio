@@ -118,7 +118,8 @@ class PhoneDevice implements DeviceLike {
 
 // ------------------------------------------------------------------ adb
 
-const ADB = '/sdk/platform-tools/adb';
+// Built with join, as setup.ts builds its candidates, so the separator is the OS's own.
+const ADB = join('/sdk', 'platform-tools', 'adb');
 
 /** The programs the setup check runs, answered from a fixed `adb devices -l`. */
 function setupWith(devices: string): Partial<SetupTools> {
