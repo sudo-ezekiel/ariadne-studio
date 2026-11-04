@@ -1,0 +1,9 @@
+// The landing page and the docs, as static files on Cloudflare. `pnpm site:deploy`
+// builds the docs into site/docs and publishes site/. The custom domain creates
+// its own DNS record and certificate.
+{
+  "name": "ariadne-site",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./site", "html_handling": "auto-trailing-slash" },
+  "routes": [{ "pattern": "ariadne.sudo-ezekiel.com", "custom_domain": true }]
+}

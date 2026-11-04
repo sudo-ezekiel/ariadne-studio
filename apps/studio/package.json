@@ -1,0 +1,47 @@
+{
+  "name": "@ariadne/studio",
+  "version": "0.1.0",
+  "private": true,
+  "keywords": [
+    "maestro",
+    "maestro-flow",
+    "mobile-testing",
+    "android",
+    "e2e",
+    "test-recorder",
+    "no-code",
+    "business-analyst"
+  ],
+  "type": "module",
+  "description": "Local recorder studio: Fastify server plus a Vite React UI.",
+  "exports": {
+    "./server": "./src/server/index.ts"
+  },
+  "scripts": {
+    "dev": "pnpm run \"/^dev:/\"",
+    "dev:server": "tsx watch --clear-screen=false src/server/main.ts",
+    "dev:ui": "vite",
+    "start": "tsx src/server/main.ts",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ariadne/core": "workspace:*",
+    "@fastify/static": "^10.1.8",
+    "@resvg/resvg-wasm": "2.6.2",
+    "fastify": "^5.12.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,182 @@
+/*
+ * The Ariadne brand on VitePress's default theme. The tokens below copy
+ * docs/brand.md section 3 and apps/studio/src/ui/styles.css; change them there
+ * first. Navy is the main thing to do; ochre is the thread, where you are. Ochre
+ * never stands for a warning or a pass: those keep their semantic colours.
+ */
+:root {
+  --navy: #1c2b4a;
+  --navy-hover: #142038;
+  --navy-text: #1c2b4a;
+  --on-navy: #ffffff;
+  --thread: #e8b43a;
+  --thread-strong: #c48a0e;
+  --thread-soft: #fdf3d0;
+  --sea: #1f6f9f;
+  --ink: #1a2233;
+  --ink-2: #5b6474;
+  --ink-3: #8a93a3;
+  --line: #dcdfe6;
+  --line-2: #ebedf2;
+  --paper: #f4f3ee;
+  --panel: #ffffff;
+  --panel-2: #f7f7f9;
+  --pass: #1e7d3c;
+  --pass-soft: #e6f4ea;
+  --fail: #b3261e;
+  --fail-soft: #fdecea;
+  --warn: #9a5b00;
+  --warn-soft: #fdebd3;
+  --info: #1f6f9f;
+  --info-soft: #e8f2f9;
+}
+
+.dark {
+  --navy: #3d5a96;
+  --navy-hover: #4a69a8;
+  --navy-text: #9db6e8;
+  --thread: #e8b43a;
+  --thread-strong: #f0c45a;
+  --thread-soft: #3a3014;
+  --sea: #6cb4e0;
+  --ink: #e6e9ef;
+  --ink-2: #a9b1bf;
+  --ink-3: #7a8394;
+  --line: #343d4f;
+  --line-2: #2a3141;
+  --paper: #12161f;
+  --panel: #1a202b;
+  --panel-2: #232a37;
+  --pass: #5cc27a;
+  --pass-soft: #15301f;
+  --fail: #f2766b;
+  --fail-soft: #3a1a18;
+  --warn: #f0a640;
+  --warn-soft: #3a2a12;
+  --info: #6cb4e0;
+  --info-soft: #16293a;
+}
+
+/* Both themes: the variables VitePress reads, in terms of the tokens above. */
+:root,
+.dark {
+  --vp-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --vp-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --vp-c-bg: var(--panel);
+  --vp-c-bg-alt: var(--paper);
+  --vp-c-bg-elv: var(--panel);
+  --vp-c-bg-soft: var(--panel-2);
+
+  --vp-c-text-1: var(--ink);
+  --vp-c-text-2: var(--ink-2);
+  --vp-c-text-3: var(--ink-3);
+
+  --vp-c-border: var(--line);
+  --vp-c-divider: var(--line);
+  --vp-c-gutter: var(--line-2);
+
+  --vp-c-brand-1: var(--navy-text);
+  --vp-c-brand-2: var(--navy-text);
+  --vp-c-brand-3: var(--navy);
+  --vp-c-brand-soft: var(--panel-2);
+
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: var(--on-navy);
+  --vp-button-brand-bg: var(--navy);
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: var(--on-navy);
+  --vp-button-brand-hover-bg: var(--navy-hover);
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: var(--on-navy);
+  --vp-button-brand-active-bg: var(--navy-hover);
+
+  --vp-home-hero-name-color: var(--navy-text);
+
+  /* Semantic colours stay semantic, and none of them is the thread. */
+  --vp-c-tip-1: var(--info);
+  --vp-c-tip-2: var(--info);
+  --vp-c-tip-3: var(--info);
+  --vp-c-tip-soft: var(--info-soft);
+  --vp-c-note-1: var(--ink-2);
+  --vp-c-note-2: var(--ink-2);
+  --vp-c-note-3: var(--ink-2);
+  --vp-c-note-soft: var(--panel-2);
+  --vp-c-success-1: var(--pass);
+  --vp-c-success-2: var(--pass);
+  --vp-c-success-3: var(--pass);
+  --vp-c-success-soft: var(--pass-soft);
+  --vp-c-important-1: var(--navy-text);
+  --vp-c-important-2: var(--navy-text);
+  --vp-c-important-3: var(--navy);
+  --vp-c-important-soft: var(--panel-2);
+  --vp-c-warning-1: var(--warn);
+  --vp-c-warning-2: var(--warn);
+  --vp-c-warning-3: var(--warn);
+  --vp-c-warning-soft: var(--warn-soft);
+  --vp-c-danger-1: var(--fail);
+  --vp-c-danger-2: var(--fail);
+  --vp-c-danger-3: var(--fail);
+  --vp-c-danger-soft: var(--fail-soft);
+  --vp-c-caution-1: var(--fail);
+  --vp-c-caution-2: var(--fail);
+  --vp-c-caution-3: var(--fail);
+  --vp-c-caution-soft: var(--fail-soft);
+
+  --vp-custom-block-info-bg: var(--panel-2);
+  --vp-custom-block-info-text: var(--ink);
+  --vp-custom-block-tip-text: var(--ink);
+  --vp-custom-block-warning-text: var(--ink);
+  --vp-custom-block-danger-text: var(--ink);
+}
+
+/* Links in prose are sea, as in the studio. */
+.vp-doc a {
+  color: var(--sea);
+}
+
+.vp-doc a:hover {
+  color: var(--sea);
+  text-decoration: underline;
+}
+
+/* The thread: the page and the heading you are on. */
+.VPSidebarItem.is-active > .item > .indicator,
+.VPDocAsideOutline .content .outline-marker {
+  background-color: var(--thread);
+}
+
+.VPSidebarItem.is-active > .item .link > .text {
+  font-weight: 600;
+}
+
+:focus-visible {
+  outline: 2px solid var(--thread);
+  outline-offset: 2px;
+}
+
+/* A flat name in the hero, and no glow behind the logo. */
+.VPHero .image-bg {
+  display: none;
+}
+
+/*
+ * VitePress hides its footer on pages with a sidebar, which is every page here,
+ * and the trademark line has to show on all of them. It sits in the content
+ * column, right of the fixed sidebar, using the offsets of .VPContent.has-sidebar.
+ */
+.Layout footer.VPFooter.has-sidebar {
+  display: block;
+}
+
+@media (min-width: 960px) {
+  .Layout footer.VPFooter.has-sidebar {
+    padding-left: calc(var(--vp-sidebar-width) + 32px);
+  }
+}
+
+@media (min-width: 1440px) {
+  .Layout footer.VPFooter.has-sidebar {
+    padding-left: calc((100vw - var(--vp-layout-max-width)) / 2 + var(--vp-sidebar-width) + 32px);
+  }
+}

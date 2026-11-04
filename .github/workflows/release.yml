@@ -1,0 +1,106 @@
+# On a v* tag: builds the desktop app, attaches it to a DRAFT release and packs
+# the npm tarball as a workflow artifact. Nothing goes out from here: a person
+# publishes the draft and the tarball by hand, see docs/RELEASING.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Check the tag matches the packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compare versions
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          for file in apps/cli/package.json apps/desktop/package.json; do
+            actual="$(jq -r .version "$file")"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error file=$file::$file has version $actual, the tag says $expected"
+              exit 1
+            fi
+          done
+
+  desktop:
+    name: Desktop app (${{ matrix.os }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    # The macOS build is configured but has never been built, so a failure there
+    # leaves it out of the draft without holding up Linux and Windows.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      # Signing is not set up: stop electron-builder looking for a certificate.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Takes the pnpm version from packageManager in package.json.
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm desktop:dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+
+  npm-tarball:
+    name: npm tarball
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Takes the pnpm version from packageManager in package.json.
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+      - run: pnpm install --frozen-lockfile
+      # pnpm rewrites workspace: versions; prepack builds everything first.
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP/npm"
+        working-directory: apps/cli
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-tarball
+          if-no-files-found: error
+          path: ${{ runner.temp }}/npm/*.tgz
+
+  draft-release:
+    name: Draft GitHub release
+    needs: [desktop, npm-tarball]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/*

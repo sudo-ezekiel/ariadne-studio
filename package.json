@@ -1,0 +1,46 @@
+{
+  "name": "ariadne",
+  "private": true,
+  "description": "Ariadne, a recorder for Maestro. Record flows by using your Android app, on your own machine, and get plain Maestro YAML with a screenshot per step.",
+  "keywords": [
+    "maestro",
+    "maestro-flow",
+    "mobile-testing",
+    "android",
+    "e2e",
+    "test-recorder",
+    "no-code",
+    "business-analyst"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @ariadne/studio dev",
+    "start": "pnpm --filter @ariadne/studio start",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.json --noEmit",
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:studio": "tsx scripts/smoke-studio.ts",
+    "smoke:gestures": "tsx scripts/smoke-gestures.ts",
+    "smoke:phone": "tsx scripts/smoke-phone.ts",
+    "cli": "pnpm --filter ariadne-studio... build && node apps/cli/bin/ariadne-studio.mjs",
+    "desktop": "pnpm --filter @ariadne/desktop start",
+    "desktop:dist": "pnpm --filter @ariadne/desktop dist",
+    "desktop:dist:win": "pnpm --filter @ariadne/desktop dist:win",
+    "docs:dev": "pnpm --filter @ariadne/docs docs:dev",
+    "docs:build": "pnpm --filter @ariadne/docs docs:build",
+    "site:url": "node scripts/site-url.mjs",
+    "seo:check": "node scripts/seo-check.mjs",
+    "site:deploy": "pnpm docs:build && wrangler deploy"
+  },
+  "devDependencies": {
+    "@ariadne/core": "workspace:*",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

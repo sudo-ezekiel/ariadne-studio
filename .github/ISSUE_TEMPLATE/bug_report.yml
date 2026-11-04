@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in Ariadne Studio does not work as the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public. Leave out real passwords, customer data and screenshots of real accounts.
+        For a problem on a specific phone, use the phone report. For a vulnerability, see SECURITY.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw. Quote any message exactly.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Connect...
+        2. Start recording...
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you run Ariadne
+      options:
+        - Desktop app
+        - npm package
+        - From the repository
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Ariadne version
+      description: "`ariadne-studio --version`, or the version in the installer's name."
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options:
+        - Linux
+        - Windows
+        - macOS
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone or emulator
+      placeholder: Android 16 emulator
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log or diagnostics
+      description: |
+        Paste the relevant log lines, or attach the file from **Export diagnostics** in the
+        **Set up a device** dialog. Look through it first: this issue is public.

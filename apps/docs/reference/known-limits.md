@@ -1,0 +1,75 @@
+---
+title: Known limits
+description: What Ariadne does not do yet, and the behaviour of Maestro and agent-device worth knowing.
+---
+
+# Known limits
+
+What is not done, and what behaves in a way you might not expect.
+
+## Platforms
+
+- Android only.
+- The desktop app is tested end to end on Linux only. The Windows build has been run under Wine: the installer, the window, the studio server, Maestro's `maestro.bat` with awkward `.env` values, and stopping a run that timed out all work there. Wine lacks PowerShell, which agent-device uses on Windows to manage its background process, so connecting to a device and recording on Windows still need a real Windows machine to confirm.
+- The macOS build is configured but not built or tried.
+
+## One device at a time
+
+- One device session at a time, and Run blocks the studio until Maestro finishes.
+- Run all runs in the background but holds the device until it ends.
+
+## Using the phone
+
+- Tested with real fingers on one phone, a POCO F5 Pro with HyperOS 3, and with simulated touches on the Android 16 emulator. Other phones report touches differently, so expect some to need work.
+- It needs a phone you can touch. On a remote phone, such as Samsung's Remote Test Lab, clicks in the browser never reach the touchscreen, so nothing records. Record on the screen here instead; Connect, recording and Run all work over a remote link, though a run is slower.
+- A tap on a value that changes, such as a calculated result, names that value, so the run fails once it differs. Tap the control instead, or a developer can add an id. This applies on the screen here too.
+- Text longer than 80 characters is not used to find an element, so a card with a long label records a position. This applies on the screen here too.
+- Gesture navigation is told apart by where the swipe starts. It has been run on the emulator; on a real phone it is unproven.
+- Two quick taps on the same spot record as two taps, never as a double tap: a calculator's `7`, `7` looks the same as a double tap. Use the right click menu on the screen here for a real double tap.
+- A flick records as a swipe at its speed, up to the limits of a swipe on the screen here, and the list may scroll a different distance on replay.
+- The phone's screen is not mirrored live while you use it: the screen here updates about a second after each step.
+
+## Scrolling and swiping
+
+- Scroll down and Scroll up scroll the main list by about 60% of the screen height while recording.
+- A swipe dragged on the screen replays by position, as percentages of the screen, not on an element. The same drag can scroll a list a slightly different distance under Maestro than it did while recording. Follow it with a tap or check on an element rather than a position.
+- A scroll before a tap or check replays as `scrollUntilVisible` on that element, so a run does not depend on Maestro scrolling the same distance as agent-device, nor on the screen being drawn yet. Maestro waits and scrolls until the element is fully visible, 20 s by default.
+- A scroll that no tap or check follows stays a plain `scroll`, which moves a fixed distance and does not wait. Measured on the Settings app, a plain `scroll` straight after `launchApp` runs before the list is drawn and scrolls nothing.
+
+## Secrets in run output
+
+After every run the studio replaces `.env` values with `${KEY}` in the text files of the run folder, including Maestro's `maestro.log` and `commands.json`. `output.txt` and `summary.json` are clean too. Three things it does not cover:
+
+- values shorter than 4 characters, because replacing them would corrupt ordinary text;
+- pictures: screenshots and [run videos](/guides/run-video) keep whatever the screen showed;
+- Maestro's own default output under `~/.maestro/tests`, outside the project.
+
+Keep `runs/` out of version control. A new project's `.gitignore` does.
+
+## Keyboard
+
+The studio keeps the device's real keyboard, which agent-device would otherwise swap for a headless one, because Maestro runs with the real keyboard and Back behaves differently when a keyboard is showing.
+
+## Blocks
+
+- A block that needs Maestro makes starting, re-recording or running it mid-case take as long as a Maestro run, typically 10 to 20 seconds on an emulator.
+- agent-device 0.21.35 reports success for some commands it does not really run: it "replayed" a `runScript` block. That is why the studio decides from the file, not from trying agent-device first.
+- agent-device must use its shared daemon for block replay to run inside the studio's session. The studio passes agent-device's default state directory explicitly (`AGENT_DEVICE_STATE_DIR`, else `~/.agent-device`). Without it, agent-device runs a replay in a private one-shot daemon that cannot use the device the studio holds.
+
+## Looks different
+
+The score is a coarse picture comparison, and a run still follows the recorded selectors. A step whose screen legitimately changes, such as a date or a new banner, shows as different until it is re-recorded.
+
+## Chains
+
+A case runs the flow of the case it starts from in full, end checks included, so a long chain replays every parent each time. Split long cases where a shared starting point makes sense.
+
+## Open link
+
+Open link sends Android's VIEW intent through adb while recording, the same intent Maestro's `openLink` sends on a run, so the device opens the link with whatever app handles it. agent-device alone can only open links inside the app under test. Checked on the emulator with a web link: both end in Chrome. The link is quoted for the device shell and must look like `scheme://...`.
+
+## Run video
+
+Android's screen recorder may stop at 3 minutes on a long run, and a run can last 5 minutes.
+
+The steps beside the phone need `ffmpeg`, and they are drawn in Noto Sans Mono: step names in scripts other than Latin, Greek and Cyrillic show as boxes.

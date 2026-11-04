@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# The dev project directory holds recordings, screenshots and secrets. Only the
+# project settings and developer-authored blocks are meant to be committed.
+workspace/*
+!workspace/project.json
+!workspace/blocks/
+workspace/blocks/*
+!workspace/blocks/*.yaml
+
+# Desktop app build output: the staged server and the installers.
+apps/desktop/stage/
+apps/desktop/release/
+
+# Docs site: the build output and VitePress's cache.
+site/docs/
+apps/docs/.vitepress/cache/
+

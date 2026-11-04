@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ariadne">
+  <!-- Bare mark for light backgrounds: navy thread and ring, ochre knot. -->
+  <path d="M14 20 V50 H50 V14 H26 V38 H38 V26" fill="none" stroke="#1c2b4a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="14" cy="14" r="4.5" fill="none" stroke="#1c2b4a" stroke-width="3.5"/>
+  <circle cx="38" cy="26" r="5.5" fill="#e8b43a"/>
+</svg>

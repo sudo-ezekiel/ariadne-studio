@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ariadne.sudo-ezekiel.com/sitemap.xml
+Sitemap: https://ariadne.sudo-ezekiel.com/docs/sitemap.xml

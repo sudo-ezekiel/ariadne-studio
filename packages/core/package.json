@@ -1,0 +1,42 @@
+{
+  "name": "@ariadne/core",
+  "version": "0.1.0",
+  "private": true,
+  "keywords": [
+    "maestro",
+    "maestro-flow",
+    "mobile-testing",
+    "android",
+    "e2e",
+    "test-recorder",
+    "no-code",
+    "business-analyst"
+  ],
+  "type": "module",
+  "description": "Recorder core: device session, hit testing, Maestro selectors and YAML, project store. No UI, no HTTP.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./hit-test": "./src/device/hit-test.ts",
+    "./model": "./src/maestro/model.ts",
+    "./escape": "./src/maestro/escape.ts",
+    "./flow-layout": "./src/recorder/flow-layout.ts",
+    "./describe": "./src/recorder/describe.ts",
+    "./block-values": "./src/recorder/block-values.ts",
+    "./suite": "./src/replay/suite.ts",
+    "./similarity": "./src/image/similarity.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "agent-device": "0.21.35",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@ariadne/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ariadne Studio as a desktop app: an Electron window around the same server the ariadne-studio CLI runs.",
+  "author": "Ezekiel",
+  "license": "Apache-2.0",
+  "desktopName": "ariadne-studio.desktop",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "tsx build.ts",
+    "start": "pnpm --filter @ariadne/desktop... build && tsx start.ts",
+    "dist": "pnpm --filter @ariadne/desktop... build && tsx build.ts --stage && electron-builder --config electron-builder.yml",
+    "dist:win": "pnpm --filter @ariadne/desktop... build && tsx build.ts --stage && electron-builder --config electron-builder.yml --win",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "ariadne-studio": "workspace:*",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

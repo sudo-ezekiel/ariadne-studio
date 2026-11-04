@@ -1,0 +1,13 @@
+# GitHub Actions only, grouped, once a month. Workflows pin actions by major
+# version, so this opens a pull request only for a new major. npm dependencies
+# stay out: agent-device is pinned on purpose (see pnpm-workspace.yaml).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"

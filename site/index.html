@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ariadne, a recorder for Maestro: record flows by using your app</title>
+<meta name="description" content="A local, no-code Maestro test recorder for Android. Click through your app and get plain Maestro YAML, a screenshot per step and a video of every run.">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="theme-color" content="#1c2b4a">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" href="favicon-192.png" sizes="192x192">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" as="image" type="image/webp" href="media/record-poster.webp" fetchpriority="high">
+<!-- `pnpm site:url https://...` sets the public address here and everywhere else it is written. -->
+<link rel="canonical" href="https://ariadne.sudo-ezekiel.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Ariadne">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Ariadne, a recorder for Maestro: record flows by using your app">
+<meta property="og:description" content="A local, no-code Maestro test recorder for Android. Click through your app and get plain Maestro YAML, a screenshot per step and a video of every run.">
+<meta property="og:url" content="https://ariadne.sudo-ezekiel.com/">
+<meta property="og:image" content="https://ariadne.sudo-ezekiel.com/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Ariadne: record Maestro flows by using your app. A run video shows a case's steps ticking off beside the phone.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Ariadne, a recorder for Maestro: record flows by using your app">
+<meta name="twitter:description" content="A local, no-code Maestro test recorder for Android. Click through your app and get plain Maestro YAML, a screenshot per step and a video of every run.">
+<meta name="twitter:image" content="https://ariadne.sudo-ezekiel.com/img/og.png">
+<meta name="twitter:image:alt" content="Ariadne: record Maestro flows by using your app. A run video shows a case's steps ticking off beside the phone.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Ariadne",
+  "alternateName": "Ariadne, a recorder for Maestro",
+  "url": "https://ariadne.sudo-ezekiel.com/"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Ariadne",
+  "alternateName": "Ariadne Studio",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Mobile test recorder",
+  "operatingSystem": "Linux",
+  "description": "A local, no-code Maestro test recorder for Android. Click through your app and get plain Maestro YAML, a screenshot per step and a video of every run.",
+  "softwareRequirements": "Android SDK platform-tools (adb), Java 17 or newer, Maestro CLI; Node.js 22.12 or newer for the npm package",
+  "downloadUrl": "https://github.com/sudo-ezekiel/ariadne-studio/releases",
+  "url": "https://ariadne.sudo-ezekiel.com/",
+  "image": "https://ariadne.sudo-ezekiel.com/img/og.png",
+  "screenshot": "https://ariadne.sudo-ezekiel.com/media/run-poster.png"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is this the same as maestro record?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. maestro record makes a video of a flow you already have. Ariadne writes the flow from your clicks. It can also save a video of each run, with the steps beside the phone, made on your own computer."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is Maestro?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Maestro is a mobile UI testing framework by mobile.dev. Tests are YAML flows that the Maestro CLI runs on Android and iOS devices and emulators. See docs.maestro.dev."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Ariadne a replacement for Maestro?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Ariadne records Maestro flows and passes them to the Maestro CLI to run. It adds the recorder, the results view and the document export."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is Ariadne different from Maestro Studio?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Maestro Studio is mobile.dev's own tool for developers working on flows. Ariadne is for people who know the product but do not write YAML. It records a whole case as you use the app, keeps a screenshot and run history for every step, lets one case start where another ends, and exports test case documents. Both produce flows the Maestro CLI can run."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Ariadne a Waldo alternative?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "For recording tests without writing them, yes. As with Waldo, you record a test by using the app. Ariadne runs on your own computer, against an emulator or a USB phone, and keeps each test as a plain Maestro flow in your repository. See how the tools compare."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to know YAML?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. You record, check, run and export in the studio. Setup blocks are YAML, but a developer writes those for you."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Ariadne need the cloud?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. It runs on your own computer against an emulator or a USB phone. Ariadne has no account and no service of its own, and nothing it records is uploaded. The Maestro CLI has its own analytics setting; see Privacy in the docs."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it support iOS?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Not today. Ariadne records on Android emulators and USB phones."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where do the tests live?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "In a folder you choose. flows/ holds the Maestro YAML, cases/ the recorded steps, evidence/ their screenshots, runs/ the results of every run and exports/ the documents. The Files sidebar in the studio shows all of it."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can developers edit the YAML by hand?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, they are plain files, but a case's flow is rewritten from its recorded steps on the next save or run. Edit recorded cases in the studio, and keep hand-written flows in blocks/."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use my existing .maestro folder?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. npx ariadne-studio init adds Ariadne beside it, your subflows become setup blocks, and recorded flows land in .maestro/recorded. Add recorded/* to flows: in config.yaml and workspace runs include them."
+      }
+    }
+  ]
+}
+</script>
+<style>
+:root {
+  --navy: #1c2b4a;
+  --navy-hover: #142038;
+  --thread: #e8b43a;
+  --thread-strong: #c48a0e;
+  --thread-soft: #fdf3d0;
+  --sea: #1f6f9f;
+  --ink: #1a2233;
+  --ink-2: #5b6474;
+  --ink-3: #8a93a3;
+  --line: #dcdfe6;
+  --line-2: #ebedf2;
+  --paper: #f4f3ee;
+  --panel: #ffffff;
+  --panel-2: #f7f7f9;
+  --stage: #0f1627;
+  --pass: #1e7d3c;
+  --pass-soft: #e6f4ea;
+  --fail: #b3261e;
+  --fail-soft: #fdecea;
+  --warn: #9a5b00;
+  --warn-soft: #fdebd3;
+  --info: #1f6f9f;
+  --info-soft: #e8f2f9;
+  --block: #5b4b9a;
+  --block-soft: #f1eefa;
+  --block-line: #d9d2f0;
+  --on-dark: #ffffff;
+  --on-dark-2: #c3c9d6;
+  --dark-line: rgba(255, 255, 255, 0.14);
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --wrap: 1200px;
+  --gutter: 24px;
+  --section: 104px;
+  --radius-control: 6px;
+  --radius-card: 10px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+/* Each title level is about twice the one below it, so a level is never mistaken for its neighbour */
+h1, h2, h3 { margin: 0; color: var(--ink); text-wrap: balance; }
+h1 { font-size: clamp(42px, 1.9rem + 3.9vw, 78px); font-weight: 800; line-height: 1; letter-spacing: -0.032em; }
+h2 { font-size: clamp(28px, 1.5rem + 1.2vw, 40px); font-weight: 750; line-height: 1.12; letter-spacing: -0.022em; }
+h3 { font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -0.008em; }
+
+p { margin: 0 0 12px; text-wrap: pretty; }
+
+a { color: var(--sea); text-underline-offset: 0.15em; }
+a:hover { color: var(--navy); }
+
+:focus-visible { outline: 3px solid var(--thread); outline-offset: 3px; }
+
+img { display: block; max-width: 100%; height: auto; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+pre {
+  margin: 0;
+  background: var(--stage);
+  color: #e6e9f0;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 20px 24px;
+  border-radius: var(--radius-card);
+  overflow-x: auto;
+}
+pre code {
+  font-size: inherit;
+  color: inherit;
+  overflow-wrap: normal;
+}
+
+.wrap { max-width: calc(var(--wrap) + 2 * var(--gutter)); margin: 0 auto; padding: 0 var(--gutter); }
+.wide { width: min(var(--wide), calc(100% - 2 * var(--gutter))); margin: 0 auto; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.btn-primary { background: var(--navy); color: #ffffff; border: 1px solid var(--navy); }
+.btn-primary:hover { background: var(--navy-hover); border-color: var(--navy-hover); color: #ffffff; }
+.btn-secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+.btn-secondary:hover { border-color: var(--ink-3); color: var(--ink); }
+.btn-small { height: 36px; padding: 0 14px; font-size: 14px; }
+
+/* Header: sticky on wide screens, two rows on a phone */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px 32px;
+  min-height: 64px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--navy);
+  font-weight: 650;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  min-height: 40px;
+  text-decoration: none;
+}
+.brand:hover { color: var(--navy); }
+.brand img { border-radius: 6px; }
+.site-header nav { margin-left: auto; }
+.site-header ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site-header ul a { color: var(--ink-2); text-decoration: none; font-size: 15px; font-weight: 500; }
+.site-header ul a:hover { color: var(--ink); text-decoration: underline; }
+
+/* Section rhythm */
+main > section { scroll-margin-top: 72px; }
+.section { padding: var(--section) 0 0; }
+.section-end { padding-bottom: var(--section); }
+
+/* The title stands alone on the left, its text sets on the same baseline to the right */
+.section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 12px 56px;
+  align-items: baseline;
+  margin-bottom: 44px;
+}
+.section-head > h2:only-child { grid-column: 1 / -1; }
+.section-head p { color: var(--ink-2); margin: 0; font-size: 18px; max-width: 62ch; }
+
+.on-dark h2 { color: var(--on-dark); }
+.on-dark p { color: var(--on-dark-2); }
+
+/* Hero: text on paper, the studio straddling into the first navy band */
+.hero { padding-top: 64px; }
+.hero-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 56px;
+  margin-top: 28px;
+}
+.lead { font-size: 20px; line-height: 1.45; margin: 0; color: var(--ink-2); max-width: 66ch; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+.hero-band { position: relative; isolation: isolate; margin-top: 48px; padding-bottom: 56px; }
+.hero-band::before { content: ""; position: absolute; left: 0; right: 0; top: 46%; bottom: 0; background: var(--navy); z-index: -1; }
+
+.stage-media {
+  position: relative;
+  margin: 0 auto;
+  padding: 8px;
+  background: var(--stage);
+  border: 1px solid var(--dark-line);
+  border-radius: var(--radius-card);
+}
+.stage-media video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 7px;
+  background: var(--stage);
+}
+.stage-media figcaption { padding: 10px 4px 2px; color: var(--on-dark-2); font-size: 13.5px; }
+.hero-media { --wide: 1296px; }
+
+.has-toggle { position: relative; }
+/* Sits on the caption's line, clear of the footage */
+.video-toggle {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  padding: 2px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.video-toggle:hover { background: rgba(255, 255, 255, 0.16); }
+.has-toggle figcaption { padding-right: 84px; }
+
+/* A picture beside what it shows */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 48px;
+  align-items: start;
+}
+.split > * { min-width: 0; }
+.record-split { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: stretch; }
+
+/* The recorded flow in a window */
+.code-window {
+  display: flex;
+  flex-direction: column;
+  background: var(--stage);
+  border: 1px solid var(--dark-line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.code-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--dark-line);
+  color: var(--on-dark-2);
+  font-size: 13px;
+}
+.code-bar strong { color: var(--on-dark); font-weight: 600; }
+.code-bar code { font-size: 12px; background: none; border: 0; padding: 0; color: var(--ink-3); }
+.code-window pre { flex: 1; border-radius: 0; }
+
+/* Short facts: a title and a line, ruled */
+.facts { list-style: none; margin: 0; padding: 0; }
+.facts li { padding: 18px 0; border-top: 1px solid var(--line); }
+.facts li:first-child { border-top: 0; padding-top: 0; }
+.facts li:last-child { padding-bottom: 0; }
+.facts h3 { margin-bottom: 6px; }
+.facts p { margin: 0; color: var(--ink-2); font-size: 16px; }
+
+/* A still in a frame */
+.shot { margin: 0; }
+.shot img {
+  width: 100%;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.shot figcaption { padding: 12px 4px 0; font-size: 13.5px; color: var(--ink-2); }
+
+/* Run: the band ends where the video does; the facts sit on paper */
+.band { background: var(--navy); color: var(--on-dark); padding: var(--section) 0 40px; }
+.band .section-head { margin-bottom: 0; }
+.run-stage { position: relative; isolation: isolate; }
+.run-stage::before { content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 60%; background: var(--navy); z-index: -1; }
+.run-media { --wide: 1400px; padding: 0; background: none; border: 0; }
+.run-media video { border-radius: var(--radius-card); border: 1px solid var(--dark-line); }
+.run-media figcaption { padding: 12px 84px 0 8px; color: var(--ink-2); }
+.run-media .video-toggle { bottom: -2px; border-color: var(--line); background: var(--panel); color: var(--navy); }
+.run-media .video-toggle:hover { border-color: var(--ink-3); background: var(--panel); }
+.run-below { padding-top: 56px; }
+
+/* Projects: two open columns, text first, the still at the foot */
+.features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; }
+.feature { display: flex; flex-direction: column; min-width: 0; }
+.feature h3 { margin-bottom: 8px; }
+.feature p { margin: 0; color: var(--ink-2); font-size: 16px; max-width: 52ch; }
+.feature .shot { margin-top: auto; padding-top: 24px; }
+
+/* FAQ: the heading stays while the questions open */
+.faq { background: var(--panel); border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.faq-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 48px 64px; align-items: start; }
+.faq-head { display: block; position: sticky; top: 96px; margin-bottom: 0; }
+.faq-head .more { margin: 16px 0 0; font-size: 16px; }
+.faq-list { margin: 0; }
+.faq details { border-top: 1px solid var(--line); }
+.faq details:last-child { border-bottom: 1px solid var(--line); }
+.faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 4px;
+  margin: 0 -4px;
+  border-radius: var(--radius-control);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary:hover { color: var(--navy); }
+.faq summary::after {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-right: 2px solid var(--ink-2);
+  border-bottom: 2px solid var(--ink-2);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms ease;
+}
+.faq details[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+.faq .answer { padding: 0 48px 20px 0; color: var(--ink-2); font-size: 16px; }
+.faq .answer p { margin: 0; }
+.faq .answer p + p { margin-top: 8px; }
+
+/* Get started: the two ways to run it, then what either one needs */
+.paths { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; }
+.path { min-width: 0; padding-top: 18px; border-top: 2px solid var(--navy); }
+.path h3 { margin-bottom: 8px; }
+.path p { margin: 0; color: var(--ink-2); font-size: 16px; }
+.path p + p { margin-top: 10px; }
+.path pre { margin: 14px 0; font-size: 14px; padding: 14px 18px; }
+.path .actions { margin-top: 16px; }
+.path .fine { margin: 14px 0 0; font-size: 14px; color: var(--ink-2); }
+.needs-list { margin: 0; padding: 0; list-style: none; }
+.needs-list li { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+
+/* Footer */
+.site-footer { margin-top: var(--section); background: var(--navy); color: var(--on-dark-2); padding: 44px 0 52px; font-size: 14.5px; }
+.site-footer .brand { color: var(--on-dark); font-size: 17px; }
+.site-footer .brand:hover { color: var(--on-dark); }
+.footer-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 20px 0 24px; padding: 0; list-style: none; }
+.site-footer a { color: var(--on-dark); }
+.site-footer a:hover { color: var(--thread); }
+.trademark { font-size: 13.5px; margin: 0; color: rgba(255, 255, 255, 0.66); }
+
+@media (max-width: 1040px) {
+  :root { --section: 80px; }
+  .record-split { grid-template-columns: minmax(0, 1fr); }
+  .record-split .facts { max-width: 640px; }
+  .faq-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .faq-head { position: static; }
+  .paths { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .path-needs { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+  .section-head, .split, .features { grid-template-columns: minmax(0, 1fr); }
+  .split { gap: 32px; }
+  .features { gap: 48px; }
+  .feature .shot { padding-top: 20px; }
+  .hero-band::before { top: 40%; }
+  .run-stage::before { bottom: 65%; }
+}
+
+@media (max-width: 720px) {
+  :root { --section: 56px; }
+  .site-header { position: static; -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--paper); }
+  .header-inner { flex-wrap: wrap; gap: 8px 16px; padding-top: 12px; padding-bottom: 12px; }
+  .site-header nav { order: 3; width: 100%; margin-left: 0; }
+  .site-header ul { gap: 4px 18px; }
+  .nav-cta { margin-left: auto; }
+  main > section { scroll-margin-top: 16px; }
+
+  .hero { padding-top: 40px; }
+  h1 { font-size: clamp(34px, 9.6vw, 56px); }
+  .lead { font-size: 17px; }
+  .hero-band { margin-top: 32px; padding-bottom: 36px; }
+  .stage-media { padding: 5px; border-radius: 10px; }
+  .stage-media video { border-radius: 5px; }
+  .section-head { margin-bottom: 28px; }
+  .section-head p { font-size: 16.5px; }
+
+  pre { font-size: 11.5px; padding: 16px 14px; }
+  .code-bar { padding: 10px 14px; }
+  .code-bar code { display: none; }
+  .run-below { padding-top: 40px; }
+  .faq summary { font-size: 17px; }
+  .faq .answer { padding-right: 24px; font-size: 15.5px; }
+  .paths { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .faq summary::after, .btn { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top"><img src="img/icon.svg" width="26" height="26" alt=""><span>Ariadne</span></a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="#record">Record</a></li>
+        <li><a href="#run">Run</a></li>
+        <li><a href="#projects">Projects</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="docs/">Docs</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-primary btn-small nav-cta" href="#get-started">Get started</a>
+  </div>
+</header>
+
+<main>
+
+  <section id="top" class="hero">
+    <div class="wrap">
+      <h1>Record Maestro flows by using your app</h1>
+      <div class="hero-sub">
+        <p class="lead">Click through your Android app on a mirrored screen and Ariadne writes the Maestro flow as you go. Everything runs on your own computer.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#get-started">Get started</a>
+          <a class="btn btn-secondary" href="docs/">Read the docs</a>
+        </div>
+      </div>
+    </div>
+    <div class="hero-band">
+      <figure class="wide stage-media hero-media has-toggle">
+        <!-- With reduced motion neither source matches, so only the poster shows and no video is fetched. -->
+        <video autoplay muted loop playsinline poster="media/record-poster.webp" width="1280" height="864" aria-label="Ariadne Studio with a calendar app mirrored on an Android emulator. A new event is typed and saved, each action appears as a step with its selector, a check is added, and the finished case opens its Maestro YAML.">
+          <source src="media/record.webm" type="video/webm" media="(prefers-reduced-motion: no-preference)">
+          <source src="media/record.mp4" type="video/mp4" media="(prefers-reduced-motion: no-preference)">
+        </video>
+        <button type="button" class="video-toggle" hidden>Pause</button>
+        <figcaption>Ariadne Studio recording a case in Fossify Calendar on an Android emulator. Device waits are shortened.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="record" class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Every tap becomes a step</h2>
+        <p>Connect an emulator or a USB phone and use your app as usual. Ariadne turns your clicks into Maestro YAML, one step at a time, each with a selector and a screenshot. A business analyst can record a test without writing code, and the flow runs with <code>maestro test</code> on a laptop or in CI.</p>
+      </div>
+      <div class="split record-split">
+        <ul class="facts">
+          <li>
+            <h3>Selectors picked for you</h3>
+            <p>Each step uses the element's resource id or visible text, escaped the way Maestro expects. Coordinates are the last resort, and the studio flags them.</p>
+          </li>
+          <li>
+            <h3>Gestures and phone buttons</h3>
+            <p>Tap, type, swipe, long press and double tap, plus Back, Home, Volume, Power and Rotate. To change a case later, re-record from any step or add steps in the middle.</p>
+          </li>
+          <li>
+            <h3>Click to add a check</h3>
+            <p>Turn on Check and click what should be on screen. When you finish recording, tick the end results you expect.</p>
+          </li>
+        </ul>
+        <div class="code-window">
+          <div class="code-bar"><strong>Create an event</strong><code>Maestro flow, as recorded</code></div>
+<pre><code>appId: org.fossify.calendar
+name: Create an event
+---
+- launchApp
+- tapOn:
+    id: "org\\.fossify\\.calendar:id/calendar_fab"
+- tapOn:
+    id: "org\\.fossify\\.calendar:id/fab_event_label"
+- inputText: "Dentist"
+- tapOn:
+    id: "org\\.fossify\\.calendar:id/event_location"
+- inputText: "Athens"
+- tapOn:
+    id: "org\\.fossify\\.calendar:id/save"
+- assertVisible:
+    id: "org\\.fossify\\.calendar:id/event_item_title"</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="run" class="section">
+    <div class="band on-dark">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>See which step failed and why</h2>
+          <p>The Maestro CLI runs your cases. Ariadne shows the result of each step beside the phone screen, with Maestro's message when a step fails.</p>
+        </div>
+      </div>
+    </div>
+    <div class="run-stage">
+      <figure class="wide stage-media run-media has-toggle">
+        <video class="clip" muted loop playsinline preload="none" poster="media/run-poster.webp" width="1920" height="1080" aria-label="A run of the Create an event case. The case's steps fill the left of the frame and tick off one by one, while a calendar app on the right creates the Dentist event.">
+          <source src="media/run.webm" type="video/webm" media="(prefers-reduced-motion: no-preference)">
+          <source src="media/run.mp4" type="video/mp4" media="(prefers-reduced-motion: no-preference)">
+        </video>
+        <button type="button" class="video-toggle" hidden>Pause</button>
+        <figcaption>The video Ariadne saved when it ran the case above.</figcaption>
+      </figure>
+    </div>
+    <div class="wrap run-below">
+      <div class="split">
+        <figure class="shot">
+          <img src="img/run-video-failed.webp" width="1920" height="1080" loading="lazy" alt="The last frame of a failed run video: the step that failed is marked with a cross and Maestro's message under it, the steps after it are marked not run, and the phone beside them shows the screen it stopped on">
+          <figcaption>The last frame of a failed run, with Maestro's message under the step and the screen it stopped on.</figcaption>
+        </figure>
+        <ul class="facts">
+          <li>
+            <h3>Compare each screen with the recording</h3>
+            <p>Ariadne takes a screenshot after every step and puts it next to the one you recorded. A screen that changed is marked "looks different", even when the run passed.</p>
+          </li>
+          <li>
+            <h3>Flaky cases are marked</h3>
+            <p>Run all retries a failed case once. If it passes the second time, it is marked flaky.</p>
+          </li>
+          <li>
+            <h3>Reports and test case documents</h3>
+            <p>A run report is a single HTML file with its pictures inside. Test case documents export to Excel, HTML or Markdown.</p>
+          </li>
+          <li>
+            <h3>Optional run videos</h3>
+            <p>Turn them on in Settings. Videos are made on your computer and are not uploaded.</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="projects" class="section section-end">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Works with logins and existing Maestro projects</h2>
+      </div>
+      <div class="features">
+        <article class="feature">
+          <h3>Start past the login screen</h3>
+          <p>A setup block is a Maestro flow that gets the app ready, such as logging in. A developer writes it once and anyone can drag it into a recording. Test users stay in <code>.env</code>, out of the case files.</p>
+          <figure class="shot">
+            <img src="img/block-mid-recording.webp" width="1480" height="1000" loading="lazy" alt="A setup block run in the middle of a recording on a real app, shown as a violet row among the recorded steps">
+          </figure>
+        </article>
+        <article class="feature">
+          <h3>Add Ariadne to a Maestro project</h3>
+          <p>Run <code>npx ariadne-studio init</code> in your repository. Your subflows become setup blocks and recorded cases land in <code>.maestro/recorded</code> as plain flows. Add <code>recorded/*</code> to <code>flows:</code> in <code>config.yaml</code> and workspace runs include them.</p>
+          <figure class="shot">
+            <img src="img/existing-project.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
+          </figure>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="section section-end faq">
+    <div class="wrap faq-grid">
+      <div class="section-head faq-head">
+        <h2>Common questions</h2>
+        <p class="more"><a href="docs/faq/general">More questions in the docs</a></p>
+      </div>
+      <div class="faq-list">
+        <details>
+          <summary><span>Is this the same as <code>maestro record</code>?</span></summary>
+          <div class="answer"><p>No. <code>maestro record</code> makes a video of a flow you already have. Ariadne writes the flow from your clicks. It can also save a <a href="docs/guides/run-video">video of each run</a>, with the steps beside the phone, made on your own computer.</p></div>
+        </details>
+        <details>
+          <summary><span>What is Maestro?</span></summary>
+          <div class="answer"><p>Maestro is a mobile UI testing framework by mobile.dev. Tests are YAML flows that the Maestro CLI runs on Android and iOS devices and emulators. See <a href="https://docs.maestro.dev/">docs.maestro.dev</a>.</p></div>
+        </details>
+        <details>
+          <summary><span>Is Ariadne a replacement for Maestro?</span></summary>
+          <div class="answer"><p>No. Ariadne records Maestro flows and passes them to the Maestro CLI to run. It adds the recorder, the results view and the document export.</p></div>
+        </details>
+        <details>
+          <summary><span>How is Ariadne different from Maestro Studio?</span></summary>
+          <div class="answer"><p>Maestro Studio is mobile.dev's own tool for developers working on flows. Ariadne is for people who know the product but do not write YAML. It records a whole case as you use the app, keeps a screenshot and run history for every step, lets one case start where another ends, and exports test case documents. Both produce flows the Maestro CLI can run.</p></div>
+        </details>
+        <details>
+          <summary><span>Is Ariadne a Waldo alternative?</span></summary>
+          <div class="answer"><p>For recording tests without writing them, yes. As with Waldo, you record a test by using the app. Ariadne runs on your own computer, against an emulator or a USB phone, and keeps each test as a plain Maestro flow in your repository. <a href="docs/guides/compare">See how the tools compare</a>.</p></div>
+        </details>
+        <details>
+          <summary><span>Do I need to know YAML?</span></summary>
+          <div class="answer"><p>No. You record, check, run and export in the studio. <a href="docs/guides/setup-blocks">Setup blocks</a> are YAML, but a developer writes those for you.</p></div>
+        </details>
+        <details>
+          <summary><span>Does Ariadne need the cloud?</span></summary>
+          <div class="answer"><p>No. It runs on your own computer against an emulator or a USB phone. Ariadne has no account and no service of its own, and nothing it records is uploaded. The Maestro CLI has its own analytics setting; see <a href="docs/guides/if-you-know-maestro#privacy">Privacy in the docs</a>.</p></div>
+        </details>
+        <details>
+          <summary><span>Does it support iOS?</span></summary>
+          <div class="answer"><p>Not today. Ariadne records on Android emulators and USB phones.</p></div>
+        </details>
+        <details>
+          <summary><span>Where do the tests live?</span></summary>
+          <div class="answer"><p>In a folder you choose. <code>flows/</code> holds the Maestro YAML, <code>cases/</code> the recorded steps, <code>evidence/</code> their screenshots, <code>runs/</code> the results of every run and <code>exports/</code> the documents. The Files sidebar in the studio shows all of it.</p></div>
+        </details>
+        <details>
+          <summary><span>Can developers edit the YAML by hand?</span></summary>
+          <div class="answer"><p>Yes, they are plain files, but a case's flow is rewritten from its recorded steps on the next save or run. Edit recorded cases in the studio, and keep hand-written flows in <code>blocks/</code>.</p></div>
+        </details>
+        <details>
+          <summary><span>Can I use my existing <code>.maestro</code> folder?</span></summary>
+          <div class="answer"><p>Yes. <code>npx ariadne-studio init</code> adds Ariadne beside it, your subflows become setup blocks, and recorded flows land in <code>.maestro/recorded</code>. Add <code>recorded/*</code> to <code>flows:</code> in <code>config.yaml</code> and workspace runs include them.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Desktop: when the Linux build is published, confirm this link resolves to a
+       GitHub release carrying Ariadne-Studio-<version>-linux-x86_64.AppImage. The link goes
+       to the latest release page because the file name changes with every version. The
+       downloadUrl in the JSON-LD at the top of this file points at the same page. -->
+  <section id="get-started" class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Get started</h2>
+        <p>The desktop app and the command line use the same project folders, so people on a team can pick either.</p>
+        <p class="fine"><strong>Not released yet.</strong> The first release is being tested, so the download and the <code>npx</code> command do not work today. Watch the <a href="https://github.com/sudo-ezekiel/ariadne-studio">repository</a> to hear when they do.</p>
+      </div>
+      <div class="paths">
+        <div class="path">
+          <h3>Desktop app</h3>
+          <p>For Linux, as an AppImage. Download it, make it executable and start it.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://github.com/sudo-ezekiel/ariadne-studio/releases">Download for Linux</a>
+          </div>
+          <p class="fine">Builds for Windows and macOS are configured and not yet verified on a device.</p>
+        </div>
+        <div class="path">
+          <h3>Command line</h3>
+          <p>On Linux, with Node 22.12 or newer:</p>
+<pre><code>npx ariadne-studio</code></pre>
+          <p>It opens the studio in your browser.</p>
+        </div>
+        <div class="path path-needs">
+          <h3>You need</h3>
+          <ul class="needs-list">
+            <li>A booted emulator or a USB phone</li>
+            <li><code>adb</code></li>
+            <li>Java 17 or newer</li>
+            <li>The Maestro CLI</li>
+          </ul>
+          <p class="fine"><strong>Device setup</strong> in the studio checks <code>adb</code>, Java and Maestro, and walks you through what is missing. Run videos also need <code>ffmpeg</code> to show the steps. Without it they show only the phone.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <a class="brand" href="#top"><img src="img/icon.svg" width="24" height="24" loading="lazy" alt=""><span>Ariadne</span></a>
+      <span>Walk through your app once. Ariadne retraces your steps on every run.</span>
+    </div>
+    <!-- Replace the repository URL once the repo is published. -->
+    <ul class="footer-links">
+      <li><a href="docs/">Docs</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/sudo-ezekiel/ariadne-studio">GitHub</a></li>
+    </ul>
+    <p class="trademark">Maestro is a trademark of mobile.dev. Ariadne is an independent tool and is not affiliated with mobile.dev.</p>
+  </div>
+</footer>
+
+<script>
+// A looping video needs a way to stop it. With reduced motion no source matches, so there is nothing to play.
+(() => {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (const frame of document.querySelectorAll('.has-toggle')) {
+    const video = frame.querySelector('video');
+    const toggle = frame.querySelector('.video-toggle');
+    let paused = false;
+    toggle.hidden = false;
+    toggle.addEventListener('click', () => {
+      paused = !video.paused;
+      if (paused) video.pause();
+      else video.play();
+      toggle.textContent = paused ? 'Play' : 'Pause';
+    });
+    // The clip further down only loads and plays once it is in view.
+    if (video.classList.contains('clip')) {
+      new IntersectionObserver(([entry]) => {
+        if (paused) return;
+        if (entry.isIntersecting) video.play();
+        else video.pause();
+      }, { threshold: 0.4 }).observe(video);
+    }
+  }
+})();
+</script>
+</body>
+</html>

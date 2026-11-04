@@ -1,0 +1,16 @@
+packages:
+  - packages/*
+  - apps/*
+
+# esbuild (used by tsx) verifies its platform binary in a postinstall script;
+# electron downloads its binary in one. electron-winstaller (Squirrel, pulled in
+# by electron-builder) is not used: Windows builds use NSIS.
+allowBuilds:
+  esbuild: true
+  electron: true
+  electron-winstaller: false
+
+# agent-device 0.21.35 is newer than pnpm's default minimum release age; it is
+# pinned on purpose because the spec was verified against this exact version.
+minimumReleaseAgeExclude:
+  - agent-device@0.21.35

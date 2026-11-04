@@ -1,0 +1,47 @@
+# Packaging for Ariadne Studio. `pnpm dist` builds for the OS it runs on and
+# `pnpm dist:win` the Windows installer, on Linux through Wine. macOS builds
+# have to run on a Mac. Nothing is code signed yet.
+appId: io.github.sudo-ezekiel.ariadne-studio
+productName: Ariadne Studio
+copyright: Copyright © 2026 Ezekiel
+directories:
+  output: release
+  buildResources: build-resources
+files:
+  - dist/**
+  - build-resources/icon.png
+  - package.json
+# The server runs as a separate Node process and agent-device hands its helper
+# APKs to adb by path, so it all stays outside the asar archive.
+extraResources:
+  - from: stage/server
+    to: server
+  # electron-builder skips node_modules folders inside a copied folder, so the
+  # one runtime package gets its own entry.
+  - from: stage/server/node_modules/agent-device
+    to: server/node_modules/agent-device
+# main.cjs is a bundle and there are no runtime node_modules to rebuild.
+npmRebuild: false
+nodeGypRebuild: false
+artifactName: Ariadne-Studio-${version}-${os}-${arch}.${ext}
+linux:
+  target: AppImage
+  category: Development
+  icon: build-resources/icon.png
+  executableName: ariadne-studio
+  # Lets desktop environments match the running window to the launcher entry.
+  syncDesktopName: true
+mac:
+  target: dmg
+  category: public.app-category.developer-tools
+win:
+  target:
+    - target: nsis
+      arch: x64
+  icon: build-resources/icon.png
+# An installer with pages, so someone without admin rights can install for
+# themselves only. Settings and logs in %APPDATA% stay on uninstall.
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+publish: null

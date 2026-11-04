@@ -1,0 +1,48 @@
+name: Phone report
+description: How Ariadne Studio did on your phone, good or bad.
+title: "Phone report: "
+labels: [phone-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. Few real phones have been tested, so a report helps even when everything worked.
+        The checklist is in the guide `apps/docs/guides/test-on-your-phone.md`.
+
+        **Issues are public.** Export diagnostics leaves out `.env` values, passwords and where keys
+        were pressed, but step names and Maestro's output come from your app, so look through the
+        file before you attach it. Leave **Include screenshots** unticked unless you have checked them.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: |
+        Press **Export diagnostics** in the **Set up a device** dialog (from the Settings gear in the
+        top bar, or the link under the device card). Drag the .zip file into this box.
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone maker and model
+      placeholder: Samsung Galaxy A16
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      description: Add the maker's own version if you know it, such as One UI 6.1 or HyperOS 3.
+      placeholder: Android 14, One UI 6.1
+    validations:
+      required: true
+  - type: textarea
+    id: failed
+    attributes:
+      label: What failed
+      description: |
+        Which items on the checklist did not work, and any message the phone or the studio showed.
+        If everything worked, say so. On a Samsung, say whether USB debugging stayed on, and quote
+        any Auto Blocker message.
+    validations:
+      required: true

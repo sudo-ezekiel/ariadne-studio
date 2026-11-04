@@ -1,0 +1,8 @@
+appId: com.android.settings
+name: Open network settings
+---
+- launchApp
+- tapOn:
+    text: "Network & internet"
+- assertVisible:
+    text: "Internet"

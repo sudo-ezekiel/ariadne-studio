@@ -1,0 +1,56 @@
+{
+  "name": "ariadne-studio",
+  "version": "0.1.0",
+  "description": "Ariadne Studio, a recorder for Maestro. Record flows by using your Android app, on your own machine, and get plain Maestro YAML with a screenshot per step.",
+  "keywords": [
+    "maestro",
+    "maestro-flow",
+    "mobile-testing",
+    "android",
+    "e2e",
+    "test-recorder",
+    "no-code",
+    "business-analyst",
+    "maestro-yaml",
+    "android-testing",
+    "test-automation",
+    "qa"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/sudo-ezekiel/ariadne-studio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sudo-ezekiel/ariadne-studio.git",
+    "directory": "apps/cli"
+  },
+  "bugs": "https://github.com/sudo-ezekiel/ariadne-studio/issues",
+  "type": "module",
+  "bin": {
+    "ariadne-studio": "bin/ariadne-studio.mjs"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "tsx build.ts",
+    "prepack": "pnpm --filter ariadne-studio... build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "agent-device": "0.21.35"
+  },
+  "devDependencies": {
+    "@ariadne/core": "workspace:*",
+    "@ariadne/studio": "workspace:*",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

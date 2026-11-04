@@ -1,0 +1,12 @@
+# Ariadne
+
+> Ariadne, a recorder for Maestro. A local, no-code test recorder for Android: click through your app on a mirrored screen and get plain Maestro YAML, a screenshot per step and a video of every run.
+
+Maestro is a trademark of mobile.dev. Ariadne is an independent tool and is not affiliated with mobile.dev.
+
+## Docs
+
+- [Documentation index](https://ariadne.sudo-ezekiel.com/docs/llms.txt): every page, in plain Markdown
+- [Introduction](https://ariadne.sudo-ezekiel.com/docs/guides/introduction.md): what Ariadne is and who it is for
+- [Record your first case](https://ariadne.sudo-ezekiel.com/docs/guides/first-case.md): a walkthrough on a real app
+- [Compare the tools](https://ariadne.sudo-ezekiel.com/docs/guides/compare.md): Ariadne, Maestro Studio and Waldo
