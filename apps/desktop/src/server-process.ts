@@ -44,6 +44,8 @@ const STOP_GRACE_MS = 8000;
 export function startServer(options: StartServerOptions): Promise<StudioServer> {
   mkdirSync(dirname(options.logFile), { recursive: true });
   const log = createWriteStream(options.logFile, { flags: 'w' });
+  // A log that cannot be written must not take the app down with it.
+  log.on('error', (error) => console.error(`Could not write ${options.logFile}: ${error.message}`));
   const tail: string[] = [];
   const child: ChildProcess = fork(options.entry, [options.projectDir, '--port', '0', '--host', '127.0.0.1', '--no-open'], {
     execPath: options.execPath,

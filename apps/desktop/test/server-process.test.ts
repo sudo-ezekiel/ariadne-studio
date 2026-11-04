@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerStartError, startServer, type StudioServer } from '../src/server-process.ts';
 
 // The fixture stands in for dist/cli.mjs: it speaks the same IPC messages, picks
@@ -71,13 +71,14 @@ describe('startServer', () => {
 
   it('passes the project folder, port 0, host and --no-open to the entry', async () => {
     await start('ready');
-    expect(readFileSync(join(dir, 'logs', 'server.log'), 'utf8')).toContain(`fixture args: ${join(dir, 'project')} --port 0 --host 127.0.0.1 --no-open`);
+    // The write to the log lands a moment after the ready message.
+    await vi.waitFor(() => expect(readFileSync(join(dir, 'logs', 'server.log'), 'utf8')).toContain(`fixture args: ${join(dir, 'project')} --port 0 --host 127.0.0.1 --no-open`));
   });
 
   it('creates the missing log folder and writes server output to the log file', async () => {
     const error = await startFailing('exit-early');
     expect(error.output).toContain('about to die');
-    expect(readFileSync(join(dir, 'logs', 'server.log'), 'utf8')).toContain('about to die');
+    await vi.waitFor(() => expect(readFileSync(join(dir, 'logs', 'server.log'), 'utf8')).toContain('about to die'));
   });
 
   it('rejects with a ServerStartError carrying the server message and output tail on ariadne:error', async () => {
