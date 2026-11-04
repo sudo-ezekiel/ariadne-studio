@@ -220,7 +220,7 @@ describe('the server', () => {
 
   it('refuses a request marked cross-site by the browser', async () => {
     const { app } = await server();
-    const response = await app.inject({ method: 'GET', url: '/api/setup', headers: { 'sec-fetch-site': 'cross-site' } });
+    const response = await app.inject({ method: 'GET', url: '/api/session', headers: { 'sec-fetch-site': 'cross-site' } });
     expect(response.statusCode).toBe(403);
   });
 
@@ -247,24 +247,24 @@ describe('the server', () => {
 
   it('answers a normal request with inject\'s default headers', async () => {
     const { app } = await server();
-    expect((await app.inject({ method: 'GET', url: '/api/setup' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/session' })).statusCode).toBe(200);
   });
 
   it('answers a request with a loopback Host and its own Origin', async () => {
     const { app } = await server();
-    const response = await app.inject({ method: 'GET', url: '/api/setup', headers: { host: '127.0.0.1:4711', origin: 'http://127.0.0.1:4711', 'sec-fetch-site': 'same-origin' } });
+    const response = await app.inject({ method: 'GET', url: '/api/session', headers: { host: '127.0.0.1:4711', origin: 'http://127.0.0.1:4711', 'sec-fetch-site': 'same-origin' } });
     expect(response.statusCode).toBe(200);
   });
 
   it('serves a LAN Host when told it listens on 0.0.0.0, and still refuses another site', async () => {
     const { app } = await server('0.0.0.0');
-    expect((await app.inject({ method: 'GET', url: '/api/setup', headers: { host: '192.168.1.20:4711' } })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'GET', url: '/api/setup', headers: { host: '192.168.1.20:4711', origin: 'https://evil.example' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/session', headers: { host: '192.168.1.20:4711' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/session', headers: { host: '192.168.1.20:4711', origin: 'https://evil.example' } })).statusCode).toBe(403);
   });
 
   it('refuses a LAN Host when listenHost is left at its default', async () => {
     const { app } = await server();
-    expect((await app.inject({ method: 'GET', url: '/api/setup', headers: { host: '192.168.1.20:4711' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/session', headers: { host: '192.168.1.20:4711' } })).statusCode).toBe(403);
   });
 });
 
