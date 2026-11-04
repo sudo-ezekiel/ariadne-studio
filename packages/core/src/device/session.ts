@@ -95,6 +95,24 @@ export function installRefused(error: unknown): boolean {
   return normalized.details?.adbFailure === 'install_failed' || normalized.message.includes('INSTALL_FAILED_USER_RESTRICTED');
 }
 
+/**
+ * The process of a daemon that started and then stopped making progress, which
+ * agent-device's error names. It stalled on about one fresh Windows machine in
+ * five (and always under Wine), and while it lives it holds the registration
+ * lock, so every later start fails with "Daemon registration busy".
+ */
+export function stalledDaemon(error: unknown): number | undefined {
+  const details = normalizeAgentDeviceError(error).details as { kind?: unknown; reason?: unknown; daemonProcess?: { pid?: unknown } } | undefined;
+  if (details?.kind !== 'daemon_startup_failed' || details.reason !== 'startup-stalled') return undefined;
+  const pid = details.daemonProcess?.pid;
+  return typeof pid === 'number' ? pid : undefined;
+}
+
+async function stopProcess(pid: number): Promise<void> {
+  if (process.platform === 'win32') await execFileAsync('taskkill', ['/pid', String(pid), '/t', '/f'], { timeout: 15_000, windowsHide: true });
+  else process.kill(pid, 'SIGKILL');
+}
+
 function viewportFrom(value: unknown): Viewport | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const { width, height } = value as { width?: unknown; height?: unknown };
@@ -166,9 +184,25 @@ export class DeviceSession {
     return this.target !== undefined;
   }
 
+  /**
+   * Runs a call that may be the one that starts agent-device's daemon. If the
+   * daemon stalls, ends it and tries once more: nothing recovers while it lives.
+   */
+  private async startingDaemon<T>(call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (error) {
+      const pid = stalledDaemon(error);
+      if (pid === undefined) throw error;
+      console.error(`[studio] agent-device's daemon stalled at start (${describeDeviceError(error).message}). Ending process ${pid} and starting it again.`);
+      await stopProcess(pid);
+      return call();
+    }
+  }
+
   /** Booted Android devices, for the device picker. */
   async listDevices(): Promise<DeviceInfo[]> {
-    const devices = await this.client.devices.list({ platform: 'android' });
+    const devices = await this.startingDaemon(() => this.client.devices.list({ platform: 'android' }));
     return devices
       .filter((device) => device.platform === 'android' && device.booted === true)
       .map((device) => ({
@@ -194,14 +228,16 @@ export class DeviceSession {
    * two in step.
    */
   async open({ deviceId, appId, relaunch = false }: OpenOptions): Promise<void> {
-    const result = await this.client.apps.open({
-      app: appId,
-      platform: 'android',
-      serial: deviceId,
-      foreground: true,
-      relaunch,
-      testIme: false,
-    });
+    const result = await this.startingDaemon(() =>
+      this.client.apps.open({
+        app: appId,
+        platform: 'android',
+        serial: deviceId,
+        foreground: true,
+        relaunch,
+        testIme: false,
+      }),
+    );
     this.target = { deviceId, appId };
     this.viewport = viewportFrom(result.snapshot?.viewport) ?? this.viewport;
   }
