@@ -179,18 +179,16 @@ describe('spawnCommand', () => {
     afterEach(() => vi.unstubAllEnvs());
 
     // Passing undefined would use the default, process.env.ComSpec, which a real
-    // Windows process always has and whose name is case-insensitive there. So the
-    // variable itself is emptied, under both spellings, which behaves the same
-    // on Windows and on Linux.
+    // Windows process always has, so the variable itself is changed. One spelling
+    // only: names are case-insensitive on Windows, so stubbing a second one records
+    // the first stub as its original, and the fake outlives the test.
     it('falls back to cmd.exe when the ComSpec variable is empty', () => {
       vi.stubEnv('ComSpec', '');
-      vi.stubEnv('COMSPEC', '');
       expect(spawnCommand('C:\\m\\maestro.bat', [], 'win32').command).toBe('cmd.exe');
     });
 
     it('uses the ComSpec variable when it is set', () => {
       vi.stubEnv('ComSpec', 'D:\\win\\cmd.exe');
-      vi.stubEnv('COMSPEC', 'D:\\win\\cmd.exe');
       expect(spawnCommand('C:\\m\\maestro.bat', [], 'win32').command).toBe('D:\\win\\cmd.exe');
     });
   });

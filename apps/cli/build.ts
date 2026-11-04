@@ -4,7 +4,7 @@
 // entry) relative to its install folder, so it has to stay a real package.
 import { builtinModules, createRequire } from 'node:module';
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
@@ -97,7 +97,7 @@ const NO_LICENCE_FILE: Record<string, string> = {
 
 const notices: string[] = [];
 for (const root of [...roots].sort()) {
-  const absolute = root.startsWith('/') ? root : join(process.cwd(), root);
+  const absolute = isAbsolute(root) ? root : join(process.cwd(), root);
   const meta = JSON.parse(readFileSync(join(absolute, 'package.json'), 'utf8')) as PackageJson;
   const licenseFile = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'license', 'LICENCE'].map((file) => join(absolute, file)).find(existsSync);
   notices.push(

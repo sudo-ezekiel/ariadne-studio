@@ -1191,7 +1191,8 @@ describe('replay screenshots and reports', () => {
     return replayed.body as RunView;
   }
 
-  it('runs an instrumented copy of the flow and compares each replayed screen with the recorded one', async () => {
+  // Compares real PNGs, which took over 5 s on a Windows CI machine.
+  it('runs an instrumented copy of the flow and compares each replayed screen with the recorded one', { timeout: 30_000 }, async () => {
     const caseId = await recordReplayBase();
     // The screen after Back looks different on replay.
     maestro.shotScreens.set('after-003', 'login');
