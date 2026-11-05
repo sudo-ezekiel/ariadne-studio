@@ -902,6 +902,14 @@ button.link-on-dark:hover:not(:disabled) {
   min-width: 0;
 }
 
+.wait-form {
+  align-items: center;
+}
+
+.wait-form input {
+  flex: 0 0 64px;
+}
+
 /* Case panel */
 
 .case-panel {

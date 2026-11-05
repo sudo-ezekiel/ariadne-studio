@@ -305,3 +305,8 @@ export type CaseBlockRequest = BlockUse;
 
 /** A test user saved from the studio: `values` maps a block variable (USERNAME) to its value. */
 export type TestUserRequest = { name: string; values: Record<string, string> };
+
+/** The longest a Wait step can be. */
+export const MAX_WAIT_SECONDS = 120;
+/** What the Wait button offers. On a POCO F5 Pro, a tap on gov.gr failed 8 s after the page opened and worked at 16 s. */
+export const DEFAULT_WAIT_SECONDS = 20;

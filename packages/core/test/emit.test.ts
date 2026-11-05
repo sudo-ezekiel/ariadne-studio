@@ -352,3 +352,51 @@ describe('startRecording and stopRecording', () => {
     );
   });
 });
+
+describe('wait', () => {
+  const waitFlow = (seconds: number): MaestroFlow => ({ appId: 'a.b', steps: [{ kind: 'wait', seconds }] });
+  const parseBody = (body: string) => () => parseMaestroFlow(`appId: a\n---\n${body}`);
+
+  it('emits a Wait as an optional extendedWaitUntil for something that is never on screen', () => {
+    expect(toMaestroYaml(waitFlow(20))).toBe(
+      [
+        'appId: a.b',
+        '---',
+        '- extendedWaitUntil:',
+        '    visible: "ariadne-wait"',
+        '    timeout: 20000',
+        '    optional: true',
+        '    label: "Wait 20 seconds"',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('writes one second in the singular', () => {
+    const yaml = toMaestroYaml(waitFlow(1));
+    expect(yaml).toContain('    timeout: 1000\n');
+    expect(yaml).toContain('    label: "Wait 1 second"\n');
+  });
+
+  it('reads back what it wrote', () => {
+    const flow: MaestroFlow = {
+      appId: 'a.b',
+      steps: [{ kind: 'launchApp' }, { kind: 'wait', seconds: 20 }, { kind: 'wait', seconds: 1 }, { kind: 'wait', seconds: 120 }],
+    };
+    expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+  });
+
+  it('still refuses an extendedWaitUntil for something real on screen', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "Loaded"\n    timeout: 5000\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+    expect(parseBody('- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n')).toThrow(MaestroParseError);
+  });
+
+  it('still refuses an extendedWaitUntil for the Wait label when it has no timeout', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: "20000"\n')).toThrow(MaestroParseError);
+  });
+
+  it('refuses a bare extendedWaitUntil', () => {
+    expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+});

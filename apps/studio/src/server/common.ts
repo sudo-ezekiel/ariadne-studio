@@ -209,6 +209,8 @@ async function performDirect(state: ServerState, action: DirectAction): Promise<
       const at = pointOnScreen(action.point, (await state.session.snapshot()).viewport);
       return action.kind === 'longPress' ? state.session.longPressAt(at) : state.session.doubleTapAt(at);
     }
+    case 'wait':
+      return new Promise((resolve) => setTimeout(resolve, action.seconds * 1000));
   }
 }
 

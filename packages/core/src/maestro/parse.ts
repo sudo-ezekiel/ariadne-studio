@@ -2,6 +2,7 @@ import { parseAllDocuments } from 'yaml';
 import {
   MAESTRO_KEYS,
   MAESTRO_ORIENTATIONS,
+  NEVER_ON_SCREEN,
   type MaestroFlow,
   type MaestroSelector,
   type MaestroStep,
@@ -222,6 +223,10 @@ export function parseStep(raw: unknown, position: number): MaestroStep {
       expectKeys(arg, ['link'], `openLink at ${where}`);
       return { kind: 'openLink', link: expectString(arg.link, `openLink.link at ${where}`) };
     }
+    case 'extendedWaitUntil':
+      // Only the form a Wait step writes. Any other wait stays Maestro's to run.
+      if (isRecord(arg) && arg.visible === NEVER_ON_SCREEN && typeof arg.timeout === 'number') return { kind: 'wait', seconds: arg.timeout / 1000 };
+      throw new MaestroParseError(`Unsupported command "extendedWaitUntil" at ${where}`);
     case 'takeScreenshot': {
       if (typeof arg === 'string') return { kind: 'takeScreenshot', path: arg };
       if (!isRecord(arg)) throw new MaestroParseError(`takeScreenshot needs a path at ${where}`);

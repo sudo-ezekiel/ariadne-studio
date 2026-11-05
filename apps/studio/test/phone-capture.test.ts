@@ -762,6 +762,14 @@ describe('the studio while the phone is the input', () => {
     expect(response.body.step).toMatchObject({ kind: 'expect' });
   });
 
+  it('lets a wait through, since it touches nothing on the phone', async () => {
+    const r = await rig();
+    await startPhone(r);
+    const response = await call(r, 'POST', '/api/case/wait', { seconds: 5 });
+    expect(response.status).toBe(200);
+    expect(response.body.step).toMatchObject({ kind: 'wait', seconds: 5 });
+  });
+
   it('allows actions again once the phone is stopped', async () => {
     const r = await rig();
     await startPhone(r);

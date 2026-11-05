@@ -32,15 +32,16 @@ import {
   type TestCase,
   hasAppElements,
 } from '@ariadne/core';
-import type {
-  ActionResponse,
-  CandidatesResponse,
-  CaseFinishResponse,
-  CaseListItem,
-  CaseStartResponse,
-  ProjectInfo,
-  SessionInfo,
-  TestUserRequest,
+import {
+  MAX_WAIT_SECONDS,
+  type ActionResponse,
+  type CandidatesResponse,
+  type CaseFinishResponse,
+  type CaseListItem,
+  type CaseStartResponse,
+  type ProjectInfo,
+  type SessionInfo,
+  type TestUserRequest,
 } from '../shared/api-types.ts';
 import { registerCaseRoutes } from './cases.ts';
 import {
@@ -91,6 +92,14 @@ function readPoint(body: unknown): Point {
     throw new HttpError(400, 'BAD_REQUEST', 'Expected { x, y } in viewport pixels.');
   }
   return { x, y };
+}
+
+function readSeconds(body: unknown): number {
+  const { seconds } = (body ?? {}) as { seconds?: unknown };
+  if (typeof seconds !== 'number' || !Number.isInteger(seconds) || seconds < 1 || seconds > MAX_WAIT_SECONDS) {
+    throw new HttpError(400, 'BAD_REQUEST', `A wait is 1 to ${MAX_WAIT_SECONDS} seconds.`);
+  }
+  return seconds;
 }
 
 function readString(body: unknown, key: string): string {
@@ -805,6 +814,16 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       state.editing = undefined;
       return { caseId, screen };
     });
+  });
+
+  /** A pause for a run to sit through. Nothing happens on the device, so it also goes through while using the phone. */
+  app.post('/api/case/wait', async (request): Promise<ActionResponse> => {
+    const seconds = readSeconds(request.body);
+    requireSession(state);
+    requireCase(state);
+    return enqueue(state, () =>
+      recordedAction(state, async () => undefined, (recorder, screenshot) => recorder.recordWait(seconds, screenshot), 'wait'),
+    );
   });
 
   app.post('/api/case/expect', async (request): Promise<ActionResponse> => {

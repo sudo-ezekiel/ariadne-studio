@@ -1,5 +1,5 @@
 import { Scalar, stringify } from 'yaml';
-import type { MaestroFlow, MaestroSelector, MaestroStep, PercentPoint } from './model.ts';
+import { NEVER_ON_SCREEN, waitName, type MaestroFlow, type MaestroSelector, type MaestroStep, type PercentPoint } from './model.ts';
 
 // Selector values and typed text are always double quoted: Maestro reads them
 // as regexes or literal input, and quoting keeps YAML from turning "yes",
@@ -62,6 +62,10 @@ function stepToYaml(step: MaestroStep): unknown {
       return { assertNotVisible: selectorToYaml(step.selector) };
     case 'openLink':
       return { openLink: quoted(step.link) };
+    case 'wait':
+      return {
+        extendedWaitUntil: { visible: quoted(NEVER_ON_SCREEN), timeout: step.seconds * 1000, optional: true, label: quoted(waitName(step.seconds)) },
+      };
     case 'takeScreenshot':
       return step.optional === undefined
         ? { takeScreenshot: { path: step.path } }

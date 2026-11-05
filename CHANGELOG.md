@@ -21,6 +21,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   case starts, not a limit.
 - Screens that block screenshots, as banks and ID apps often do, show their text and buttons over
   the black picture.
+- **Wait** makes a run pause at a point in a case. A tap on a web page that is still loading does
+  nothing, and Maestro still reports it as completed.
 
 ### Changed
 

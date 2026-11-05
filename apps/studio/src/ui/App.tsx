@@ -287,6 +287,7 @@ export function App() {
   const relaunch = () => run('Relaunching', async () => applyAction(await api.relaunch()));
   const hideKeyboard = () => run('Hiding the keyboard', async () => applyAction(await api.hideKeyboard()));
   const openLink = (url: string) => run('Opening link', async () => applyAction(await api.openLink(url)));
+  const addWait = (seconds: number) => run('Adding a wait', async () => applyAction(await api.wait(seconds)));
   const longPress = (point: Point) => run('Long pressing', async () => applyAction(await api.longPress(point.x, point.y)));
   const doubleTap = (point: Point) => run('Double tapping', async () => applyAction(await api.doubleTap(point.x, point.y)));
   const swipe = (from: Point, to: Point, durationMs: number) =>
@@ -506,6 +507,7 @@ export function App() {
           onRefresh={() => void refreshScreen()}
           onHideKeyboard={() => void hideKeyboard()}
           onOpenLink={(url) => void openLink(url)}
+          onWait={(seconds) => void addWait(seconds)}
           onLongPress={(point) => void longPress(point)}
           onDoubleTap={(point) => void doubleTap(point)}
           onSwipe={(from, to, durationMs) => void swipe(from, to, durationMs)}

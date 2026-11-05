@@ -1,7 +1,7 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
-import type { PhoneStatus, ScreenState, SnapshotNodeLite } from '../../shared/api-types.ts';
+import { DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
 import { PhoneButtons } from './PhoneButtons.tsx';
@@ -42,6 +42,7 @@ type Props = {
   onRefresh: () => void;
   onHideKeyboard: () => void;
   onOpenLink: (url: string) => void;
+  onWait: (seconds: number) => void;
   onLongPress: (point: Point) => void;
   onDoubleTap: (point: Point) => void;
   /** A drag across the screen, in viewport pixels, and how long it took. */
@@ -220,6 +221,8 @@ export function Mirror(props: Props) {
   const [hover, setHover] = useState<SnapshotNodeLite | undefined>();
   const [text, setText] = useState('');
   const [link, setLink] = useState<string | null>(null);
+  const [wait, setWait] = useState<string | null>(null);
+  const waitValid = Number.isInteger(Number(wait)) && Number(wait) >= 1 && Number(wait) <= MAX_WAIT_SECONDS;
   const press = useRef<Press | null>(null);
   /** The drag being drawn, in viewport pixels. */
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
@@ -403,7 +406,15 @@ export function Mirror(props: Props) {
             Hide keyboard
           </button>
           {link === null ? (
-            <button type="button" onClick={() => setLink('')} disabled={inputOff} title="Open a web link or an app deep link">
+            <button
+              type="button"
+              onClick={() => {
+                setWait(null);
+                setLink('');
+              }}
+              disabled={inputOff}
+              title="Open a web link or an app deep link"
+            >
               Open link
             </button>
           ) : (
@@ -427,6 +438,47 @@ export function Mirror(props: Props) {
                 Go
               </button>
               <button type="button" onClick={() => setLink(null)}>
+                Cancel
+              </button>
+            </form>
+          )}
+          {wait === null || !caseActive ? (
+            <button
+              type="button"
+              onClick={() => {
+                setLink(null);
+                setWait(String(DEFAULT_WAIT_SECONDS));
+              }}
+              disabled={!sessionOpen || !caseActive || busy}
+              title={caseActive ? 'Make a run pause here, for a page that is still loading. Nothing happens on the phone now' : 'Start a case first'}
+            >
+              Wait
+            </button>
+          ) : (
+            <form
+              className="inline-form wait-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!waitValid) return;
+                props.onWait(Number(wait));
+                setWait(null);
+              }}
+            >
+              <input
+                autoFocus
+                type="number"
+                min={1}
+                max={MAX_WAIT_SECONDS}
+                value={wait}
+                onChange={(event) => setWait(event.target.value)}
+                aria-label="Seconds to wait"
+                disabled={!sessionOpen || busy}
+              />
+              <span>seconds</span>
+              <button type="submit" disabled={!sessionOpen || busy || !waitValid}>
+                Add
+              </button>
+              <button type="button" onClick={() => setWait(null)}>
                 Cancel
               </button>
             </form>

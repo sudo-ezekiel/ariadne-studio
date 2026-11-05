@@ -308,6 +308,10 @@ export class Recorder {
     return this.recordSimple({ kind: 'openLink', url }, screenshotPath);
   }
 
+  recordWait(seconds: number, screenshotPath?: string): CaseStep {
+    return this.recordSimple({ kind: 'wait', seconds }, screenshotPath);
+  }
+
   recordHideKeyboard(screenshotPath?: string): CaseStep {
     return this.recordSimple({ kind: 'hideKeyboard' }, screenshotPath);
   }
@@ -321,6 +325,7 @@ export class Recorder {
     fields:
       | { kind: 'relaunch' }
       | { kind: 'openLink'; url: string }
+      | { kind: 'wait'; seconds: number }
       | { kind: 'hideKeyboard' }
       | { kind: 'erase'; chars: number }
       | { kind: 'block'; file: string; values?: Record<string, string> }
@@ -462,6 +467,8 @@ function stepToMaestro(
       return { kind: 'launchApp' };
     case 'openLink':
       return { kind: 'openLink', link: step.url };
+    case 'wait':
+      return { kind: 'wait', seconds: step.seconds };
     case 'hideKeyboard':
       return { kind: 'hideKeyboard' };
     case 'scroll':

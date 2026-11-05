@@ -75,6 +75,14 @@ A case runs the flow of the case it starts from in full, end checks included, so
 
 Open link sends Android's VIEW intent through adb while recording, the same intent Maestro's `openLink` sends on a run, so the device opens the link with whatever app handles it. agent-device alone can only open links inside the app under test. Checked on the emulator with a web link: both end in Chrome. The link is quoted for the device shell and must look like `scheme://...`.
 
+## A tap on a page that is still loading
+
+Maestro can find a link on a web page before the page is ready to follow it. The tap then does nothing and Maestro still reports it as completed, so the run fails at the next step, or passes if no step comes after the tap.
+
+On a POCO F5 Pro, a recorded tap on gov.gr did nothing up to 8 seconds after the page opened, and worked from about 16 seconds. `waitForAnimationToEnd` did not help, and an emulator passed the same flow with no pause, so an emulator does not show this.
+
+Add a **Wait** before the tap, and a check after it, so that a tap that did nothing fails where you can see it. How long a page needs depends on the phone and the network.
+
 ## Run video
 
 Android's screen recorder may stop at 3 minutes on a long run, and a run can last 5 minutes.

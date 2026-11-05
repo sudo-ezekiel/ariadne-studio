@@ -85,6 +85,7 @@ The controls under the screen add these steps:
 - **Relaunch app** closes the app and starts it again.
 - **Hide keyboard** closes the on-screen keyboard.
 - **Open link** opens a web link or an app deep link. The link must look like `scheme://...`. The device opens it with whatever app handles it.
+- **Wait** makes a run pause at this point, for 1 to 120 seconds. Nothing happens on the phone while you record. Add one before a tap on a website that has just opened, see [Known limits](/reference/known-limits#a-tap-on-a-page-that-is-still-loading).
 
 ## Check mode
 

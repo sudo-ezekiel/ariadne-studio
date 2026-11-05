@@ -31,6 +31,7 @@ The case JSON is the source of truth, and the Flow is generated from it on every
 | Check | `assertVisible` |
 | Relaunch app | `launchApp` |
 | Open link | `openLink` |
+| Wait | `extendedWaitUntil`, see below |
 | Hide keyboard | `hideKeyboard` |
 | Run a setup block now | `runFlow` |
 | Scroll | see below |
@@ -38,6 +39,20 @@ The case JSON is the source of truth, and the Flow is generated from it on every
 Maestro's `Lock` key did nothing on Android, so Power is written as `pressKey: Power`, which turns the screen off and on like the phone's button.
 
 Selector values and typed text are always double quoted, so YAML does not turn `yes`, `123` or `${PASSWORD}` into something else.
+
+## Wait
+
+Maestro has no command for a pause, so a Wait is written as a wait for a label that is never on screen. It runs out without failing the flow:
+
+```yaml
+- extendedWaitUntil:
+    visible: "ariadne-wait"
+    timeout: 20000
+    optional: true
+    label: "Wait 20 seconds"
+```
+
+Maestro prints it as `WARNED`, because the label never came. That is how a Wait ends, and it counts as passed.
 
 ## Scrolls
 

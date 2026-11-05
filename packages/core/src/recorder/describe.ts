@@ -2,7 +2,7 @@
 // case documents and run reports. Pure and free of Node imports so the studio
 // UI bundles it too.
 import { unescapeMaestroRegex } from '../maestro/escape.ts';
-import type { MaestroOrientation, MaestroSelector, MaestroStep, PercentPoint } from '../maestro/model.ts';
+import { waitName, type MaestroOrientation, type MaestroSelector, type MaestroStep, type PercentPoint } from '../maestro/model.ts';
 import type { CaseStep, Expectation, PhoneKey, RecordedNode, StepReview } from './case-types.ts';
 import { describeValues } from './block-values.ts';
 import type { FlowItem } from './flow-layout.ts';
@@ -140,6 +140,8 @@ export function describeStep(step: CaseStep, scrollTarget?: MaestroSelector): st
       return 'Restart the app';
     case 'openLink':
       return `Open the link ${step.url}`;
+    case 'wait':
+      return waitName(step.seconds);
     case 'hideKeyboard':
       return 'Hide the keyboard';
     case 'erase':
@@ -201,6 +203,8 @@ export function describeMaestroStep(step: MaestroStep): string {
       return `Check that ${elementName(step.selector)} is not visible`;
     case 'openLink':
       return `Open the link ${step.link}`;
+    case 'wait':
+      return waitName(step.seconds);
     case 'takeScreenshot':
       return 'Take a screenshot';
     case 'startRecording':

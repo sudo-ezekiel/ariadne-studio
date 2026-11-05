@@ -1,7 +1,8 @@
 // A lit lock screen looks like any screen, with real text on it (notifications
 // too), so only Android can say it is up. These tests let a fake phone say so
 // and check that the studio keeps neither the picture nor the text, presses
-// nothing, and records nothing.
+// nothing, and records nothing. The wait step shares the file because it is the
+// one action that touches no device, which is why the lock screen matters to it.
 import { mkdirSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildServer } from '../src/server/index.ts';
 import type { DeviceLike } from '../src/server/state.ts';
-import type { ActionResponse, CaseStartResponse, ScreenState } from '../src/shared/api-types.ts';
+import { MAX_WAIT_SECONDS, type ActionResponse, type CaseStartResponse, type ScreenState } from '../src/shared/api-types.ts';
 
 const VIEWPORT = { width: 1080, height: 2400 };
 
@@ -149,6 +150,7 @@ describe('the lock screen', () => {
     phone.actions.length = 0;
     return started;
   };
+  const wait = (seconds: unknown) => call<ActionResponse>('POST', '/api/case/wait', { seconds });
   const steps = async () => (await call<{ steps: Array<Record<string, unknown>> }>('GET', '/api/case/current')).body.steps;
   const black = blackPicture(VIEWPORT);
 
@@ -282,6 +284,76 @@ describe('the lock screen', () => {
       expect(body.error?.code).toBe('SCREEN_HIDDEN');
       expect(phone.replays).toBe(0);
       expect(phone.actions).toEqual([]);
+      expect(await steps()).toEqual([]);
+    });
+  });
+
+  describe('POST /api/case/wait', () => {
+    it('records a wait step and touches nothing on the device', async () => {
+      await connect();
+      await startCase();
+      const { status, body } = await wait(20);
+      expect(status).toBe(200);
+      expect(body.step).toMatchObject({ kind: 'wait', seconds: 20 });
+      expect(await steps()).toHaveLength(1);
+      expect(phone.taps).toEqual([]);
+      expect(phone.keys).toEqual([]);
+      expect(phone.actions).toEqual([]);
+      expect(phone.replays).toBe(0);
+    });
+
+    it('does not really wait while recording', async () => {
+      await connect();
+      await startCase();
+      const started = Date.now();
+      await wait(MAX_WAIT_SECONDS);
+      expect(Date.now() - started).toBeLessThan(5000);
+    });
+
+    it('accepts the longest wait and a one second wait', async () => {
+      await connect();
+      await startCase();
+      expect((await wait(1)).status).toBe(200);
+      expect((await wait(MAX_WAIT_SECONDS)).status).toBe(200);
+      expect(await steps()).toMatchObject([{ kind: 'wait', seconds: 1 }, { kind: 'wait', seconds: MAX_WAIT_SECONDS }]);
+    });
+
+    it.each([[0], [-1], [MAX_WAIT_SECONDS + 1], [1.5], ['20'], [null], [undefined]])('refuses %s seconds with 400 and records nothing', async (seconds) => {
+      await connect();
+      await startCase();
+      const { status, body } = await wait(seconds);
+      expect(status).toBe(400);
+      expect(body.error?.code).toBe('BAD_REQUEST');
+      expect(await steps()).toEqual([]);
+    });
+
+    it('refuses a request with no body', async () => {
+      await connect();
+      await startCase();
+      const response = await app.inject({ method: 'POST', url: '/api/case/wait' });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('is refused with 409 NO_CASE when no case is being recorded', async () => {
+      await connect();
+      const { status, body } = await wait(20);
+      expect(status).toBe(409);
+      expect(body.error?.code).toBe('NO_CASE');
+    });
+
+    it('is refused with 409 NO_SESSION when no phone is connected', async () => {
+      const { status, body } = await wait(20);
+      expect(status).toBe(409);
+      expect(body.error?.code).toBe('NO_SESSION');
+    });
+
+    it('is refused with 409 SCREEN_HIDDEN while the phone is locked', async () => {
+      await connect();
+      await startCase();
+      phone.lockUp = true;
+      const { status, body } = await wait(20);
+      expect(status).toBe(409);
+      expect(body.error?.code).toBe('SCREEN_HIDDEN');
       expect(await steps()).toEqual([]);
     });
   });

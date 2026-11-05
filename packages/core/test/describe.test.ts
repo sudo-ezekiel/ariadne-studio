@@ -67,6 +67,8 @@ describe('describeStep', () => {
       [{ index: 8, kind: 'relaunch', at }, 'Restart the app'],
       [{ index: 9, kind: 'openLink', url: 'https://example.com/claims?id=7', at }, 'Open the link https://example.com/claims?id=7'],
       [{ index: 10, kind: 'hideKeyboard', at }, 'Hide the keyboard'],
+      [{ index: 11, kind: 'wait', seconds: 20, at }, 'Wait 20 seconds'],
+      [{ index: 12, kind: 'wait', seconds: 1, at }, 'Wait 1 second'],
     ];
     for (const [step, text] of steps) expect(describeStep(step)).toBe(text);
   });
@@ -206,6 +208,7 @@ describe('describeMaestroStep', () => {
     assertVisible: { kind: 'assertVisible', selector: system },
     assertNotVisible: { kind: 'assertNotVisible', selector: system },
     openLink: { kind: 'openLink', link: 'myapp://claims/7' },
+    wait: { kind: 'wait', seconds: 20 },
     takeScreenshot: { kind: 'takeScreenshot', path: 'step-1' },
     startRecording: { kind: 'startRecording', path: 'run-video', optional: true },
     stopRecording: { kind: 'stopRecording' },
@@ -287,6 +290,11 @@ describe('describeMaestroStep', () => {
     expect(describeMaestroStep({ kind: 'openLink', link: 'https://example.com/claims?id=7' })).toBe(
       'Open the link https://example.com/claims?id=7',
     );
+  });
+
+  it('describes a Wait in seconds, and one second in the singular', () => {
+    expect(describeMaestroStep({ kind: 'wait', seconds: 20 })).toBe('Wait 20 seconds');
+    expect(describeMaestroStep({ kind: 'wait', seconds: 1 })).toBe('Wait 1 second');
   });
 
   it('writes swipe and scroll directions in lower case', () => {
