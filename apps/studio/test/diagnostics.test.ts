@@ -199,6 +199,7 @@ async function rig(options: RigOptions = {}): Promise<Rig> {
       return () => undefined;
     },
     xiaomi: async () => undefined,
+    locked: async () => false,
     allowDriver: refuse('allowDriver'),
     installDriver: refuse('installDriver'),
     stopDriver: refuse('stopDriver'),

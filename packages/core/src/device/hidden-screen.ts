@@ -1,7 +1,9 @@
-// A phone that is asleep or locked still answers: a black picture and nothing of
-// any app. Acting on that would press blind and record a step nobody saw, so the
-// studio has to tell it from a screen that is only dark.
-import { decodePng, type RawImage } from '../image/png.ts';
+// A phone that is asleep still answers: a black picture and nothing of any app.
+// Acting on that would press blind and record a step nobody saw, so the studio
+// has to tell it from a screen that is only dark. A lit lock screen is another
+// matter: a normal picture with real text, notifications included, which only
+// Android can tell from an app.
+import { decodePng, encodePng, type RawImage } from '../image/png.ts';
 import { luminanceGrid } from '../image/similarity.ts';
 
 /** Android's own package: the status bar, the notification shade and the lock screen. */
@@ -40,6 +42,19 @@ export function screenView(nodes: readonly ScreenNode[], png: Uint8Array): Scree
   }
   if (!black) return 'visible';
   return hasAppElements(nodes) ? 'secure' : 'hidden';
+}
+
+/** What `dumpsys window` says about the lock screen; undefined when it does not say. */
+export function parseKeyguardShowing(output: string): boolean | undefined {
+  const match = /isKeyguardShowing=(true|false)/.exec(output);
+  return match ? match[1] === 'true' : undefined;
+}
+
+/** A black picture the shape of `viewport`, to keep in place of a lock screen. */
+export function blackPicture(viewport: { width: number; height: number }): Buffer {
+  const width = Math.max(1, Math.round(viewport.width / 10));
+  const height = Math.max(1, Math.round(viewport.height / 10));
+  return encodePng({ width, height, channels: 1, data: new Uint8Array(width * height) });
 }
 
 /** Whether a package is a phone's home screen. Each maker has its own, and they all say so in the name. */

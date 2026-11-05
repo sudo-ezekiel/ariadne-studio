@@ -116,7 +116,7 @@ type Rig = {
   app: FastifyInstance;
   device: PhoneDevice;
   dir: string;
-  tools: { read: ReturnType<typeof vi.fn>; watch: ReturnType<typeof vi.fn>; xiaomi: ReturnType<typeof vi.fn>; allowDriver: ReturnType<typeof vi.fn>; installDriver: ReturnType<typeof vi.fn>; stopDriver: ReturnType<typeof vi.fn> };
+  tools: { read: ReturnType<typeof vi.fn>; watch: ReturnType<typeof vi.fn>; xiaomi: ReturnType<typeof vi.fn>; allowDriver: ReturnType<typeof vi.fn>; installDriver: ReturnType<typeof vi.fn>; stopDriver: ReturnType<typeof vi.fn>; locked: ReturnType<typeof vi.fn> };
   runMaestro: ReturnType<typeof vi.fn<MaestroRunner>>;
   /** Lines in, as getevent would print them. */
   line(text: string): void;
@@ -146,6 +146,7 @@ async function rig(overrides: Partial<PhoneInputTools> = {}, findBin: () => stri
     allowDriver: vi.fn(async () => undefined),
     installDriver: vi.fn(async (_id: string, _maestroBin: string) => undefined),
     stopDriver: vi.fn(async (_id: string) => undefined),
+    locked: vi.fn(async (_id: string): Promise<boolean | undefined> => false),
   };
   const runMaestro = vi.fn<MaestroRunner>(async () => {
     throw new Error('Maestro was not expected to run in this test');
@@ -666,6 +667,76 @@ describe('leaving the app', () => {
     await settled(r);
     await finger(r, REGISTER);
     expect((await waitForSteps(r, 2))[1]).toMatchObject({ kind: 'tap', review: 'left-app' });
+  });
+});
+
+describe('the lock screen while recording', () => {
+  it('records nothing while the phone says it is locked, even with the app in front', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    await finger(r, SIGN_IN);
+    await finger(r, REGISTER);
+    await sleep(150);
+    expect(await currentSteps(r)).toEqual([]);
+  });
+
+  it('stays paused for as long as the phone is locked', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    const pauses = (await status(r)).revision;
+    await settled(r, 10);
+    expect(await status(r)).toMatchObject({ paused: true, revision: pauses });
+  });
+
+  it('records again once the phone is unlocked and the app is in front', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    r.tools.locked.mockImplementation(async () => false);
+    await waitFor(async () => (await status(r)).paused === false, 'resume');
+    await settled(r);
+    await finger(r, SIGN_IN);
+    expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap', review: 'left-app' });
+  });
+
+  it('does not resume on unlock while the app is not in front', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    r.device.nodes = launcherScreen();
+    r.tools.locked.mockImplementation(async () => false);
+    await settled(r, 10);
+    await sleep(1100);
+    expect((await status(r)).paused).toBe(true);
+  });
+
+  it('treats a phone that cannot say as unlocked', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => undefined);
+    await settled(r, 10);
+    await sleep(1100);
+    expect((await status(r)).paused).toBe(false);
+    await finger(r, SIGN_IN);
+    expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap' });
+  });
+
+  it('asks the phone at most once a second across many snapshots', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockClear();
+    const snapshots = r.device.snapshots;
+    const started = Date.now();
+    await settled(r, 40);
+    const elapsed = Date.now() - started;
+    expect(r.device.snapshots - snapshots).toBeGreaterThanOrEqual(40);
+    expect(r.tools.locked.mock.calls.length).toBeLessThanOrEqual(Math.floor(elapsed / 1000) + 1);
   });
 });
 

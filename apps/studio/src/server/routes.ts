@@ -53,6 +53,7 @@ import {
   deviceReplaySteps,
   exists,
   nowIso,
+  phoneLocked,
   projectEnv,
   readSavedCase,
   replayNeedsMaestro,
@@ -316,10 +317,13 @@ async function projectInfo(state: ServerState): Promise<ProjectInfo> {
 /** The latest snapshot, re-taken (without a screenshot) when it is too old to trust. */
 async function freshLatest(state: ServerState): Promise<Latest> {
   let latest = state.latest;
+  // Left as it is: the click was aimed at this, and refuseHiddenScreen needs to see that.
+  if (latest?.hidden) return latest;
   if (!latest || Date.now() - Date.parse(latest.takenAt) > STALE_SNAPSHOT_MS) {
     const fresh = await state.session.snapshot();
-    // Nothing of an app: it needs a picture too, in case the phone went to sleep on this screen.
-    if (!hasAppElements(fresh.nodes)) return captureScratch(state);
+    // Nothing of an app needs a picture too, in case the phone went to sleep on this
+    // screen. So does a lock screen, whose text must not become the latest screen.
+    if (!hasAppElements(fresh.nodes) || (await phoneLocked(state))) return captureScratch(state);
     latest = { ...fresh, screenshotPath: latest?.screenshotPath ?? scratchScreenshot(state) };
     state.latest = latest;
   }
@@ -330,9 +334,10 @@ async function freshLatest(state: ServerState): Promise<Latest> {
  * A press on a screen that shows nothing lands somewhere nobody can see, and
  * would record a step with no element and a black picture. The click was aimed
  * at that black picture too, so it is refused even if the phone has woken since.
+ * The phone is asked as well, because it may have locked since the last capture.
  */
 async function refuseHiddenScreen(state: ServerState): Promise<void> {
-  if (!state.latest?.hidden) return;
+  if (!state.latest?.hidden && !(await phoneLocked(state))) return;
   const now = await captureScratch(state);
   throw new HttpError(
     409,
@@ -681,6 +686,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const block = await prepareBlockUse(state, requested, env);
     const { use } = block;
     return enqueue(state, async () => {
+      await refuseHiddenScreen(state);
       if (block.runsWithMaestro) {
         // Maestro's own launchApp restarts the app, so no relaunch first.
         const testCase = state.recorder!.toCase();

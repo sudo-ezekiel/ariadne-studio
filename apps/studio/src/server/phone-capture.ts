@@ -37,7 +37,7 @@ import {
   type Viewport,
 } from '@ariadne/core';
 import type { PhonePrepareResponse, PhoneStatus } from '../shared/api-types.ts';
-import { HttpError, MAX_SWIPE_MS, MIN_SWIPE_MS, captureInto, captureScratch, projectEnv, requireCase, requireSession } from './common.ts';
+import { HttpError, MAX_SWIPE_MS, MIN_SWIPE_MS, captureInto, captureScratch, phoneLocked, projectEnv, requireCase, requireSession } from './common.ts';
 import { enqueue, type ServerState } from './state.ts';
 
 /** Pause between snapshots; a snapshot itself takes about 100 ms on a phone. */
@@ -56,6 +56,8 @@ const EVIDENCE_DELAY_MS = 900;
 const EVIDENCE_LIMIT_MS = 4000;
 /** About three seconds of failures in a row means the phone is gone or locked. */
 const MAX_SNAPSHOT_FAILURES = 25;
+/** How often to ask Android about the lock screen. Snapshots come far more often than that. */
+const LOCK_CHECK_MS = 1000;
 /** A touch read against a snapshot older than this may be against an old screen. */
 const STALE_SNAPSHOT_MS = 1000;
 /** The notification shade: not part of the app, though it covers it. */
@@ -102,6 +104,8 @@ export class PhoneCapture {
   private stopped = false;
   private paused = false;
   private cameBack = false;
+  private locked = false;
+  private lockCheckedAt = 0;
   private revision = 0;
   private noticeCount = 0;
   private notice: string | undefined;
@@ -237,19 +241,32 @@ export class PhoneCapture {
     this.viewport = viewport;
     const screen: PhoneScreen = { nodes: snapshot.nodes, viewport, startedAt, endedAt, ...(snapshot.keyboard ? { keyboard: snapshot.keyboard } : {}) };
     const app = foregroundApp(screen);
-    this.trackApp(app);
+    this.trackApp(app, await this.lockScreenUp());
     if (!this.paused) this.noteField(screen);
     this.history.push({ ...screen, ...(app ? { app } : {}), outside: this.paused });
     if (this.history.length > HISTORY) this.history.shift();
   }
 
-  /** Home, the launcher or the notification shade pause recording until the app is back. */
-  private trackApp(app: string | undefined): void {
-    if (app === this.appId && this.paused) {
+  /**
+   * Android's word for it, at most once a second. A lock screen need not be
+   * System UI on every maker's phone, and its PIN pad must never become steps.
+   */
+  private async lockScreenUp(): Promise<boolean> {
+    const now = Date.now();
+    if (now - this.lockCheckedAt >= LOCK_CHECK_MS) {
+      this.lockCheckedAt = now;
+      this.locked = await phoneLocked(this.state);
+    }
+    return this.locked;
+  }
+
+  /** Home, the launcher, the notification shade or the lock screen pause recording until the app is back. */
+  private trackApp(app: string | undefined, locked: boolean): void {
+    if (app === this.appId && this.paused && !locked) {
       this.paused = false;
       this.cameBack = true;
       this.revision += 1;
-    } else if (app !== undefined && !this.paused && (app === this.input.homeApp || app === SYSTEM_UI)) {
+    } else if (!this.paused && (locked || (app !== undefined && (app === this.input.homeApp || app === SYSTEM_UI)))) {
       this.paused = true;
       this.counts.pauses += 1;
       this.revision += 1;

@@ -85,7 +85,7 @@ The screen only runs in portrait, such as the launcher. Rotate on a screen that 
 
 ### "The phone's screen is off or locked"
 
-Ariadne cannot see anything on the phone, so it does not press or record anything: a step recorded now would have no element and a black picture. Wake the phone and unlock it, and the screen comes back by itself. If nobody can reach the phone, the Power button under the screen still works. Turn on **Stay awake** in Developer options so it does not sleep in the middle of a recording.
+Ariadne does not press or record anything on a phone that is asleep or locked: a step recorded now would have no element and a black picture. The lock screen is left out on purpose, even when it is lit, because its notifications can be private. Wake the phone and unlock it, and the screen comes back by itself. If nobody can reach the phone, the Power button under the screen still works. Turn on **Stay awake** in Developer options so it does not sleep in the middle of a recording.
 
 A screen that is black here because the app hides it from screenshots, as banking apps do, is different: its elements still come through, so it records as usual.
 

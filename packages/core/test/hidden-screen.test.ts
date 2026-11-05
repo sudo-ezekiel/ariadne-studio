@@ -1,7 +1,7 @@
 // Telling a phone that shows nothing from a screen that is only dark.
 import { describe, expect, it } from 'vitest';
-import { SYSTEM_UI, hasAppElements, isBlackImage, looksLikeHomeApp, screenView } from '../src/device/hidden-screen.ts';
-import { encodePng, type RawImage } from '../src/image/png.ts';
+import { SYSTEM_UI, blackPicture, hasAppElements, isBlackImage, looksLikeHomeApp, parseKeyguardShowing, screenView } from '../src/device/hidden-screen.ts';
+import { decodePng, encodePng, type RawImage } from '../src/image/png.ts';
 
 function image(paint?: (x: number, y: number) => number): RawImage {
   const [width, height] = [72, 160];
@@ -75,5 +75,41 @@ describe('looksLikeHomeApp', () => {
 
   it.each(['com.android.chrome', 'gr.gov.wallet', 'com.example.homebanking'])('does not take %s for one', (app) => {
     expect(looksLikeHomeApp(app)).toBe(false);
+  });
+});
+
+describe('parseKeyguardShowing', () => {
+  it('is true when the lock screen is showing', () => {
+    expect(parseKeyguardShowing('    isKeyguardShowing=true\n')).toBe(true);
+  });
+
+  it('is false when it is not', () => {
+    expect(parseKeyguardShowing('  mShowingDream=false isKeyguardShowing=false\n')).toBe(false);
+  });
+
+  it('is undefined when the line is missing or says something else', () => {
+    expect(parseKeyguardShowing('')).toBeUndefined();
+    expect(parseKeyguardShowing('mCurrentFocus=Window{u0 com.example}')).toBeUndefined();
+    expect(parseKeyguardShowing('isKeyguardShowing=maybe')).toBeUndefined();
+  });
+});
+
+describe('blackPicture', () => {
+  it('decodes, and reads as a black picture', () => {
+    const decoded = decodePng(blackPicture({ width: 1080, height: 2400 }));
+    expect(isBlackImage(decoded)).toBe(true);
+  });
+
+  it('keeps the shape of the viewport', () => {
+    const decoded = decodePng(blackPicture({ width: 1080, height: 2400 }));
+    expect([decoded.width, decoded.height]).toEqual([108, 240]);
+  });
+
+  it('is never empty for a tiny viewport', () => {
+    const decoded = decodePng(blackPicture({ width: 3, height: 4 }));
+    expect(decoded.width).toBeGreaterThanOrEqual(1);
+    expect(decoded.height).toBeGreaterThanOrEqual(1);
+    const none = decodePng(blackPicture({ width: 0, height: 0 }));
+    expect(none.width).toBeGreaterThanOrEqual(1);
   });
 });

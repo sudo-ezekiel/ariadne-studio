@@ -6,6 +6,7 @@ import type { FastifyReply } from 'fastify';
 import {
   agentDeviceReplays,
   SYSTEM_UI,
+  blackPicture,
   caseToFlow,
   foregroundApp,
   looksLikeHomeApp,
@@ -79,9 +80,23 @@ export async function projectEnv(state: ServerState): Promise<Record<string, str
   return { ...(settings.env ?? {}), ...(await state.project.readEnv()) };
 }
 
+/** Whether the lock screen is up. A phone that cannot say counts as unlocked. */
+export async function phoneLocked(state: ServerState): Promise<boolean> {
+  const { deviceId } = state.session;
+  if (!deviceId) return false;
+  return (await state.phoneTools.locked(deviceId).catch(() => undefined)) === true;
+}
+
 /** Captures the screen into `path` and makes it the latest screen. */
 export async function captureInto(state: ServerState, path: string): Promise<Latest> {
   const capture = await state.session.capture(path);
+  // Asked after the capture, so a phone that locked during it counts. The lock
+  // screen can show private messages, so neither its picture nor its text stays.
+  if (await phoneLocked(state)) {
+    await writeFile(capture.screenshotPath, blackPicture(capture.viewport));
+    state.latest = { ...capture, nodes: [], keyboard: undefined, hidden: true };
+    return state.latest;
+  }
   const view = screenView(capture.nodes, await readFile(capture.screenshotPath).catch(() => new Uint8Array()));
   const front = view === 'hidden' ? undefined : foregroundApp(capture);
   const elsewhere = front && front !== state.session.appId && front !== SYSTEM_UI ? { app: front, home: looksLikeHomeApp(front) } : undefined;
