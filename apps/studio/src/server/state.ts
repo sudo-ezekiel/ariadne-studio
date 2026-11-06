@@ -134,6 +134,11 @@ export function scratchScreenshot(state: ServerState): string {
   return join(state.scratchDir, 'screen.png');
 }
 
+/** Where a capture lands first. Nothing serves this file, so a lock screen in it can be dealt with before anyone can read it. */
+export function capturingScreenshot(state: ServerState): string {
+  return join(state.scratchDir, 'capturing.png');
+}
+
 type LiteSource = DeviceSnapshot['nodes'][number];
 
 /** Drops what the UI cannot use: hidden or covered nodes and every field it does not read. */

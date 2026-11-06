@@ -1,10 +1,10 @@
 // The API drives a phone and hands out screenshots, so it answers only to
 // pages from this computer. The pure checks are tried with the headers a
 // browser sends; the server tests send them through the real hook.
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeviceSnapshot, OpenOptions } from '@ariadne/core';
@@ -130,6 +130,8 @@ class CountingDevice implements DeviceLike {
   }
   async capture(screenshotPath: string) {
     this.calls.push('capture');
+    await mkdir(dirname(screenshotPath), { recursive: true });
+    await writeFile(screenshotPath, new Uint8Array());
     return { ...(await this.snapshot()), screenshotPath };
   }
   async back() { this.calls.push('back'); }

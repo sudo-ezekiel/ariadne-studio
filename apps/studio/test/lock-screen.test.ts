@@ -4,9 +4,9 @@
 // nothing, and records nothing. The wait step shares the file because it is the
 // one action that touches no device, which is why the lock screen matters to it.
 import { mkdirSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { blackPicture, encodePng, SYSTEM_UI, type DeviceSnapshot, type OpenOptions, type PhoneInputTools, type Point, type RawImage } from '@ariadne/core';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,6 +23,7 @@ function picture(level: number): Buffer {
 }
 
 const LIT = picture(120);
+const EARLIER = picture(60);
 const BUTTON = { index: 0, depth: 1, rect: { x: 100, y: 1000, width: 300, height: 200 }, hittable: true, label: 'Seven', identifier: 'calc:id/digit_7' };
 /** What a lock screen shows on a phone whose keyguard is not System UI: private text and a PIN pad. */
 const LOCK_NODES = [
@@ -41,6 +42,8 @@ class LockablePhone implements Partial<DeviceLike> {
   /** Every other call that does something on the device. */
   actions: string[] = [];
   replays = 0;
+  /** The picture the next capture writes. */
+  shows: Buffer = LIT;
 
   get isOpen() {
     return this.target !== undefined;
@@ -65,7 +68,7 @@ class LockablePhone implements Partial<DeviceLike> {
   }
   async capture(screenshotPath: string) {
     mkdirSync(dirname(screenshotPath), { recursive: true });
-    await writeFile(screenshotPath, LIT);
+    await writeFile(screenshotPath, this.shows);
     this.captured.push(screenshotPath);
     return { ...(await this.snapshot()), screenshotPath };
   }
@@ -153,6 +156,11 @@ describe('the lock screen', () => {
   const wait = (seconds: unknown) => call<ActionResponse>('POST', '/api/case/wait', { seconds });
   const steps = async () => (await call<{ steps: Array<Record<string, unknown>> }>('GET', '/api/case/current')).body.steps;
   const black = blackPicture(VIEWPORT);
+  /** The picture the studio serves for the latest screen. */
+  const served = async () => Buffer.from((await app.inject({ method: 'GET', url: '/api/screen/image' })).rawPayload);
+  const exists = (path: string) => access(path).then(() => true, () => false);
+  /** The folder the phone was last asked to capture into: the studio's scratch folder. */
+  const scratch = () => dirname(phone.captured.at(-1)!);
 
   /** Pretends an hour has gone by, so the latest screen is stale. */
   function anHourLater() {
@@ -174,7 +182,7 @@ describe('the lock screen', () => {
       await connect();
       phone.lockUp = true;
       await refresh();
-      const written = await readFile(phone.captured.at(-1)!);
+      const written = await served();
       expect(written.equals(LIT)).toBe(false);
       expect(written.equals(black)).toBe(true);
     });
@@ -193,7 +201,7 @@ describe('the lock screen', () => {
       const { body } = await connect();
       expect(body.hidden).toBeUndefined();
       expect(body.nodes.length).toBeGreaterThan(0);
-      expect((await readFile(phone.captured.at(-1)!)).equals(LIT)).toBe(true);
+      expect((await served()).equals(LIT)).toBe(true);
     });
 
     it('shows the screen again once the phone is unlocked', async () => {
@@ -228,7 +236,90 @@ describe('the lock screen', () => {
       const { body } = await connect();
       expect(body.hidden).toBeUndefined();
       expect(body.nodes.length).toBeGreaterThan(0);
-      expect((await readFile(phone.captured.at(-1)!)).equals(LIT)).toBe(true);
+      expect((await served()).equals(LIT)).toBe(true);
+    });
+
+    it('never hands the phone the path the screen is served from', async () => {
+      await connect();
+      phone.lockUp = true;
+      await refresh();
+      expect(phone.captured.length).toBeGreaterThanOrEqual(2);
+      for (const path of phone.captured) expect(basename(path)).toBe('capturing.png');
+    });
+
+    it('serves the previous picture, never the lit one, while the lock answer is pending', async () => {
+      phone.shows = EARLIER;
+      await connect();
+      phone.shows = LIT;
+      phone.lockUp = true;
+      let release!: (answer: boolean) => void;
+      const answer = new Promise<boolean>((resolve) => (release = resolve));
+      let captureDone!: () => void;
+      const asking = new Promise<void>((resolve) => (captureDone = resolve));
+      locked = () => {
+        captureDone();
+        return answer;
+      };
+      const refreshing = refresh();
+      await asking;
+      // The fake has written the lit picture by now; the studio has not been told yet whether it may keep it.
+      expect(await readFile(phone.captured.at(-1)!)).toEqual(LIT);
+      const during = await served();
+      expect(during.equals(LIT)).toBe(false);
+      expect(during.equals(EARLIER)).toBe(true);
+      release(true);
+      expect((await refreshing).body.hidden).toBe(true);
+      expect((await served()).equals(black)).toBe(true);
+    });
+
+    it('never has the lit picture of a locked phone in the served file at any point it can be seen', async () => {
+      phone.shows = EARLIER;
+      await connect();
+      phone.shows = LIT;
+      phone.lockUp = true;
+      const seen: Array<Buffer | undefined> = [];
+      locked = async () => {
+        seen.push(await readFile(join(scratch(), 'screen.png')).catch(() => undefined));
+        return true;
+      };
+      await refresh();
+      seen.push(await readFile(join(scratch(), 'screen.png')));
+      expect(seen).toHaveLength(2);
+      for (const picture of seen) expect(picture?.equals(LIT)).toBe(false);
+    });
+
+    it('leaves no private capture file behind', async () => {
+      await connect();
+      expect(await exists(join(scratch(), 'capturing.png'))).toBe(false);
+      phone.lockUp = true;
+      await refresh();
+      expect(await exists(join(scratch(), 'capturing.png'))).toBe(false);
+    });
+
+    it('puts the picture of a step made while unlocked in an evidence folder that did not exist', async () => {
+      await connect();
+      const { body } = await startCase();
+      const folder = join(dir, 'evidence', body.caseId);
+      expect(await exists(folder)).toBe(false);
+      const pressed = await call<ActionResponse>('POST', '/api/action/key', { key: 'volumeUp' });
+      expect(pressed.status).toBe(200);
+      const files = await readdir(folder);
+      expect(files).toHaveLength(1);
+      expect((await readFile(join(folder, files[0]!))).equals(LIT)).toBe(true);
+      expect(await exists(join(scratch(), 'capturing.png'))).toBe(false);
+    });
+
+    it('puts a black picture in an evidence folder that did not exist when the step was made while locked', async () => {
+      await connect();
+      const { body } = await startCase();
+      const folder = join(dir, 'evidence', body.caseId);
+      expect(await exists(folder)).toBe(false);
+      phone.lockUp = true;
+      expect((await call<ActionResponse>('POST', '/api/action/key', { key: 'volumeUp' })).status).toBe(200);
+      const files = await readdir(folder);
+      expect(files).toHaveLength(1);
+      expect((await readFile(join(folder, files[0]!))).equals(black)).toBe(true);
+      expect(await exists(join(scratch(), 'capturing.png'))).toBe(false);
     });
   });
 

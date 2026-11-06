@@ -1,6 +1,6 @@
 // Helpers shared by the route modules.
 import { createReadStream } from 'node:fs';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { FastifyReply } from 'fastify';
 import {
@@ -22,7 +22,7 @@ import {
   type TestCase,
   type DescribeNames,
 } from '@ariadne/core';
-import { scratchScreenshot, type Latest, type ServerState } from './state.ts';
+import { capturingScreenshot, scratchScreenshot, type Latest, type ServerState } from './state.ts';
 
 /** An error with a stable code the UI can show: 4xx for client mistakes, 5xx for device or tool failures. */
 export class HttpError extends Error {
@@ -87,20 +87,35 @@ export async function phoneLocked(state: ServerState): Promise<boolean> {
   return (await state.phoneTools.locked(deviceId).catch(() => undefined)) === true;
 }
 
+/** Puts a finished picture at `path`. A rename swaps it whole, but cannot cross drives, and Windows can refuse one over a file being read. */
+async function movePicture(from: string, path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  try {
+    await rename(from, path);
+  } catch {
+    await copyFile(from, path).finally(() => rm(from, { force: true }));
+  }
+}
+
 /** Captures the screen into `path` and makes it the latest screen. */
 export async function captureInto(state: ServerState, path: string): Promise<Latest> {
-  const capture = await state.session.capture(path);
+  // `path` can be the file the mirror is showing, so the picture lands elsewhere
+  // and only reaches `path` once the lock has been checked.
+  const capture = await state.session.capture(capturingScreenshot(state));
   // Asked after the capture, so a phone that locked during it counts. The lock
   // screen can show private messages, so neither its picture nor its text stays.
-  if (await phoneLocked(state)) {
-    await writeFile(capture.screenshotPath, blackPicture(capture.viewport));
-    state.latest = { ...capture, nodes: [], keyboard: undefined, hidden: true };
+  const locked = await phoneLocked(state);
+  if (locked) await writeFile(capture.screenshotPath, blackPicture(capture.viewport));
+  await movePicture(capture.screenshotPath, path);
+  const saved = { ...capture, screenshotPath: path };
+  if (locked) {
+    state.latest = { ...saved, nodes: [], keyboard: undefined, hidden: true };
     return state.latest;
   }
-  const view = screenView(capture.nodes, await readFile(capture.screenshotPath).catch(() => new Uint8Array()));
+  const view = screenView(capture.nodes, await readFile(path).catch(() => new Uint8Array()));
   const front = view === 'hidden' ? undefined : foregroundApp(capture);
   const elsewhere = front && front !== state.session.appId && front !== SYSTEM_UI ? { app: front, home: looksLikeHomeApp(front) } : undefined;
-  state.latest = { ...capture, ...(view === 'hidden' ? { hidden: true } : {}), ...(view === 'secure' ? { secure: true } : {}), ...(elsewhere ? { elsewhere } : {}) };
+  state.latest = { ...saved, ...(view === 'hidden' ? { hidden: true } : {}), ...(view === 'secure' ? { secure: true } : {}), ...(elsewhere ? { elsewhere } : {}) };
   return state.latest;
 }
 
