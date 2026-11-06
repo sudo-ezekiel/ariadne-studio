@@ -101,7 +101,8 @@ async function movePicture(from: string, path: string): Promise<void> {
   try {
     await rename(from, path);
   } catch {
-    await copyFile(from, path).finally(() => rm(from, { force: true }));
+    await copyFile(from, path);
+    await rm(from, { force: true });
   }
 }
 
@@ -112,9 +113,15 @@ export async function captureInto(state: ServerState, path: string): Promise<Lat
   const capture = await state.session.capture(capturingScreenshot(state));
   // Asked after the capture, so a phone that locked during it counts. The lock
   // screen can show private messages, so neither its picture nor its text stays.
-  const locked = await phoneLocked(state);
-  if (locked) await writeFile(capture.screenshotPath, blackPicture(capture.viewport));
-  await movePicture(capture.screenshotPath, path);
+  let locked: boolean;
+  try {
+    locked = await phoneLocked(state);
+    if (locked) await writeFile(capture.screenshotPath, blackPicture(capture.viewport));
+    await movePicture(capture.screenshotPath, path);
+  } catch (error) {
+    await rm(capture.screenshotPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
   const saved = { ...capture, screenshotPath: path };
   if (locked) {
     state.latest = { ...saved, nodes: [], keyboard: undefined, hidden: true };

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, rename: vi.fn(actual.rename), copyFile: vi.fn(actual.copyFile) };
+  return { ...actual, rename: vi.fn(actual.rename), copyFile: vi.fn(actual.copyFile), writeFile: vi.fn(actual.writeFile) };
 });
 
 import * as fsPromises from 'node:fs/promises';
@@ -17,6 +17,7 @@ import { capturingScreenshot, type ServerState } from '../src/server/state.ts';
 
 const VIEWPORT = { width: 1080, height: 2400 };
 const LIT = Buffer.from('a lit picture');
+const realWriteFile = (await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')).writeFile;
 
 describe('captureInto when the picture cannot be renamed into place', () => {
   let dir: string;
@@ -35,11 +36,13 @@ describe('captureInto when the picture cannot be renamed into place', () => {
     };
     state = { session, scratchDir: dir, phoneTools: { locked: async () => answer } } as unknown as ServerState;
     vi.mocked(fsPromises.rename).mockRejectedValue(Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' }));
+    vi.mocked(fsPromises.writeFile).mockImplementation(((...args: Parameters<typeof fsPromises.writeFile>) => realWriteFile(...args)) as typeof fsPromises.writeFile);
   });
 
   afterEach(async () => {
     vi.mocked(fsPromises.rename).mockReset();
     vi.mocked(fsPromises.copyFile).mockReset();
+    vi.mocked(fsPromises.writeFile).mockReset();
     await rm(dir, { recursive: true, force: true });
   });
 
@@ -68,6 +71,27 @@ describe('captureInto when the picture cannot be renamed into place', () => {
     vi.mocked(fsPromises.copyFile).mockRejectedValue(failure);
     const path = join(dir, 'screen.png');
     await expect(captureInto(state, path)).rejects.toBe(failure);
+    expect(await gone(capturingScreenshot(state))).toBe(true);
+    expect(await gone(path)).toBe(true);
+  });
+
+  it('rejects with the write error, and removes the private file, when the black-out write fails for a locked phone', async () => {
+    answer = true;
+    const failure = Object.assign(new Error('disk is read-only'), { code: 'EROFS' });
+    const black = blackPicture(VIEWPORT);
+    vi.mocked(fsPromises.writeFile).mockImplementation(((path, data, ...rest) =>
+      Buffer.isBuffer(data) && data.equals(black) ? Promise.reject(failure) : realWriteFile(path, data, ...rest)) as typeof fsPromises.writeFile);
+    const path = join(dir, 'screen.png');
+    await expect(captureInto(state, path)).rejects.toBe(failure);
+    expect(await gone(capturingScreenshot(state))).toBe(true);
+    expect(await gone(path)).toBe(true);
+  });
+
+  it('rejects, and removes the private file, when the destination folder cannot be created', async () => {
+    const blocker = join(dir, 'not-a-folder');
+    await writeFile(blocker, 'a plain file');
+    const path = join(blocker, 'inside', '001.png');
+    await expect(captureInto(state, path)).rejects.toThrow();
     expect(await gone(capturingScreenshot(state))).toBe(true);
     expect(await gone(path)).toBe(true);
   });
