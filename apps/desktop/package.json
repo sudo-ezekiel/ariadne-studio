@@ -1,6 +1,6 @@
 {
   "name": "@ariadne/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Ariadne Studio as a desktop app: an Electron window around the same server the ariadne-studio CLI runs.",
   "author": "Ezekiel",

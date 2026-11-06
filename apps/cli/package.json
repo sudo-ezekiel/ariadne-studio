@@ -1,6 +1,6 @@
 {
   "name": "ariadne-studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Ariadne Studio, a recorder for Maestro. Record flows by using your Android app, on your own machine, and get plain Maestro YAML with a screenshot per step.",
   "keywords": [
     "maestro",
