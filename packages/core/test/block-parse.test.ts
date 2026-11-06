@@ -57,6 +57,25 @@ describe('parseBlockFlow', () => {
     expect(outline.variables).toEqual(['PIN']);
   });
 
+  it('sends a Wait with a custom label to Maestro and keeps its block variable', () => {
+    const yaml = [
+      'appId: com.example',
+      '---',
+      '- launchApp',
+      '- extendedWaitUntil:',
+      '    visible: "ariadne-wait"',
+      '    timeout: 20000',
+      '    optional: true',
+      '    label: "Wait for ${ACCOUNT}"',
+      '',
+    ].join('\n');
+    const outline = parseBlockFlow(yaml);
+    expect(outline.flow).toBeUndefined();
+    expect(outline.maestroOnly).toEqual(['extendedWaitUntil']);
+    expect(outline.commands).toEqual([{ kind: 'step', step: { kind: 'launchApp' } }, { kind: 'maestro', command: 'extendedWaitUntil' }]);
+    expect(outline.variables).toEqual(['ACCOUNT']);
+  });
+
   it.each([
     ['invalid YAML', 'appId: com.example\n---\n- tapOn: [\n'],
     ['no header', '- launchApp\n'],

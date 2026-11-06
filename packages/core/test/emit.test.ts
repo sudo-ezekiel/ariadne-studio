@@ -424,6 +424,57 @@ describe('wait', () => {
     expect(waitWithTimeout('1000')().steps).toEqual([{ kind: 'wait', seconds: 1 }]);
   });
 
+  const waitWithLabel = (timeout: number, label: string) =>
+    parseBody(`- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: ${timeout}\n    optional: true\n    label: ${JSON.stringify(label)}\n`);
+
+  it('refuses a Wait with a custom label', () => {
+    expect(waitWithLabel(20000, 'Let the page settle')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait whose label uses a block variable, which a Wait would lose', () => {
+    expect(waitWithLabel(20000, 'Wait for ${ACCOUNT}')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait with an empty label', () => {
+    expect(waitWithLabel(20000, '')).toThrow(MaestroParseError);
+  });
+
+  it('reads the generated label for 20 seconds', () => {
+    expect(waitWithLabel(20000, 'Wait 20 seconds')().steps).toEqual([{ kind: 'wait', seconds: 20 }]);
+  });
+
+  it('reads the singular generated label for 1 second', () => {
+    expect(waitWithLabel(1000, 'Wait 1 second')().steps).toEqual([{ kind: 'wait', seconds: 1 }]);
+  });
+
+  it('refuses the plural label on a 1 second timeout', () => {
+    expect(waitWithLabel(1000, 'Wait 1 seconds')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a generated label for the wrong number of seconds', () => {
+    expect(waitWithLabel(20000, 'Wait 5 seconds')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait with an extra key', () => {
+    expect(
+      parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    notVisible: "x"\n    timeout: 20000\n    optional: true\n'),
+    ).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait with an extra key even when the label is the generated one', () => {
+    expect(
+      parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n    optional: true\n    label: "Wait 20 seconds"\n    notVisible: "x"\n'),
+    ).toThrow(MaestroParseError);
+  });
+
+  it('reads back each Wait the emitter writes, across fractional and large seconds', () => {
+    const flow: MaestroFlow = {
+      appId: 'a.b',
+      steps: [0.5, 1, 2, 59, 60, 3600].map((seconds) => ({ kind: 'wait', seconds })),
+    };
+    expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+  });
+
   it('refuses a bare extendedWaitUntil', () => {
     expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
   });

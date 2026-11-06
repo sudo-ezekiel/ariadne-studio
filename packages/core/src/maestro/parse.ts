@@ -3,6 +3,7 @@ import {
   MAESTRO_KEYS,
   MAESTRO_ORIENTATIONS,
   NEVER_ON_SCREEN,
+  waitName,
   type MaestroFlow,
   type MaestroSelector,
   type MaestroStep,
@@ -17,6 +18,14 @@ import {
 
 /** The longest delay a timer can hold. A Wait is replayed on one, and a longer one would fire at once. */
 const LONGEST_TIMER_MS = 2_147_483_647;
+
+/** What a Wait step writes, and nothing else: a label or a key of someone's own would be lost on the way through. */
+function isWaitForm(arg: unknown): arg is { timeout: number } {
+  if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout', 'optional', 'label'].includes(key))) return false;
+  const { visible, timeout, optional, label } = arg;
+  if (visible !== NEVER_ON_SCREEN || optional !== true || typeof timeout !== 'number') return false;
+  return timeout > 0 && timeout <= LONGEST_TIMER_MS && (label === undefined || label === waitName(timeout / 1000));
+}
 
 export class MaestroParseError extends Error {
   override name = 'MaestroParseError';
@@ -228,9 +237,7 @@ export function parseStep(raw: unknown, position: number): MaestroStep {
     }
     case 'extendedWaitUntil':
       // Only the form a Wait step writes. Any other wait stays Maestro's to run.
-      if (isRecord(arg) && arg.visible === NEVER_ON_SCREEN && arg.optional === true && typeof arg.timeout === 'number' && arg.timeout > 0 && arg.timeout <= LONGEST_TIMER_MS) {
-        return { kind: 'wait', seconds: arg.timeout / 1000 };
-      }
+      if (isWaitForm(arg)) return { kind: 'wait', seconds: arg.timeout / 1000 };
       throw new MaestroParseError(`Unsupported command "extendedWaitUntil" at ${where}`);
     case 'takeScreenshot': {
       if (typeof arg === 'string') return { kind: 'takeScreenshot', path: arg };
