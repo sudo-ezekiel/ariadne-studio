@@ -13,8 +13,12 @@ const SYSTEM = 'S-1-5-18';
 const ADMINISTRATORS = 'S-1-5-32-544';
 const TRUSTED_INSTALLER = 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464';
 
-/** Who may change a folder besides this user: Windows itself and its administrators, in SDDL's short names. */
-const TRUSTED = new Set(['SY', 'BA', 'CO', 'OW', TRUSTED_INSTALLER]);
+/**
+ * Who may change a folder besides this user: Windows itself and its
+ * administrators, in SDDL's short names. LA is the built-in Administrator, which
+ * SDDL writes that way even when that account is this user.
+ */
+const TRUSTED = new Set(['SY', 'BA', 'LA', 'CO', 'OW', TRUSTED_INSTALLER]);
 
 /** SDDL's names for rights that change nothing. */
 const READ_ONLY_CODES = new Set(['FR', 'FX', 'GR', 'GX', 'RC']);
@@ -47,8 +51,8 @@ export function onlyTrustedCanChange(sddl: string, me: string): boolean {
 
 /**
  * A Windows tool by its full path, so a file of the same name in this folder
- * cannot stand in for it. PSModulePath stays behind because Windows PowerShell
- * cannot load Get-Acl from what a newer PowerShell leaves there.
+ * cannot stand in for it. PSModulePath stays behind so that what a newer
+ * PowerShell left there cannot get in Windows PowerShell's way.
  */
 function runSystemTool(tool: string, args: string[]): string {
   const file = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', tool);
@@ -64,7 +68,7 @@ function mySid(): string {
 
 function folderSddl(dir: string): string {
   const command = `(Get-Acl -LiteralPath '${dir.replaceAll("'", "''")}').Sddl`;
-  // Without the replace, a long answer can come back wrapped over several lines.
+  // SDDL has no spaces in it, so any there came from the console.
   return runSystemTool(win32.join('WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', command]).replace(/\s+/g, '');
 }
 

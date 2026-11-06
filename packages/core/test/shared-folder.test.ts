@@ -24,6 +24,23 @@ describe('onlyTrustedCanChange', () => {
     expect(onlyTrustedCanChange(sddl(owner, `D:PAI${CLEAN}`), ME)).toBe(true);
   });
 
+  it('passes the shape Windows CI gave after a claim, where the built-in Administrator is LA and this user is another SID', () => {
+    const real = 'O:BAG:S-1-5-21-111-222-333-513D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;LA)';
+    expect(onlyTrustedCanChange(real, 'S-1-5-21-111-222-333-500')).toBe(true);
+  });
+
+  it('passes a folder owned by the built-in Administrator, written LA', () => {
+    expect(onlyTrustedCanChange(sddl('LA', `D:PAI${CLEAN}`), ME)).toBe(true);
+  });
+
+  it('fails when the guest account, LG, owns it', () => {
+    expect(onlyTrustedCanChange(sddl('LG', `D:PAI${CLEAN}`), ME)).toBe(false);
+  });
+
+  it('fails when the guest account, LG, has full control', () => {
+    expect(onlyTrustedCanChange(sddl(ME, `D:PAI${CLEAN}(A;OICI;FA;;;LG)`), ME)).toBe(false);
+  });
+
   it('passes with or without a group section', () => {
     expect(onlyTrustedCanChange(sddl(ME, `G:SYD:PAI${CLEAN}`), ME)).toBe(true);
     expect(onlyTrustedCanChange(sddl(ME, `D:PAI${CLEAN}`), ME)).toBe(true);
