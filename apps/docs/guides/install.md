@@ -89,7 +89,7 @@ The button accepts Google's [Android SDK terms](https://developer.android.com/st
 
 Recording works as soon as the Android tools are in, so you can carry on with the phone steps while Java and Maestro download.
 
-The Android tools go in `%LOCALAPPDATA%\Android\Sdk\platform-tools`, where Android Studio would put them. Java and Maestro go in `%LOCALAPPDATA%\Ariadne\tools` and are for Ariadne only. If that folder has letters outside plain ASCII, as with a Greek user name, they go in `%ProgramData%\Ariadne\tools` instead, because Java cannot always start from there. Other accounts on the computer can reach that folder, so Ariadne locks `%ProgramData%\Ariadne` to your account, and runs nothing from it if another account could change it. To remove them, delete those folders.
+The Android tools go in `%LOCALAPPDATA%\Android\Sdk\platform-tools`, where Android Studio would put them, or under `ANDROID_HOME` or `ANDROID_SDK_ROOT` if either is set. Android Studio may be using that folder too. Java and Maestro go in `%LOCALAPPDATA%\Ariadne\tools` and are for Ariadne only. If that folder has letters outside plain ASCII, as with a Greek user name, they go in `%ProgramData%\Ariadne\tools` instead, because Java cannot always start from there. Other accounts on the computer can reach that folder, so Ariadne locks `%ProgramData%\Ariadne` to your account, and runs nothing from it if another account could change it. To remove them, delete those folders, once you know nothing else needs them.
 
 On macOS and Linux, or if your company blocks the downloads, use the manual steps below.
 

@@ -103,7 +103,7 @@ The file arrived and passed its check, and Windows ran it, but it stopped with a
 
 ### "Ariadne will not run tools from ..."
 
-This is about `%ProgramData%\Ariadne`, which Ariadne uses when your user name has letters Java cannot spell. Other accounts on the computer can reach that folder, and a program put there would run as you, so Ariadne only uses it when nobody else can change it. Another account may have made it first. Ask your IT team to delete the folder, then press **Try again**.
+This is about `%ProgramData%\Ariadne`, which Ariadne uses when your user name has letters Java cannot spell. Other accounts on the computer can reach that folder, and a program put there would run as you, so Ariadne only uses it when nobody else can change it. Another account may have made it first, and its Java and Maestro may be in there, so do not just delete it. Ask your IT team to check who owns it. If nobody needs it they can remove it, and you can press **Try again**. If another account does use it, set up Java and Maestro by hand for your account.
 
 ### Android tools (adb) not found
 

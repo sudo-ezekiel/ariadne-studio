@@ -134,7 +134,7 @@ export function defaultInstallIo(androidHome: () => string | undefined, env: Nod
       if (!shared) return;
       await claimFolder(shared).catch((error: unknown) => {
         console.error(`[studio] Set up this computer: claiming ${shared}: ${error instanceof Error ? error.message : String(error)}`);
-        throw new PlainError(`Ariadne will not run tools from ${shared}, because another account on this computer may be able to change them. Ask your IT team to delete that folder, then press Try again.`);
+        throw new PlainError(`Ariadne will not run tools from ${shared}, because another account on this computer may be able to change them. Ask your IT team to check who owns that folder, because another account's tools may be in it, then press Try again.`);
       });
     },
   };
