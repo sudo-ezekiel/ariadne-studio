@@ -236,9 +236,13 @@ export class ToolInstaller {
     if (download.id === 'maestro' && this.tools.find((tool) => tool.id === 'java')?.state === 'failed') return;
     await this.io.start(join(destination, download.check.file), download.check.args).catch((error: unknown) => {
       console.error(`[studio] Set up this computer: starting ${download.name}: ${error instanceof Error ? error.message : String(error)}`);
-      throw new PlainError(
-        `Ariadne downloaded ${download.name}, but Windows would not start it. A company computer may block programs in your user folder: ask your IT team to allow ${destination}.`,
-      );
+      // A policy block has no code of its own in Node, so it arrives as UNKNOWN.
+      if (['EACCES', 'EPERM', 'UNKNOWN'].includes(String(codeOf(error)))) {
+        throw new PlainError(
+          `Ariadne downloaded ${download.name}, but Windows would not start it. A company computer may block programs in your user folder: ask your IT team to allow ${destination}.`,
+        );
+      }
+      throw new PlainError(`Ariadne downloaded ${download.name}, but it did not start correctly. Press Try again. If it keeps failing, Help > Show logs has the reason.`);
     });
   }
 

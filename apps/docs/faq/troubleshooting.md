@@ -97,6 +97,10 @@ Check the internet connection and press **Try again**. On a company computer, as
 
 The file arrived and passed its check, but Windows did not let it run. A company computer may block programs in user folders. Ask your IT team to allow the folder the message names. **Help > Show logs** has the reason Windows gave.
 
+### "Ariadne downloaded ..., but it did not start correctly"
+
+The file arrived and passed its check, and Windows ran it, but it stopped with an error or took too long. Press **Try again**. **Help > Show logs** has what it said.
+
 ### Android tools (adb) not found
 
 On Windows, open **Device setup** and press **Agree and set up**. Otherwise install Android Studio, then restart Ariadne. If the Android SDK is somewhere unusual, set `ANDROID_HOME` to it. Ariadne also reads `ANDROID_SDK_ROOT`, and looks in `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS and `%LOCALAPPDATA%\Android\Sdk` on Windows.

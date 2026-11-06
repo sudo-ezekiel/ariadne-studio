@@ -146,7 +146,7 @@ describe('ToolInstaller', () => {
   it('names the folder to allow when Windows will not start a tool', async () => {
     const io = fakeIo({
       start: async () => {
-        throw new Error('This program is blocked by group policy.');
+        throw Object.assign(new Error('This program is blocked by group policy.'), { code: 'EPERM' });
       },
     });
     const installer = await run(io, ['adb']);
@@ -154,6 +154,34 @@ describe('ToolInstaller', () => {
     expect(state).toBe('failed');
     expect(error).toContain('would not start');
     expect(error).toContain(join(base, 'installed', 'adb'));
+  });
+
+  it.each(['EACCES', 'EPERM', 'UNKNOWN'])('blames Windows for a tool that fails to start with %s', async (code) => {
+    const io = fakeIo({
+      start: async () => {
+        throw Object.assign(new Error('blocked'), { code });
+      },
+    });
+    const installer = await run(io, ['adb']);
+    expect(installer.status().tools[0]?.error).toContain('would not start');
+  });
+
+  it.each([
+    ['a non-zero exit', Object.assign(new Error('exit 1'), { code: 1 })],
+    ['a timeout', Object.assign(new Error('timed out'), { killed: true })],
+    ['a missing file', Object.assign(new Error('not found'), { code: 'ENOENT' })],
+  ])('does not blame Windows or the IT team for %s when starting a tool', async (_name, failure) => {
+    const io = fakeIo({
+      start: async () => {
+        throw failure;
+      },
+    });
+    const installer = await run(io, ['adb']);
+    const { error, state } = installer.status().tools[0]!;
+    expect(state).toBe('failed');
+    expect(error).toContain('did not start correctly');
+    expect(error).not.toContain('would not start');
+    expect(error).not.toContain('IT team');
   });
 
   it('does not start Maestro when Java failed, which would only report the same thing again', async () => {
