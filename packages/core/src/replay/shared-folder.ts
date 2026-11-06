@@ -45,10 +45,15 @@ export function onlyTrustedCanChange(sddl: string, me: string): boolean {
   });
 }
 
-/** A Windows tool by its full path, so a file of the same name in this folder cannot stand in for it. */
+/**
+ * A Windows tool by its full path, so a file of the same name in this folder
+ * cannot stand in for it. PSModulePath stays behind because Windows PowerShell
+ * cannot load Get-Acl from what a newer PowerShell leaves there.
+ */
 function runSystemTool(tool: string, args: string[]): string {
   const file = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', tool);
-  return execFileSync(file, args, { encoding: 'utf8', timeout: 30_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
+  return execFileSync(file, args, { encoding: 'utf8', env, timeout: 30_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 function mySid(): string {
@@ -59,7 +64,8 @@ function mySid(): string {
 
 function folderSddl(dir: string): string {
   const command = `(Get-Acl -LiteralPath '${dir.replaceAll("'", "''")}').Sddl`;
-  return runSystemTool(win32.join('WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', command]).trim();
+  // Without the replace, a long answer can come back wrapped over several lines.
+  return runSystemTool(win32.join('WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', command]).replace(/\s+/g, '');
 }
 
 /** Whether nobody but this user and the system can change `dir`. A folder that is not there has nothing to distrust. */
@@ -88,5 +94,6 @@ export async function claimFolder(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true, maxRetries: 3 });
   await mkdir(dir, { recursive: true });
   runSystemTool('icacls.exe', [dir, '/inheritance:r', '/grant:r', `*${mySid()}:(OI)(CI)F`, `*${SYSTEM}:(OI)(CI)F`, `*${ADMINISTRATORS}:(OI)(CI)F`]);
-  if (!folderIsPrivate(dir) || (await readdir(dir)).length > 0) throw new Error(`${dir} is still open to other accounts`);
+  const sddl = folderSddl(dir);
+  if (!onlyTrustedCanChange(sddl, mySid()) || (await readdir(dir)).length > 0) throw new Error(`${dir} is still open to other accounts: ${sddl}`);
 }
