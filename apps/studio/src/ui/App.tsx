@@ -16,6 +16,7 @@ import type {
   StepPatch,
   SuiteView,
 } from '../shared/api-types.ts';
+import { opensByItself } from '../shared/setup-steps.ts';
 import { api, ApiError } from './api.ts';
 import { CasePanel, type Draft, type PanelTab } from './components/CasePanel.tsx';
 import { ConnectionCard } from './components/ConnectionCard.tsx';
@@ -30,6 +31,10 @@ const HIGHLIGHT_MS = 1000;
 const TOAST_MS = 8000;
 const SUITE_POLL_MS = 1500;
 const PHONE_POLL_MS = 600;
+/** The wait between looks at the phone, each of which takes a couple of seconds itself. */
+const LIVE_SCREEN_MS = 1500;
+/** A phone that stopped answering, as when it is unplugged, is not worth asking as often. */
+const LIVE_SCREEN_FAILED_MS = 10_000;
 const PHONE_OFF: PhoneStatus = { active: false, paused: false, revision: 0 };
 
 export function App() {
@@ -98,10 +103,16 @@ export function App() {
       setSession(sessionInfo);
       setCurrentCase(active);
       setSuite(lastSuite);
-      const list = await loadDevices();
+      // No adb yet is what the setup guide below is for, not an error to show.
+      const list = await loadDevices().catch((error: unknown) => {
+        if (error instanceof ApiError && error.code === 'TOOL_MISSING') return [];
+        throw error;
+      });
       const preferred = sessionInfo.deviceId ?? info.lastDeviceId;
       if (preferred && list.some((device) => device.id === preferred)) setDeviceId(preferred);
       if (sessionInfo.open) setScreen(await api.screen().catch(() => null));
+      const setup = await api.setup().catch(() => null);
+      if (setup && opensByItself(setup, sessionInfo.open, info.lastDeviceId)) setSetupOpen(true);
     });
   }, [run, loadDevices]);
 
@@ -144,6 +155,33 @@ export function App() {
 
   // Steps made on the phone arrive from the server; follow them while the tester is using it.
   const phoneActive = phone.active;
+
+  // The phone changes without telling anyone: an app hands over to a website, a person closes
+  // it, it goes to sleep. So the screen here keeps looking. It stops for anything that needs
+  // the device, or that reads what is on screen, and while nobody can see this window.
+  const liveScreen = session.open && busy === null && picking === null && !phone.active && !suiteRunning;
+  useEffect(() => {
+    if (!liveScreen) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const look = async () => {
+      let wait = LIVE_SCREEN_MS;
+      if (!document.hidden) {
+        try {
+          const next = await api.refreshScreen();
+          if (alive) setScreen(next);
+        } catch {
+          wait = LIVE_SCREEN_FAILED_MS;
+        }
+      }
+      if (alive) timer = setTimeout(() => void look(), wait);
+    };
+    timer = setTimeout(() => void look(), LIVE_SCREEN_MS);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [liveScreen]);
   const phoneRevision = useRef(0);
   const phoneNotice = useRef(0);
   useEffect(() => {
@@ -241,6 +279,7 @@ export function App() {
     });
 
   const tap = (point: Point) => run('Tapping', async () => applyAction(await api.tap(point.x, point.y)));
+  const refreshScreen = () => run('Refreshing', async () => setScreen(await api.refreshScreen()));
   const type = (text: string) => run('Typing', async () => applyAction(await api.type(text)));
   const back = () => run('Going back', async () => applyAction(await api.back()));
   const scroll = (direction: ScrollDirection) => run('Scrolling', async () => applyAction(await api.scroll(direction)));
@@ -248,6 +287,7 @@ export function App() {
   const relaunch = () => run('Relaunching', async () => applyAction(await api.relaunch()));
   const hideKeyboard = () => run('Hiding the keyboard', async () => applyAction(await api.hideKeyboard()));
   const openLink = (url: string) => run('Opening link', async () => applyAction(await api.openLink(url)));
+  const addWait = (seconds: number) => run('Adding a wait', async () => applyAction(await api.wait(seconds)));
   const longPress = (point: Point) => run('Long pressing', async () => applyAction(await api.longPress(point.x, point.y)));
   const doubleTap = (point: Point) => run('Double tapping', async () => applyAction(await api.doubleTap(point.x, point.y)));
   const swipe = (from: Point, to: Point, durationMs: number) =>
@@ -464,8 +504,10 @@ export function App() {
           onBack={() => void back()}
           onScroll={(direction) => void scroll(direction)}
           onRelaunch={() => void relaunch()}
+          onRefresh={() => void refreshScreen()}
           onHideKeyboard={() => void hideKeyboard()}
           onOpenLink={(url) => void openLink(url)}
+          onWait={(seconds) => void addWait(seconds)}
           onLongPress={(point) => void longPress(point)}
           onDoubleTap={(point) => void doubleTap(point)}
           onSwipe={(from, to, durationMs) => void swipe(from, to, durationMs)}

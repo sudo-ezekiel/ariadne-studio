@@ -78,6 +78,8 @@ export type CaseStep =
   | (StepBase & { kind: 'relaunch' })
   /** Opens a URL or deep link (Maestro openLink). */
   | (StepBase & { kind: 'openLink'; url: string })
+  /** A pause on a run, for a page still getting ready. Nothing happens on the device when it is recorded. */
+  | (StepBase & { kind: 'wait'; seconds: number })
   | (StepBase & { kind: 'hideKeyboard' })
   /**
    * A setup block run in the middle of the case (Maestro runFlow), e.g. log

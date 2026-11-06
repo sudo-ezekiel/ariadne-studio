@@ -61,7 +61,14 @@ export type MaestroTools = {
   frameVideo: (input: FrameRunVideoInput) => Promise<void>;
 };
 
-export type Latest = ScreenCapture;
+export type Latest = ScreenCapture & {
+  /** The phone showed nothing, because it is asleep or locked. See hidden-screen.ts in core. */
+  hidden?: boolean;
+  /** The screen blocks screenshots, but its elements came through. */
+  secure?: boolean;
+  /** What is in front, when it is not the app the case starts from. */
+  elsewhere?: { app: string; home: boolean };
+};
 
 /** A saved case being changed in the recorder: re-recorded from a step, or extended in the middle. */
 export type EditingState = {
@@ -95,10 +102,14 @@ export type ServerState = {
   editing?: EditingState;
   suite?: SuiteJob;
   latest?: Latest;
+  /** The screen the end checks on offer came from: picks are positions in that list, and the mirror moves on. */
+  offered?: Latest;
   /** Where screenshots go when no case is recording them. */
   scratchDir: string;
   /** What touches on the phone need from adb; tests substitute a fake. */
   phoneTools: PhoneInputTools;
+  /** The phone that has said whether it is locked: if it stops saying, it counts as locked. */
+  lockAnswered?: string;
   /** Recording from a finger on the phone, while that is on. */
   phone?: PhoneCapture;
   /** Why recording from the phone stopped by itself. */
@@ -123,6 +134,11 @@ export function enqueue<T>(state: ServerState, task: () => Promise<T>): Promise<
 
 export function scratchScreenshot(state: ServerState): string {
   return join(state.scratchDir, 'screen.png');
+}
+
+/** Where a capture lands first. Nothing serves this file, so a lock screen in it can be dealt with before anyone can read it. */
+export function capturingScreenshot(state: ServerState): string {
+  return join(state.scratchDir, 'capturing.png');
 }
 
 type LiteSource = DeviceSnapshot['nodes'][number];
@@ -151,6 +167,9 @@ export function toScreenState(latest: Latest): ScreenState {
     nodes: latest.nodes
       .filter((node) => node.visibleToUser !== false && node.interactionBlocked === undefined && node.rect)
       .map(toLiteNode),
+    ...(latest.hidden ? { hidden: true } : {}),
+    ...(latest.secure ? { secure: true } : {}),
+    ...(latest.elsewhere ? { elsewhere: latest.elsewhere } : {}),
   };
 }
 

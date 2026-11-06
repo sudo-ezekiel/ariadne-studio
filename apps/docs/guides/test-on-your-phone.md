@@ -23,9 +23,9 @@ Install the desktop app and start it. If someone gave you an installer, use that
 
 The app is not code signed, so your computer warns on first start. On Windows the warning reads "Windows protected your PC": choose **More info > Run anyway**. Your company may need to allow it first.
 
-Connecting and recording have not been confirmed on a real Windows computer yet. If you are on Windows and something fails, that is worth reporting too.
+Windows has been tried on one computer and one phone so far. If you are on Windows and something fails, that is worth reporting too.
 
-Open **Device setup** from the Settings gear in the top bar, or from the link under Device. It checks the Android tools, your phone, Maestro and Java, and the **Phone over USB** guide walks you through USB debugging. Run needs Maestro and Java 17 or newer, so ask for help if those two are missing.
+**Device setup** opens by itself the first time and takes you through it one step at a time. You can also open it from the Settings gear in the top bar, or from the link under Device. On Windows it fetches the Android tools, Java and Maestro for you. Elsewhere, Run needs Maestro and Java 17 or newer, so ask for help if those two are missing.
 
 Turn on **Stay awake** in Developer options, so the phone does not lock in the middle of a recording.
 

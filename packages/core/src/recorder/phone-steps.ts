@@ -152,7 +152,7 @@ export function readGesture(gesture: TouchGesture, screens: GestureScreens, sett
 }
 
 /** The app showing, by which package owns most of the screen's nodes; the keyboard's own nodes do not count. */
-export function foregroundApp(screen: PhoneScreen): string | undefined {
+export function foregroundApp(screen: Pick<PhoneScreen, 'nodes' | 'keyboard'>): string | undefined {
   const counts = new Map<string, number>();
   for (const node of screen.nodes) {
     if (node.systemBar || !node.bundleId) continue;

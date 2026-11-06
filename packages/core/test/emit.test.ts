@@ -352,3 +352,130 @@ describe('startRecording and stopRecording', () => {
     );
   });
 });
+
+describe('wait', () => {
+  const waitFlow = (seconds: number): MaestroFlow => ({ appId: 'a.b', steps: [{ kind: 'wait', seconds }] });
+  const parseBody = (body: string) => () => parseMaestroFlow(`appId: a\n---\n${body}`);
+
+  it('emits a Wait as an optional extendedWaitUntil for something that is never on screen', () => {
+    expect(toMaestroYaml(waitFlow(20))).toBe(
+      [
+        'appId: a.b',
+        '---',
+        '- extendedWaitUntil:',
+        '    visible: "ariadne-wait"',
+        '    timeout: 20000',
+        '    optional: true',
+        '    label: "Wait 20 seconds"',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('writes one second in the singular', () => {
+    const yaml = toMaestroYaml(waitFlow(1));
+    expect(yaml).toContain('    timeout: 1000\n');
+    expect(yaml).toContain('    label: "Wait 1 second"\n');
+  });
+
+  it('reads back what it wrote', () => {
+    const flow: MaestroFlow = {
+      appId: 'a.b',
+      steps: [{ kind: 'launchApp' }, { kind: 'wait', seconds: 20 }, { kind: 'wait', seconds: 1 }, { kind: 'wait', seconds: 120 }],
+    };
+    expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+  });
+
+  it('still refuses an extendedWaitUntil for something real on screen', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "Loaded"\n    timeout: 5000\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+    expect(parseBody('- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n')).toThrow(MaestroParseError);
+  });
+
+  it('still refuses an extendedWaitUntil for the Wait label when it has no timeout', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: "20000"\n')).toThrow(MaestroParseError);
+  });
+
+  it('refuses the Wait label with a timeout when optional is missing', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses the Wait label with a timeout when optional is false', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n    optional: false\n')).toThrow(MaestroParseError);
+  });
+
+  it('reads the Wait form with optional true, with or without its label', () => {
+    const read = (body: string) => parseMaestroFlow(`appId: a\n---\n${body}`);
+    expect(read('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n    optional: true\n').steps).toEqual([{ kind: 'wait', seconds: 20 }]);
+    expect(read('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 5000\n    optional: true\n    label: "Wait 5 seconds"\n').steps).toEqual([{ kind: 'wait', seconds: 5 }]);
+  });
+
+  const waitWithTimeout = (timeout: string) => parseBody(`- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: ${timeout}\n    optional: true\n`);
+
+  it.each(['-5000', '0', '.inf', '.nan', '2147483648'])('refuses the Wait label with timeout %s', (timeout) => {
+    expect(waitWithTimeout(timeout)).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('reads the longest timeout a timer can hold as a Wait', () => {
+    expect(waitWithTimeout('2147483647')()).toEqual({ appId: 'a', steps: [{ kind: 'wait', seconds: 2147483.647 }] });
+  });
+
+  it('reads a timeout of 1000 as one second', () => {
+    expect(waitWithTimeout('1000')().steps).toEqual([{ kind: 'wait', seconds: 1 }]);
+  });
+
+  const waitWithLabel = (timeout: number, label: string) =>
+    parseBody(`- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: ${timeout}\n    optional: true\n    label: ${JSON.stringify(label)}\n`);
+
+  it('refuses a Wait with a custom label', () => {
+    expect(waitWithLabel(20000, 'Let the page settle')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait whose label uses a block variable, which a Wait would lose', () => {
+    expect(waitWithLabel(20000, 'Wait for ${ACCOUNT}')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait with an empty label', () => {
+    expect(waitWithLabel(20000, '')).toThrow(MaestroParseError);
+  });
+
+  it('reads the generated label for 20 seconds', () => {
+    expect(waitWithLabel(20000, 'Wait 20 seconds')().steps).toEqual([{ kind: 'wait', seconds: 20 }]);
+  });
+
+  it('reads the singular generated label for 1 second', () => {
+    expect(waitWithLabel(1000, 'Wait 1 second')().steps).toEqual([{ kind: 'wait', seconds: 1 }]);
+  });
+
+  it('refuses the plural label on a 1 second timeout', () => {
+    expect(waitWithLabel(1000, 'Wait 1 seconds')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a generated label for the wrong number of seconds', () => {
+    expect(waitWithLabel(20000, 'Wait 5 seconds')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait with an extra key', () => {
+    expect(
+      parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    notVisible: "x"\n    timeout: 20000\n    optional: true\n'),
+    ).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses a Wait with an extra key even when the label is the generated one', () => {
+    expect(
+      parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n    optional: true\n    label: "Wait 20 seconds"\n    notVisible: "x"\n'),
+    ).toThrow(MaestroParseError);
+  });
+
+  it('reads back each Wait the emitter writes, across fractional and large seconds', () => {
+    const flow: MaestroFlow = {
+      appId: 'a.b',
+      steps: [0.5, 1, 2, 59, 60, 3600].map((seconds) => ({ kind: 'wait', seconds })),
+    };
+    expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+  });
+
+  it('refuses a bare extendedWaitUntil', () => {
+    expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+});

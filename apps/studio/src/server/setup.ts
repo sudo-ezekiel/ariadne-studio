@@ -5,9 +5,11 @@ import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { readXiaomiPhone } from '@ariadne/core';
-import type { AdbDevice, SetupInfo, ToolCheck } from '../shared/api-types.ts';
+import { readXiaomiPhone, toolsJavaHome } from '@ariadne/core';
+import type { AdbDevice, SetupInfo, ToolCheck, ToolInstallStatus } from '../shared/api-types.ts';
+import { missingTools } from '../shared/setup-steps.ts';
 import { HttpError } from './common.ts';
+import { defaultInstallIo, ToolInstaller } from './tool-install.ts';
 
 /** The parts of the operating system the checks use; tests substitute fakes. */
 export type SetupTools = {
@@ -18,6 +20,9 @@ export type SetupTools = {
   androidHome: () => string | undefined;
   /** Path of the Maestro CLI; throws when it is not installed. */
   findMaestro: () => string;
+  /** The java to ask for its version: the one "Set up this computer" fetched, else whatever is on PATH. */
+  javaBin: () => string;
+  installer: ToolInstaller;
   platform: NodeJS.Platform;
   /** PATH, to find programs that are not in the Android SDK. */
   path: string;
@@ -43,6 +48,11 @@ export function defaultSetupTools(androidHome: () => string | undefined, findMae
     },
     androidHome,
     findMaestro,
+    javaBin: () => {
+      const home = toolsJavaHome();
+      return home ? join(home, 'bin', 'java.exe') : 'java';
+    },
+    installer: new ToolInstaller(defaultInstallIo(androidHome)),
     platform: process.platform,
     path: process.env.PATH ?? '',
     exists: existsSync,
@@ -111,7 +121,7 @@ export function parseAvdList(output: string): string[] {
 
 async function checkJava(tools: SetupTools): Promise<SetupInfo['java']> {
   try {
-    const { stdout, stderr } = await tools.exec('java', ['-version']);
+    const { stdout, stderr } = await tools.exec(tools.javaBin(), ['-version']);
     const parsed = parseJavaVersion(`${stderr}\n${stdout}`);
     return parsed ? { found: true, version: parsed.version, major: parsed.major } : { found: true };
   } catch {
@@ -185,6 +195,23 @@ export async function checkSetup(tools: SetupTools): Promise<SetupInfo> {
 
 export function registerSetupRoutes(app: FastifyInstance, tools: SetupTools): void {
   app.get('/api/setup', async (): Promise<SetupInfo> => checkSetup(tools));
+
+  app.get('/api/setup/install', async (): Promise<ToolInstallStatus> => tools.installer.status());
+
+  /** Starts fetching what is missing; the guide follows along with the GET. */
+  app.post('/api/setup/install', async (request): Promise<ToolInstallStatus> => {
+    if (!tools.installer.status().available) {
+      throw new HttpError(409, 'CANNOT_INSTALL', 'Ariadne cannot fetch the tools on this computer. Follow the manual steps in Device setup.');
+    }
+    if (!tools.installer.status().running) {
+      const missing = missingTools(await checkSetup(tools));
+      if (missing.includes('adb') && ((request.body ?? {}) as { acceptTerms?: unknown }).acceptTerms !== true) {
+        throw new HttpError(400, 'TERMS_NOT_ACCEPTED', "The Android tools need Google's Android SDK terms accepted first.");
+      }
+      tools.installer.start(missing);
+    }
+    return tools.installer.status();
+  });
 
   /** Starts an emulator the user created in Android Studio; only names `emulator -list-avds` returns are accepted. */
   app.post('/api/setup/emulator', async (request) => {

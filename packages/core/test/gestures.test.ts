@@ -242,6 +242,18 @@ describe('replaying part of a case through agent-device', () => {
     expect(replaySegments(steps.slice(0, 3))).toEqual([{ kind: 'flow', steps: steps.slice(0, 3) }]);
   });
 
+  it('does not replay a wait through agent-device, and does it as a direct action', () => {
+    const wait: MaestroStep = { kind: 'wait', seconds: 20 };
+    expect(agentDeviceReplays(wait)).toBe(false);
+    expect(directAction(wait)).toEqual({ kind: 'wait', seconds: 20 });
+    const around: MaestroStep[] = [steps[0]!, wait, steps[1]!];
+    expect(replaySegments(around)).toEqual([
+      { kind: 'flow', steps: [steps[0]] },
+      { kind: 'direct', step: wait, action: { kind: 'wait', seconds: 20 } },
+      { kind: 'flow', steps: [steps[1]] },
+    ]);
+  });
+
   it('refuses a command the recorder never writes', () => {
     expect(() => directAction({ kind: 'pressKey', key: 'Tab' })).toThrow(/cannot replay/);
     expect(() => directAction({ kind: 'setOrientation', orientation: 'UPSIDE_DOWN' })).toThrow(/cannot replay/);

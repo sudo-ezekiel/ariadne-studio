@@ -35,7 +35,7 @@ adb reports `no permissions`. Install your distribution's Android udev rules (`a
 
 ### No prompt and no device on a USB cable
 
-Use a cable that carries data, because some only charge. On Windows, install the phone maker's USB driver.
+Use a cable that carries data, because some only charge. On Windows, if the phone still does not show up, install its maker's USB driver, which needs admin rights.
 
 ### The first start on Windows takes over a minute
 
@@ -83,9 +83,31 @@ The screen only runs in portrait, such as the launcher. Rotate on a screen that 
 
 ## adb and the Android SDK
 
+### "The phone's screen is off or locked"
+
+Ariadne does not press or record anything on a phone that is asleep or locked: a step recorded now would have no element and a black picture. The lock screen is left out on purpose, even when it is lit, because its notifications can be private. A phone that stops saying whether it is locked counts as locked until it answers again. Wake the phone and unlock it, and the screen comes back by itself. If nobody can reach the phone, the Power button under the screen still works, once you have pressed **Stop using the phone** if that is on. Pressed during a recording it adds a step, which could turn the screen off on a run, so delete that step if you only meant to wake the phone. Turn on **Stay awake** in Developer options so it does not sleep in the middle of a recording.
+
+A screen that is black here because the app hides it from screenshots, as banking apps do, is different: its elements still come through, so it records as usual.
+
+### "Could not download ..." in Device setup
+
+Check the internet connection and press **Try again**. On a company computer, ask your IT team to allow `dl.google.com` and `github.com`, or use the manual steps under **All checks and manual steps**. A proxy can also get in the way: Ariadne does not use one.
+
+### "Ariadne downloaded ..., but Windows would not start it"
+
+The file arrived and passed its check, but Windows did not let it run. A company computer may block programs in user folders. Ask your IT team to allow the folder the message names. **Help > Show logs** has the reason Windows gave.
+
+### "Ariadne downloaded ..., but it did not start correctly"
+
+The file arrived and passed its check, and Windows ran it, but it stopped with an error or took too long. Press **Try again**. **Help > Show logs** has what it said.
+
+### "Ariadne will not run tools from ..."
+
+This is about `%ProgramData%\Ariadne`, which Ariadne uses when your user name has letters Java cannot spell. Other accounts on the computer can reach that folder, and a program put there would run as you, so Ariadne only uses it when nobody else can change it. Another account may have made it first, and its Java and Maestro may be in there, so do not just delete it. Ask your IT team to check who owns it. If nobody needs it they can remove it, and you can press **Try again**. If another account does use it, set up Java and Maestro by hand for your account.
+
 ### Android tools (adb) not found
 
-Install Android Studio, then restart Ariadne. If the Android SDK is somewhere unusual, set `ANDROID_HOME` to it. Ariadne also reads `ANDROID_SDK_ROOT`, and looks in `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS and `%LOCALAPPDATA%\Android\Sdk` on Windows.
+On Windows, open **Device setup** and press **Agree and set up**. Otherwise install Android Studio, then restart Ariadne. If the Android SDK is somewhere unusual, set `ANDROID_HOME` to it. Ariadne also reads `ANDROID_SDK_ROOT`, and looks in `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS and `%LOCALAPPDATA%\Android\Sdk` on Windows.
 
 ### "The Android emulator is not installed."
 
@@ -99,7 +121,7 @@ Started from the Dock or a launcher, an app gets a bare `PATH`, so the app adds 
 
 ### "Maestro CLI not found"
 
-Install it from [Maestro's guide](https://docs.maestro.dev/maestro-cli/how-to-install-maestro-cli). The studio looks in `~/.maestro/bin` and on `PATH`, and on Windows in `C:\maestro\bin` too. Set `MAESTRO_BIN` to name the file. Recording works without Maestro.
+On Windows, **Device setup** can fetch it for you. Otherwise install it from [Maestro's guide](https://docs.maestro.dev/maestro-cli/how-to-install-maestro-cli). The studio looks in `~/.maestro/bin` and on `PATH`, and on Windows in `C:\maestro\bin` too. Set `MAESTRO_BIN` to name the file. Recording works without Maestro.
 
 ### "Could not run Maestro"
 

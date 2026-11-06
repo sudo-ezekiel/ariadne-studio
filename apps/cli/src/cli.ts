@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { delimiter, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { androidHome } from '@ariadne/core';
+import { androidHome, defaultSdkDir } from '@ariadne/core';
 import { startStudio, studioUrl, type RunningStudio } from '@ariadne/studio/server';
 import { parseCliArgs, USAGE, UsageError, type RunOptions } from './args.ts';
 import { InitError, initProject, initReport } from './init.ts';
@@ -33,15 +33,13 @@ function version(): string {
 /**
  * agent-device finds adb on PATH. A fresh terminal, or an app started from the
  * desktop, often has the SDK installed but not on PATH, so add its platform-tools.
+ * It goes on PATH even before it exists: "Set up this computer" can put adb there
+ * while the studio runs, and agent-device's daemon keeps the PATH it started with.
  */
 function addSdkToPath(): void {
-  const home = androidHome();
-  if (!home) return;
-  const platformTools = join(home, 'platform-tools');
+  const platformTools = join(androidHome() ?? defaultSdkDir(), 'platform-tools');
   const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
-  if (existsSync(platformTools) && !dirs.includes(platformTools)) {
-    process.env.PATH = [...dirs, platformTools].join(delimiter);
-  }
+  if (!dirs.includes(platformTools)) process.env.PATH = [...dirs, platformTools].join(delimiter);
 }
 
 function notifyParent(message: ParentMessage): void {

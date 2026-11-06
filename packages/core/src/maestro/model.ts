@@ -40,6 +40,11 @@ export type MaestroStep =
   /** Opens a URL or deep link with whatever handles it on the device. */
   | { kind: 'openLink'; link: string }
   /**
+   * A pause. Maestro has no such command, so a flow waits for NEVER_ON_SCREEN,
+   * and `optional` lets that run out without failing the flow.
+   */
+  | { kind: 'wait'; seconds: number }
+  /**
    * Saves a screenshot as <path>.png in the flow's debug output. The studio
    * adds these to the copy of a flow it replays, never to flows on disk.
    */
@@ -103,4 +108,12 @@ export function describeSelector(selector: MaestroSelector): string {
     case 'point':
       return `point: ${selector.xPercent}%,${selector.yPercent}%`;
   }
+}
+
+/** The label a Wait step waits for. It marks the command as a Wait when a flow is read back. */
+export const NEVER_ON_SCREEN = 'ariadne-wait';
+
+/** How a Wait step reads in the case, the flow and the reports. */
+export function waitName(seconds: number): string {
+  return `Wait ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
 }

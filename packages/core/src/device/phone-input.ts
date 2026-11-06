@@ -6,6 +6,7 @@ import { execFile, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { installMaestroDriver } from '../replay/maestro-driver.ts';
+import { parseKeyguardShowing } from './hidden-screen.ts';
 import { readPhoneReport, type PhoneReport } from './phone-report.ts';
 import { adbPath } from './session.ts';
 import { findTouchScreen, parseDensity, parseHomeApp, parseRotation, type Rotation, type TouchScreen } from './touch.ts';
@@ -40,6 +41,8 @@ export type PhoneInputTools = {
   allowDriver: (deviceId: string) => Promise<void>;
   /** Facts about the phone for a diagnostics report. */
   report: (deviceId: string) => Promise<PhoneReport>;
+  /** Whether the lock screen is up; undefined when Android does not say. */
+  locked: (deviceId: string) => Promise<boolean | undefined>;
   /** Ends Maestro's driver when a run leaves it on the phone. */
   stopDriver: (deviceId: string) => Promise<void>;
   /** Puts Maestro's driver on the phone, asking on the phone first on Xiaomi's. */
@@ -95,6 +98,8 @@ export const phoneInputTools: PhoneInputTools = {
   xiaomi: (deviceId) => readXiaomiPhone((args) => shell(deviceId, ...args)),
   allowDriver: (deviceId) => allowDriverToOpenApps((args) => shell(deviceId, ...args)),
   report: (deviceId) => readPhoneReport((args) => shell(deviceId, ...args)),
+  // Filtered on the phone: the rest of the dump names what is on screen, notifications too.
+  locked: async (deviceId) => parseKeyguardShowing(await shell(deviceId, 'dumpsys window | grep isKeyguardShowing=')),
   stopDriver: (deviceId) => stopDriver((args) => shell(deviceId, ...args)),
   installDriver: installMaestroDriver,
 };

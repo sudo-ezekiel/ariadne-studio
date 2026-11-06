@@ -105,9 +105,9 @@ is where it goes.
 ## Limits
 
 - Android only. No iOS.
-- The desktop app is tested end to end on Linux only. On real Windows the tests and a start with
-  no phone pass in CI, so Connect and recording with a phone there are still unconfirmed. There
-  is no macOS build yet.
+- The desktop app is tested end to end on Linux. On real Windows, Connect, recording and Run have
+  worked on one computer and one phone; typing, gestures and **Use the phone** are not tried there
+  yet. There is no macOS build yet.
 - One device at a time. Run blocks the studio until Maestro finishes, with a limit of 5 minutes.
 - **Use the phone** needs a phone you can touch. Gesture navigation is unproven on a real
   phone, and other phones report touches differently, so expect some to need work.

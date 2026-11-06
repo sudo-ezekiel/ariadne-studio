@@ -1,14 +1,17 @@
-// The device setup guide: a live check of what this computer has, then step by
-// step instructions for an emulator or a phone on USB. It re-checks every few
-// seconds while open, so plugging a phone in or allowing USB debugging shows
-// up without a click.
+// The device setup guide: one step at a time from a bare computer to a phone
+// that is ready, then a live check of what this computer has and the manual
+// steps for a phone on USB or an emulator. It re-checks every few seconds while
+// open, so plugging a phone in or allowing USB debugging moves it on without a
+// click.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { AdbDevice, SetupInfo } from '../../shared/api-types.ts';
+import type { AdbDevice, SetupInfo, ToolId, ToolInstallStatus, ToolProgress } from '../../shared/api-types.ts';
+import { ALLOW_HELP_AFTER_MS, MIN_JAVA, javaIsUsable, missingTools, walkthrough, type WalkthroughStep } from '../../shared/setup-steps.ts';
 import { api, ApiError } from '../api.ts';
 import { AlertIcon, CheckIcon, CrossIcon } from './Icons.tsx';
 
 const RECHECK_MS = 4000;
-const MIN_JAVA = 17;
+const INSTALL_POLL_MS = 1000;
+const SDK_TERMS_URL = 'https://developer.android.com/studio/terms';
 
 type Props = {
   open: boolean;
@@ -83,8 +86,189 @@ function XiaomiStep({ device, preparing, onPrepare }: { device: AdbDevice } & Xi
   );
 }
 
-function Checks({ info, starting, onStart, preparing, onPrepare }: { info: SetupInfo; starting: string[]; onStart: (name: string) => void } & XiaomiProps) {
-  const javaOk = info.java.found && (info.java.major === undefined || info.java.major >= MIN_JAVA);
+function megabytes(bytes: number): number {
+  return Math.round(bytes / 1_000_000);
+}
+
+function toolStateText(tool: ToolProgress): string {
+  switch (tool.state) {
+    case 'waiting':
+      return 'Waiting';
+    case 'downloading':
+      return `Downloading, ${megabytes(tool.received)} of ${megabytes(tool.total)} MB`;
+    case 'unpacking':
+      return 'Unpacking';
+    case 'checking':
+      return 'Checking that it starts';
+    case 'done':
+      return 'Ready';
+    case 'failed':
+      return 'Did not finish';
+  }
+}
+
+function ToolRow({ tool }: { tool: ToolProgress }) {
+  return (
+    <li className="check-row">
+      {tool.state === 'done' ? <Mark level="ok" /> : tool.state === 'failed' ? <Mark level="missing" /> : <span className="check-mark tool-busy" />}
+      <div className="tool-text">
+        <div className="check-title">{tool.name}</div>
+        <div className="check-detail">{toolStateText(tool)}</div>
+        {tool.state === 'downloading' && <progress className="tool-progress" max={tool.total} value={tool.received} aria-label={`${tool.name} download`} />}
+        {tool.error && <p className="run-error">{tool.error}</p>}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The tools Ariadne can fetch itself: what is on offer and how big it is, then
+ * how it is going. It stays out of the way of the phone steps, so a tester can
+ * carry on while Java and Maestro download.
+ */
+function ToolsPanel({ status, missing, lead, onInstall }: { status: ToolInstallStatus | null; missing: ToolId[]; lead?: string; onInstall: () => void }) {
+  if (!status?.available) return null;
+  const failed = status.tools.some((tool) => tool.state === 'failed');
+  const offered = status.offered.filter((tool) => missing.includes(tool.id));
+  if (!status.running && !failed && offered.length === 0) return null;
+  const needsTerms = missing.includes('adb');
+  const label = failed ? 'Try again' : needsTerms ? 'Agree and set up' : 'Get them';
+  const size = megabytes(offered.reduce((total, tool) => total + tool.bytes, 0));
+  return (
+    <div className="tools-panel">
+      {lead && !status.running && !failed && <p>{lead}</p>}
+      {(status.running || failed) && (
+        <ul className="checks">
+          {status.tools.map((tool) => (
+            <ToolRow key={tool.id} tool={tool} />
+          ))}
+        </ul>
+      )}
+      {status.running && <p className="hint">You can carry on with the steps while this downloads.</p>}
+      {!status.running && offered.length > 0 && (
+        <>
+          <p className="tools-offer">
+            <button type="button" className="primary" onClick={onInstall}>
+              {label}
+            </button>
+            <span className="hint">About {size} MB to download. No admin rights needed.</span>
+          </p>
+          {needsTerms && (
+            <p className="hint">
+              Pressing {label} accepts Google's{' '}
+              <a href={SDK_TERMS_URL} target="_blank" rel="noreferrer">
+                Android SDK terms
+              </a>
+              . Ariadne gets each tool from the people who make it and checks the file before using it.
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+const STEPS: Array<{ id: WalkthroughStep; title: string }> = [
+  { id: 'tools', title: 'Set up this computer' },
+  { id: 'phone', title: 'Plug in your phone' },
+  { id: 'allow', title: 'Allow this computer' },
+  { id: 'ready', title: 'Connect' },
+];
+
+function PhoneStep() {
+  return (
+    <>
+      <ol className="guide walk-guide">
+        <li>
+          On the phone, open Settings, then About phone, and tap <strong>Build number</strong> seven times. On Samsung it is under Software information. On Xiaomi,
+          Redmi and POCO, tap <strong>OS version</strong>.
+        </li>
+        <li>
+          Find <strong>Developer options</strong> in Settings (search for it if you need to), and turn on <strong>USB debugging</strong> and <strong>Stay awake</strong>.
+          On Xiaomi, Redmi and POCO, also turn on <strong>Install via USB</strong> and <strong>USB debugging (Security settings)</strong>.
+        </li>
+        <li>
+          Plug the phone into this computer with a cable that carries data. If the phone asks what the connection is for, choose <strong>File transfer</strong>.
+        </li>
+      </ol>
+      <p className="hint">This moves on by itself when your phone shows up. Nothing yet? Try another cable, then see Phone over USB under All checks and manual steps.</p>
+    </>
+  );
+}
+
+function AllowStep({ device, os, stuck }: { device: AdbDevice; os: SetupInfo['os']; stuck: boolean }) {
+  if (device.state !== 'unauthorized') return <p>{deviceState(device, os).text}</p>;
+  return (
+    <>
+      <p>
+        Unlock the phone. It asks <strong>"Allow USB debugging?"</strong>. Tick <strong>Always allow from this computer</strong> and press <strong>Allow</strong>.
+      </p>
+      {stuck ? (
+        <div className="device-note">
+          No prompt, or nothing happened? In Developer options press <strong>Revoke USB debugging authorizations</strong>, turn USB debugging off and on again, then unplug
+          the phone and plug it back in. Keep the phone unlocked: the prompt comes back within a few seconds.
+        </div>
+      ) : (
+        <p className="hint">This moves on by itself when you press Allow.</p>
+      )}
+    </>
+  );
+}
+
+function ReadyStep({ device, maestroFound, preparing, onPrepare }: { device: AdbDevice; maestroFound: boolean } & XiaomiProps) {
+  return (
+    <>
+      <p>
+        <strong>{device.avd ?? device.model ?? device.serial}</strong> is ready. Press Done, pick it under Device, type the app id and press Connect.
+      </p>
+      {device.xiaomi && <p className="hint">Watch the phone when you press Connect: it can ask before installing Ariadne's helper. Tap Install.</p>}
+      {maestroFound && <XiaomiStep device={device} preparing={preparing} onPrepare={onPrepare} />}
+    </>
+  );
+}
+
+function Walkthrough({ info, install, stuck, onInstall, preparing, onPrepare }: { info: SetupInfo; install: ToolInstallStatus | null; stuck: boolean; onInstall: () => void } & XiaomiProps) {
+  const { step, device } = walkthrough(info);
+  const current = STEPS.findIndex((item) => item.id === step);
+  const missing = missingTools(info);
+  const body = (id: WalkthroughStep) => {
+    if (id === 'tools') {
+      return install && !install.available ? (
+        <p>Ariadne needs the Android tools to talk to your phone. Follow the steps under All checks and manual steps.</p>
+      ) : (
+        <>
+          <p>Ariadne needs three free tools: the Android tools, to talk to your phone, and Java and Maestro, to run saved cases. It fetches them for you, into your own folders. You do not need Android Studio.</p>
+          <ToolsPanel status={install} missing={missing} onInstall={onInstall} />
+        </>
+      );
+    }
+    if (id === 'phone') return <PhoneStep />;
+    if (id === 'allow') return device && <AllowStep device={device} os={info.os} stuck={stuck} />;
+    return device && <ReadyStep device={device} maestroFound={info.maestro.found} preparing={preparing} onPrepare={onPrepare} />;
+  };
+  return (
+    <>
+      <ol className="walk" aria-label="Setup steps">
+        {STEPS.map((item, position) => {
+          const place = position < current ? 'walk-done' : position === current ? 'walk-now' : 'walk-later';
+          return (
+            <li key={item.id} className={`walk-step ${place}`} aria-current={position === current ? 'step' : undefined}>
+              <span className="walk-mark">{position < current ? <CheckIcon size={14} /> : position + 1}</span>
+              <div className="walk-body">
+                <div className="walk-title">{item.title}</div>
+                {position === current && body(item.id)}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {step !== 'tools' && <ToolsPanel status={install} missing={missing} lead="Recording is ready. To run saved cases, Ariadne also needs these. It fetches them for you." onInstall={onInstall} />}
+    </>
+  );
+}
+
+function Checks({ info, canInstall, starting, onStart, preparing, onPrepare }: { info: SetupInfo; canInstall: boolean; starting: string[]; onStart: (name: string) => void } & XiaomiProps) {
+  const javaOk = javaIsUsable(info.java);
   const running = new Set(info.devices.map((device) => device.avd).filter(Boolean));
   const ready = info.devices.filter((device) => device.state === 'device');
   return (
@@ -92,6 +276,8 @@ function Checks({ info, starting, onStart, preparing, onPrepare }: { info: Setup
       <CheckRow level={info.adb.found ? 'ok' : 'missing'} title="Android tools (adb)">
         {info.adb.found ? (
           <span className="path">{info.adb.path}</span>
+        ) : canInstall ? (
+          <>Not found. The steps above fetch it for you. If the Android SDK is somewhere unusual, set ANDROID_HOME to it instead.</>
         ) : (
           <>Not found. Install Android Studio (step 1 of "Emulator" below), then restart Ariadne. If the Android SDK is somewhere unusual, set ANDROID_HOME to it.</>
         )}
@@ -140,6 +326,8 @@ function Checks({ info, starting, onStart, preparing, onPrepare }: { info: Setup
       <CheckRow level={info.maestro.found ? 'ok' : 'missing'} title="Maestro, to run saved cases">
         {info.maestro.found ? (
           <span className="path">{info.maestro.path}</span>
+        ) : canInstall ? (
+          <>Not found. Recording works without it; Run needs it. The steps above fetch it for you.</>
         ) : info.os === 'windows' ? (
           <>Not found. Recording works without it; Run needs it. Follow the Windows steps in Maestro's installation guide at maestro.dev.</>
         ) : (
@@ -149,10 +337,12 @@ function Checks({ info, starting, onStart, preparing, onPrepare }: { info: Setup
         )}
       </CheckRow>
       <CheckRow level={javaOk ? 'ok' : 'missing'} title={`Java ${MIN_JAVA} or newer, for Maestro`}>
-        {!info.java.found ? (
-          <>Not found. Install Java {MIN_JAVA} or newer, for example Temurin {MIN_JAVA} from adoptium.net.</>
-        ) : javaOk ? (
+        {javaOk ? (
           <>Java {info.java.version ?? ''}</>
+        ) : canInstall ? (
+          <>{info.java.found ? `Java ${info.java.version} is too old.` : 'Not found.'} The steps above fetch a new one for you, for Ariadne only.</>
+        ) : !info.java.found ? (
+          <>Not found. Install Java {MIN_JAVA} or newer, for example Temurin {MIN_JAVA} from adoptium.net.</>
         ) : (
           <>
             Java {info.java.version} is too old. Install Java {MIN_JAVA} or newer, for example Temurin {MIN_JAVA} from adoptium.net.
@@ -216,9 +406,12 @@ function UsbGuide({ os }: { os: SetupInfo['os'] | undefined }) {
         Developer options and plug in again.
       </li>
       <li>
-        <strong>{os === 'windows' ? 'Install the USB driver.' : os === 'mac' ? 'Nothing more on a Mac.' : 'Let your user use the phone (Linux).'}</strong>{' '}
+        <strong>{os === 'windows' ? 'Only if the phone does not show up: install its USB driver.' : os === 'mac' ? 'Nothing more on a Mac.' : 'Let your user use the phone (Linux).'}</strong>{' '}
         {os === 'windows' ? (
-          <>Windows needs the phone maker's USB driver: the Google USB Driver for Pixel phones, the Samsung USB Driver for Samsung phones.</>
+          <>
+            Windows brings a driver that works for some phones. If yours does not show up, install the maker's: the Google USB Driver for Pixel phones, the Samsung USB Driver for
+            Samsung phones. Installing a driver needs admin rights, so on a company computer ask your IT team.
+          </>
         ) : os === 'mac' ? (
           <>macOS needs no driver.</>
         ) : (
@@ -249,11 +442,16 @@ export function SetupDialog({ open, onClose, onDevicesChanged }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [info, setInfo] = useState<SetupInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'emulator' | 'usb'>('emulator');
+  const [tab, setTab] = useState<'emulator' | 'usb'>('usb');
   const [starting, setStarting] = useState<string[]>([]);
   const [preparing, setPreparing] = useState<string[]>([]);
   const [screenshots, setScreenshots] = useState(false);
+  const [install, setInstall] = useState<ToolInstallStatus | null>(null);
+  const [allowStuck, setAllowStuck] = useState(false);
+  const [checkNow, setCheckNow] = useState(0);
   const readyKey = useRef<string | undefined>(undefined);
+  const allowWait = useRef<{ serial: string; since: number } | undefined>(undefined);
+  const wasInstalling = useRef(false);
   const devicesChanged = useRef(onDevicesChanged);
   devicesChanged.current = onDevicesChanged;
 
@@ -282,6 +480,10 @@ export function SetupDialog({ open, onClose, onDevicesChanged }: Props) {
         readyKey.current = key;
         const running = new Set(next.devices.map((device) => device.avd));
         setStarting((current) => current.filter((name) => !running.has(name)));
+        const { step, device } = walkthrough(next);
+        if (step !== 'allow' || device?.state !== 'unauthorized') allowWait.current = undefined;
+        else if (allowWait.current?.serial !== device.serial) allowWait.current = { serial: device.serial, since: Date.now() };
+        setAllowStuck(allowWait.current !== undefined && Date.now() - allowWait.current.since >= ALLOW_HELP_AFTER_MS);
       } catch (caught) {
         if (alive) setError(caught instanceof ApiError ? caught.message : String(caught));
       }
@@ -292,7 +494,44 @@ export function SetupDialog({ open, onClose, onDevicesChanged }: Props) {
       alive = false;
       clearInterval(timer);
     };
+  }, [open, checkNow]);
+
+  // The download goes on with the dialog closed, so ask where it is on every open.
+  useEffect(() => {
+    if (open) void api.installStatus().then(setInstall, () => undefined);
   }, [open]);
+
+  const installing = install?.running ?? false;
+  useEffect(() => {
+    if (!open || !installing) return;
+    let alive = true;
+    const timer = setInterval(() => {
+      void api.installStatus().then(
+        (next) => {
+          if (alive) setInstall(next);
+        },
+        () => undefined,
+      );
+    }, INSTALL_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [open, installing]);
+
+  // What just landed shows in the checks straight away, not at the next tick.
+  useEffect(() => {
+    if (wasInstalling.current && !installing) setCheckNow((count) => count + 1);
+    wasInstalling.current = installing;
+  }, [installing]);
+
+  const startInstall = async () => {
+    try {
+      setInstall(await api.startInstall());
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : String(caught));
+    }
+  };
 
   const preparePhone = async (serial: string) => {
     setPreparing((current) => [...current, serial]);
@@ -326,22 +565,39 @@ export function SetupDialog({ open, onClose, onDevicesChanged }: Props) {
       </div>
       <div className="dialog-body">
         <p className="lede">
-          Ariadne records on an Android emulator (a virtual phone on this computer) or on a real Android phone plugged in with USB. You need one of
-          the two.
+          Ariadne records on a real Android phone plugged in with USB. Follow the steps here: each one moves on by itself. For a virtual phone on this computer, see Emulator under All
+          checks and manual steps.
         </p>
-        <h3>This computer</h3>
         {error && <p className="run-error">{error}</p>}
-        {info ? <Checks info={info} starting={starting} onStart={(name) => void startEmulator(name)} preparing={preparing} onPrepare={(serial) => void preparePhone(serial)} /> : !error && <p className="hint">Checking...</p>}
+        {info ? (
+          <Walkthrough info={info} install={install} stuck={allowStuck} onInstall={() => void startInstall()} preparing={preparing} onPrepare={(serial) => void preparePhone(serial)} />
+        ) : (
+          !error && <p className="hint">Checking...</p>
+        )}
 
-        <div className="guide-tabs" role="tablist" aria-label="Kind of device">
-          <button type="button" role="tab" aria-selected={tab === 'emulator'} className={tab === 'emulator' ? 'tab-on' : ''} onClick={() => setTab('emulator')}>
-            Emulator
-          </button>
-          <button type="button" role="tab" aria-selected={tab === 'usb'} className={tab === 'usb' ? 'tab-on' : ''} onClick={() => setTab('usb')}>
-            Phone over USB
-          </button>
-        </div>
-        {tab === 'emulator' ? <EmulatorGuide info={info} /> : <UsbGuide os={info?.os} />}
+        <details className="setup-more" open={Boolean(info && !info.adb.found && install && !install.available)}>
+          <summary>All checks and manual steps</summary>
+          <h3>This computer</h3>
+          {info && (
+            <Checks
+              info={info}
+              canInstall={install?.available ?? false}
+              starting={starting}
+              onStart={(name) => void startEmulator(name)}
+              preparing={preparing}
+              onPrepare={(serial) => void preparePhone(serial)}
+            />
+          )}
+          <div className="guide-tabs" role="tablist" aria-label="Kind of device">
+            <button type="button" role="tab" aria-selected={tab === 'usb'} className={tab === 'usb' ? 'tab-on' : ''} onClick={() => setTab('usb')}>
+              Phone over USB
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'emulator'} className={tab === 'emulator' ? 'tab-on' : ''} onClick={() => setTab('emulator')}>
+              Emulator
+            </button>
+          </div>
+          {tab === 'emulator' ? <EmulatorGuide info={info} /> : <UsbGuide os={info?.os} />}
+        </details>
 
         <h3>Something not working?</h3>
         <p className="guide-note">

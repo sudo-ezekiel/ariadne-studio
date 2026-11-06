@@ -16,7 +16,8 @@ import {
   parseJavaVersion,
   type SetupTools,
 } from '../src/server/setup.ts';
-import type { SetupInfo } from '../src/shared/api-types.ts';
+import { defaultInstallIo, ToolInstaller, type InstallIo } from '../src/server/tool-install.ts';
+import type { SetupInfo, ToolInstallStatus } from '../src/shared/api-types.ts';
 
 describe('parseAdbDevices', () => {
   it('returns nothing for empty output, only the header or only daemon noise', () => {
@@ -179,6 +180,8 @@ type FakeOptions = {
   /** Command line ("file arg arg") to what exec does with it. */
   replies?: Record<string, Reply>;
   maestro?: string | Error;
+  javaBin?: string;
+  installer?: ToolInstaller;
 };
 
 type FakeTools = SetupTools & { exec: ReturnType<typeof vi.fn<SetupTools['exec']>>; spawnDetached: ReturnType<typeof vi.fn<SetupTools['spawnDetached']>> };
@@ -202,6 +205,9 @@ function fakeTools(options: FakeOptions = {}): FakeTools {
       if (maestro instanceof Error) throw maestro;
       return maestro;
     },
+    javaBin: () => options.javaBin ?? 'java',
+    // Linux offers nothing to fetch, so no test here reaches the network by accident.
+    installer: options.installer ?? new ToolInstaller(defaultInstallIo(() => home, {}, 'linux', 'x64')),
     platform,
     path,
     exists: (candidate) => files.includes(candidate),
@@ -432,6 +438,12 @@ describe('checkSetup', () => {
     });
   });
 
+  it('asks the Java it is told to, which is the one "Set up this computer" fetched when there is one', async () => {
+    const java = join('tools', 'java', 'bin', 'java.exe');
+    const tools = fakeTools({ javaBin: java, replies: { [`${java} -version`]: JAVA_17 } });
+    expect((await checkSetup(tools)).java).toEqual({ found: true, version: '17.0.12', major: 17 });
+  });
+
   it('never runs anything it was not given, and runs nothing detached', async () => {
     const tools = fakeTools({ replies: healthyReplies() });
     await checkSetup(tools);
@@ -527,6 +539,83 @@ describe('setup routes', () => {
     const response = await app!.inject({ method, url, ...(payload === undefined ? {} : { payload: payload as object }) });
     return { status: response.statusCode, body: response.json() };
   }
+
+  describe('/api/setup/install', () => {
+    /** Fetches nothing: every tool it is asked for fails at the first request. */
+    function offlineInstaller(): { installer: ToolInstaller; fetched: () => string[] } {
+      const fetched: string[] = [];
+      const io: InstallIo = {
+        downloads: defaultInstallIo(() => undefined, { LOCALAPPDATA: dir }, 'win32', 'x64').downloads,
+        workDir: join(dir, '.incoming'),
+        destination: (id) => join(dir, id),
+        fetch: async (url) => {
+          fetched.push(String(url));
+          throw new TypeError('fetch failed');
+        },
+        unzip: async () => undefined,
+        start: async () => undefined,
+      };
+      return { installer: new ToolInstaller(io), fetched: () => fetched };
+    }
+
+    const noAdb = () => ({ files: [EMULATOR], path: '', maestro: new Error('no Maestro') });
+
+    it('says it cannot fetch anything where it is not offered', async () => {
+      await serve(fakeTools({ replies: healthyReplies() }));
+      expect((await call('GET', '/api/setup/install')).body).toMatchObject({ available: false, running: false, offered: [], tools: [] });
+      const { status, body } = await call('POST', '/api/setup/install', { acceptTerms: true });
+      expect(status).toBe(409);
+      expect(body.error.code).toBe('CANNOT_INSTALL');
+    });
+
+    it("fetches nothing until Google's terms are accepted when the Android tools are missing", async () => {
+      const { installer, fetched } = offlineInstaller();
+      await serve(fakeTools({ ...noAdb(), installer }));
+      for (const payload of [undefined, {}, { acceptTerms: false }, { acceptTerms: 'yes' }]) {
+        const { status, body } = await call('POST', '/api/setup/install', payload);
+        expect(status).toBe(400);
+        expect(body.error.code).toBe('TERMS_NOT_ACCEPTED');
+      }
+      await installer.finished();
+      expect(fetched()).toEqual([]);
+    });
+
+    it('fetches what is missing, the Android tools first, once they are accepted', async () => {
+      const { installer, fetched } = offlineInstaller();
+      await serve(fakeTools({ ...noAdb(), installer }));
+      const { status, body } = await call('POST', '/api/setup/install', { acceptTerms: true });
+      expect(status).toBe(200);
+      expect((body as ToolInstallStatus).running).toBe(true);
+      await installer.finished();
+      expect(fetched().map((url) => /(platform-tools|temurin17|maestro)/.exec(url)?.[1])).toEqual(['platform-tools', 'temurin17', 'maestro']);
+    });
+
+    it('needs no terms when the Android tools are already here', async () => {
+      const { installer, fetched } = offlineInstaller();
+      await serve(fakeTools({ installer, maestro: new Error('no Maestro'), replies: { ...healthyReplies(), 'java -version': new Error('no java') } }));
+      expect((await call('POST', '/api/setup/install')).status).toBe(200);
+      await installer.finished();
+      expect(fetched().map((url) => /(temurin17|maestro)/.exec(url)?.[1])).toEqual(['temurin17', 'maestro']);
+    });
+
+    it('starts nothing when nothing is missing', async () => {
+      const { installer, fetched } = offlineInstaller();
+      await serve(fakeTools({ installer, replies: healthyReplies() }));
+      const { body } = await call('POST', '/api/setup/install');
+      expect(body).toMatchObject({ running: false, tools: [] });
+      expect(fetched()).toEqual([]);
+    });
+
+    it('reports how it went on the GET', async () => {
+      const { installer } = offlineInstaller();
+      await serve(fakeTools({ ...noAdb(), installer }));
+      await call('POST', '/api/setup/install', { acceptTerms: true });
+      await installer.finished();
+      const { body } = await call('GET', '/api/setup/install');
+      expect((body as ToolInstallStatus).tools.map((tool) => tool.state)).toEqual(['failed', 'failed', 'failed']);
+      expect((body as ToolInstallStatus).tools[0]?.error).toContain('dl.google.com');
+    });
+  });
 
   describe('GET /api/setup', () => {
     it('returns what checkSetup finds', async () => {

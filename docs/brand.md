@@ -137,6 +137,7 @@ the code and the Maestro files still call things; the right column is what a per
 | A step recording could not be sure of | a note on the step; "Looks right" to clear it | warning, error, low confidence |
 | Getting a Xiaomi phone ready for Run | Prepare this phone | fix, patch, unlock |
 | Recording that something is visible | check; Check mode (the toggle is "Check"); end checks | Expect, expectation, assert |
+| Making a run pause at a point in a case | Wait | Sleep, delay, pause step |
 | Running a saved case with Maestro | Run; Run all; "Last run passed"; "Not run yet" | Replay |
 | A developer-written Maestro file that brings the app to a state | setup block (the Record tab lists them under "Setup blocks" and stacks the chosen ones under "Before recording"); "block" in developer docs | precondition, fixture, subflow |
 | Help with the emulator, the USB phone and the tools | Device setup; the dialog is "Set up a device" | config, settings, preferences |

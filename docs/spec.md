@@ -488,7 +488,9 @@ whose output is Maestro YAML:
   agent-device `apps.open` with `relaunch`), Open link (`openLink: <url>`; recording
   sends the same VIEW intent through `adb shell am start -W -a android.intent.action.VIEW`
   with the link single-quoted, because agent-device only opens links inside the session's
-  app), Hide keyboard (`hideKeyboard`, agent-device `command.keyboard({ action: 'dismiss' })`).
+  app), Hide keyboard (`hideKeyboard`, agent-device `command.keyboard({ action: 'dismiss' })`),
+  Wait (`extendedWaitUntil` on a label never on screen, `optional`, so it runs out without
+  failing; a replay through agent-device simply waits, and recording does nothing on the device).
 - Test case documents (the output a no-QA company actually asks a BA for): per case and
   for the whole project, as Markdown (`exports/<caseId>.md`, screenshots linked), as a
   self-contained HTML page (screenshots inlined, printable to PDF, opens in Word), and as

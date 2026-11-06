@@ -2,7 +2,8 @@
 // recording from the end of another case, goes through agent-device's Maestro
 // backend. That backend (0.21.35) runs most of what the recorder writes but
 // not all of it: it refuses setOrientation, accepts pressKey only for Back,
-// Enter and Home, and takes longPressOn and doubleTapOn points only in pixels.
+// Enter and Home, takes longPressOn and doubleTapOn points only in pixels, and
+// a wait is Maestro's command only in a flow, so the studio simply waits.
 // This splits a flow into runs agent-device replays and single steps the
 // studio performs itself through DeviceSession. Pure.
 import type { MaestroStep, PercentPoint } from '../maestro/model.ts';
@@ -18,6 +19,7 @@ export function agentDeviceReplays(step: MaestroStep): boolean {
     case 'pressKey':
       return AGENT_DEVICE_KEYS.has(step.key);
     case 'setOrientation':
+    case 'wait':
       return false;
     case 'longPressOn':
     case 'doubleTapOn':
@@ -31,7 +33,8 @@ export function agentDeviceReplays(step: MaestroStep): boolean {
 export type DirectAction =
   | { kind: 'pressKey'; key: PhoneKey }
   | { kind: 'orientation'; value: ScreenOrientation }
-  | { kind: 'longPress' | 'doubleTap'; point: PercentPoint };
+  | { kind: 'longPress' | 'doubleTap'; point: PercentPoint }
+  | { kind: 'wait'; seconds: number };
 
 export type ReplaySegment = { kind: 'flow'; steps: MaestroStep[] } | { kind: 'direct'; action: DirectAction; step: MaestroStep };
 
@@ -57,6 +60,8 @@ export function directAction(step: MaestroStep): DirectAction {
   } else if ((step.kind === 'longPressOn' || step.kind === 'doubleTapOn') && step.selector.kind === 'point') {
     const point = { xPercent: step.selector.xPercent, yPercent: step.selector.yPercent };
     return { kind: step.kind === 'longPressOn' ? 'longPress' : 'doubleTap', point };
+  } else if (step.kind === 'wait') {
+    return { kind: 'wait', seconds: step.seconds };
   }
   throw new Error(`The studio cannot replay ${JSON.stringify(step)} on the device`);
 }

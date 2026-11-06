@@ -48,6 +48,14 @@ Recording pauses by itself when you leave for the home screen or pull down the n
 
 Ariadne reads touches through `adb`, so a key press on the keyboard looks to it like any other touch. It uses them only to tell a key from a tap, keeps no positions, and reads text from the field afterwards. See [Privacy](#privacy).
 
+## When the app hands over to another app or a website
+
+Many journeys leave the app: a login on a website such as gov.gr, an identity check, a payment page. That is fine. The screen here follows the phone by itself, with a new picture every few seconds, so you see the other app or website open. Carry on clicking: what you do there is part of the case. The app id is only where a case starts, not a limit.
+
+If a screen blocks screenshots, as banks and ID apps often do, its picture stays black. Its text and buttons are drawn over it instead, and you click them as usual. The step's screenshot is black.
+
+A step that needs the camera, such as a selfie or a photo of a document, cannot be replayed. Ask the vendor for a test mode that skips it. Keep real passwords out of a case: see [Typing and secrets](#typing-and-secrets).
+
 ## Phone buttons
 
 Under the screen, the phone's own buttons sit in a row shaped like Android's navigation bar.
@@ -77,6 +85,7 @@ The controls under the screen add these steps:
 - **Relaunch app** closes the app and starts it again.
 - **Hide keyboard** closes the on-screen keyboard.
 - **Open link** opens a web link or an app deep link. The link must look like `scheme://...`. The device opens it with whatever app handles it.
+- **Wait** makes a run pause at this point, for 1 to 120 seconds. Nothing happens on the phone while you record. Add one before a tap on a website that has just opened, see [Known limits](/reference/known-limits#a-tap-on-a-page-that-is-still-loading).
 
 ## Check mode
 

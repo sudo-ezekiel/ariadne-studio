@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DriverInstallRefused, type DeviceSnapshot, type MaestroRunner, type OpenOptions, type PhoneInput, type PhoneInputTools, type Point, type Rect, type XiaomiPhone } from '@ariadne/core';
 import { buildServer } from '../src/server/index.ts';
 import { checkSetup, type SetupTools } from '../src/server/setup.ts';
+import { defaultInstallIo, ToolInstaller } from '../src/server/tool-install.ts';
 import type { DeviceLike } from '../src/server/state.ts';
 
 type Node = DeviceSnapshot['nodes'][number];
@@ -115,7 +116,7 @@ type Rig = {
   app: FastifyInstance;
   device: PhoneDevice;
   dir: string;
-  tools: { read: ReturnType<typeof vi.fn>; watch: ReturnType<typeof vi.fn>; xiaomi: ReturnType<typeof vi.fn>; allowDriver: ReturnType<typeof vi.fn>; installDriver: ReturnType<typeof vi.fn>; stopDriver: ReturnType<typeof vi.fn> };
+  tools: { read: ReturnType<typeof vi.fn>; watch: ReturnType<typeof vi.fn>; xiaomi: ReturnType<typeof vi.fn>; allowDriver: ReturnType<typeof vi.fn>; installDriver: ReturnType<typeof vi.fn>; stopDriver: ReturnType<typeof vi.fn>; locked: ReturnType<typeof vi.fn> };
   runMaestro: ReturnType<typeof vi.fn<MaestroRunner>>;
   /** Lines in, as getevent would print them. */
   line(text: string): void;
@@ -145,6 +146,7 @@ async function rig(overrides: Partial<PhoneInputTools> = {}, findBin: () => stri
     allowDriver: vi.fn(async () => undefined),
     installDriver: vi.fn(async (_id: string, _maestroBin: string) => undefined),
     stopDriver: vi.fn(async (_id: string) => undefined),
+    locked: vi.fn(async (_id: string): Promise<boolean | undefined> => false),
   };
   const runMaestro = vi.fn<MaestroRunner>(async () => {
     throw new Error('Maestro was not expected to run in this test');
@@ -668,6 +670,93 @@ describe('leaving the app', () => {
   });
 });
 
+describe('the lock screen while recording', () => {
+  it('records nothing while the phone says it is locked, even with the app in front', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    await finger(r, SIGN_IN);
+    await finger(r, REGISTER);
+    await sleep(150);
+    expect(await currentSteps(r)).toEqual([]);
+  });
+
+  it('stays paused for as long as the phone is locked', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    const pauses = (await status(r)).revision;
+    await settled(r, 10);
+    expect(await status(r)).toMatchObject({ paused: true, revision: pauses });
+  });
+
+  it('records again once the phone is unlocked and the app is in front', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    r.tools.locked.mockImplementation(async () => false);
+    await waitFor(async () => (await status(r)).paused === false, 'resume');
+    await settled(r);
+    await finger(r, SIGN_IN);
+    expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap', review: 'left-app' });
+  });
+
+  it('does not resume on unlock while the app is not in front', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockImplementation(async () => true);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    r.device.nodes = launcherScreen();
+    r.tools.locked.mockImplementation(async () => false);
+    await settled(r, 10);
+    await sleep(1100);
+    expect((await status(r)).paused).toBe(true);
+  });
+
+  it('treats a phone that has never been able to say as unlocked', async () => {
+    const r = await rig();
+    // Before the case opens, so the phone never answers at all.
+    r.tools.locked.mockImplementation(async () => undefined);
+    await startPhone(r);
+    await settled(r, 10);
+    await sleep(1100);
+    expect((await status(r)).paused).toBe(false);
+    await finger(r, SIGN_IN);
+    expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap' });
+  });
+
+  it('pauses when a phone that has answered stops saying, and resumes once it answers false again', async () => {
+    const r = await rig();
+    await startPhone(r);
+    expect(r.tools.locked).toHaveBeenCalled();
+    r.tools.locked.mockImplementation(async () => undefined);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    await finger(r, SIGN_IN);
+    await sleep(150);
+    expect(await currentSteps(r)).toEqual([]);
+    r.tools.locked.mockImplementation(async () => false);
+    await waitFor(async () => (await status(r)).paused === false, 'resume');
+    await settled(r);
+    await finger(r, SIGN_IN);
+    expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap' });
+  });
+
+  it('asks the phone at most once a second across many snapshots', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.tools.locked.mockClear();
+    const snapshots = r.device.snapshots;
+    const started = Date.now();
+    await settled(r, 40);
+    const elapsed = Date.now() - started;
+    expect(r.device.snapshots - snapshots).toBeGreaterThanOrEqual(40);
+    expect(r.tools.locked.mock.calls.length).toBeLessThanOrEqual(Math.floor(elapsed / 1000) + 1);
+  });
+});
+
 describe('the studio while the phone is the input', () => {
   it('refuses actions from the screen with 409 USING_THE_PHONE', async () => {
     const r = await rig();
@@ -688,6 +777,14 @@ describe('the studio while the phone is the input', () => {
     const response = await call(r, 'POST', '/api/case/expect', { x: SIGN_IN.x, y: SIGN_IN.y });
     expect(response.status).toBe(200);
     expect(response.body.step).toMatchObject({ kind: 'expect' });
+  });
+
+  it('lets a wait through, since it touches nothing on the phone', async () => {
+    const r = await rig();
+    await startPhone(r);
+    const response = await call(r, 'POST', '/api/case/wait', { seconds: 5 });
+    expect(response.status).toBe(200);
+    expect(response.body.step).toMatchObject({ kind: 'wait', seconds: 5 });
   });
 
   it('allows actions again once the phone is stopped', async () => {
@@ -1059,6 +1156,8 @@ describe('setup check marks Xiaomi phones', () => {
       spawnDetached: () => undefined,
       androidHome: () => '/sdk',
       findMaestro: () => '/opt/maestro/bin/maestro',
+      javaBin: () => 'java',
+      installer: new ToolInstaller(defaultInstallIo(() => '/sdk', {}, 'linux', 'x64')),
       platform: 'linux',
       path: '',
       exists: (candidate) => candidate === ADB,

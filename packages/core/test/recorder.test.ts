@@ -382,6 +382,18 @@ describe('Recorder interactions and case fields', () => {
     expect(toMaestroYaml(recorder.toFlow())).toContain('- launchApp\n- launchApp\n- openLink: "myapp://claims/7"\n- hideKeyboard\n');
   });
 
+  it('records a wait as a step, and the flow of the case waits there', () => {
+    const recorder = started();
+    expect(recorder.recordWait(20, shot(1))).toEqual({ index: 1, kind: 'wait', seconds: 20, screenshot: shot(1), at: '2026-10-30T17:12:05.000Z' });
+    expect(recorder.toCase().steps).toHaveLength(1);
+    expect(recorder.toFlow().steps).toEqual([{ kind: 'launchApp' }, { kind: 'wait', seconds: 20 }]);
+    expect(toMaestroYaml(recorder.toFlow())).toContain('    timeout: 20000\n');
+  });
+
+  it('refuses a wait without an active case', () => {
+    expect(() => new Recorder().recordWait(5)).toThrow(/No case/);
+  });
+
   it('refuses the new interactions without an active case', () => {
     const recorder = new Recorder();
     expect(() => recorder.recordRelaunch()).toThrow(/No case/);
