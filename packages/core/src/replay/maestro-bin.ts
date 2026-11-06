@@ -23,8 +23,8 @@ export function toolsTarget(env: NodeJS.ProcessEnv = process.env, platform: Node
 
 /** %ProgramData%\Ariadne, when that is where toolsTarget went: the one place here other accounts can reach. */
 export function sharedToolsRoot(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
-  const target = toolsTarget(env, platform);
-  return target && env.ProgramData && target.startsWith(`${env.ProgramData}\\`) ? win32.dirname(target) : undefined;
+  if (platform !== 'win32' || (env.LOCALAPPDATA && isPlainAscii(env.LOCALAPPDATA))) return undefined;
+  return env.ProgramData && isPlainAscii(env.ProgramData) ? win32.join(env.ProgramData, 'Ariadne') : undefined;
 }
 
 /** The folder to run Java and Maestro from: toolsTarget, unless other accounts can change what is in it. */

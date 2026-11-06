@@ -349,6 +349,17 @@ describe('the tools of "Set up this computer"', () => {
       expect(sharedToolsRoot({ ...env, ProgramData: 'C:\\ProgramData' }, 'win32')).toBeUndefined();
       expect(sharedToolsRoot(greek, 'linux')).toBeUndefined();
     });
+
+    it.each(['C:\\ProgramData\\', 'C:/ProgramData', 'C:\\ProgramData\\.', 'c:\\programdata'])(
+      'are still checked when ProgramData is written %s',
+      (programData) => {
+        const odd = { ...greek, ProgramData: programData };
+        const safe = vi.fn(() => false);
+        expect(sharedToolsRoot(odd, 'win32')).toBeDefined();
+        expect(toolsDir(odd, 'win32', safe)).toBeUndefined();
+        expect(safe).toHaveBeenCalled();
+      },
+    );
   });
 
   it('do not mind a space in the user name', () => {
