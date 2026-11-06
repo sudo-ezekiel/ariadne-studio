@@ -101,6 +101,10 @@ The file arrived and passed its check, but Windows did not let it run. A company
 
 The file arrived and passed its check, and Windows ran it, but it stopped with an error or took too long. Press **Try again**. **Help > Show logs** has what it said.
 
+### "Ariadne will not run tools from ..."
+
+This is about `%ProgramData%\Ariadne`, which Ariadne uses when your user name has letters Java cannot spell. Other accounts on the computer can reach that folder, and a program put there would run as you, so Ariadne only uses it when nobody else can change it. Another account may have made it first. Ask your IT team to delete the folder, then press **Try again**.
+
 ### Android tools (adb) not found
 
 On Windows, open **Device setup** and press **Agree and set up**. Otherwise install Android Studio, then restart Ariadne. If the Android SDK is somewhere unusual, set `ANDROID_HOME` to it. Ariadne also reads `ANDROID_SDK_ROOT`, and looks in `~/Android/Sdk` on Linux, `~/Library/Android/sdk` on macOS and `%LOCALAPPDATA%\Android\Sdk` on Windows.

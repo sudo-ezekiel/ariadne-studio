@@ -1,7 +1,7 @@
 // "Set up this computer": fetches the Android tools, a Java runtime and Maestro,
 // so a tester never has to install Android Studio or edit PATH. Everything goes
 // in folders a standard user can write to, so it needs no admin rights: adb in
-// the Android SDK folder, and the rest in the folder toolsDir picks.
+// the Android SDK folder, and the rest in the folder toolsTarget picks.
 //
 // Google's SDK terms (clause 3.4) do not let Ariadne ship adb in its installer,
 // so it comes from Google when the tester agrees to those terms, and the other
@@ -21,7 +21,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { defaultSdkDir, maestroEnv, spawnCommand, toolsDir } from '@ariadne/core';
+import { claimFolder, defaultSdkDir, maestroEnv, sharedToolsRoot, spawnCommand, toolsTarget } from '@ariadne/core';
 import type { ToolId, ToolInstallStatus, ToolProgress } from '../shared/api-types.ts';
 
 export type ToolDownload = {
@@ -89,6 +89,8 @@ export type InstallIo = {
   unzip: (zipFile: string, into: string) => Promise<void>;
   /** Starts a program to see that it runs; rejects when it does not. */
   start: (file: string, args: string[]) => Promise<void>;
+  /** Readies the folder the tools go in, before anything is put there. */
+  prepare?: () => Promise<void>;
 };
 
 /**
@@ -119,7 +121,8 @@ function startProgram(file: string, args: string[], androidHome: () => string | 
 }
 
 export function defaultInstallIo(androidHome: () => string | undefined, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, arch: string = process.arch): InstallIo {
-  const tools = toolsDir(env, platform);
+  const tools = toolsTarget(env, platform);
+  const shared = sharedToolsRoot(env, platform);
   return {
     downloads: tools && arch === 'x64' ? WINDOWS_X64 : [],
     workDir: join(tools ?? '', '.incoming'),
@@ -127,6 +130,13 @@ export function defaultInstallIo(androidHome: () => string | undefined, env: Nod
     fetch: (...args) => fetch(...args),
     unzip: unzipWithTar,
     start: (file, args) => startProgram(file, args, androidHome),
+    prepare: async () => {
+      if (!shared) return;
+      await claimFolder(shared).catch((error: unknown) => {
+        console.error(`[studio] Set up this computer: claiming ${shared}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new PlainError(`Ariadne will not run tools from ${shared}, because another account on this computer may be able to change them. Ask your IT team to delete that folder, then press Try again.`);
+      });
+    },
   };
 }
 
@@ -209,6 +219,7 @@ export class ToolInstaller {
   }
 
   private async install(download: ToolDownload, progress: ToolProgress): Promise<void> {
+    await this.io.prepare?.();
     const work = join(this.io.workDir, download.id);
     await rm(work, { recursive: true, force: true, maxRetries: 3 });
     const unpacked = join(work, 'unpacked');

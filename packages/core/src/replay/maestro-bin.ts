@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
+import { sharedFolderSafe } from './shared-folder.ts';
 
 /** Plain ASCII, which every Windows code page can spell. Java needs that of what reaches it as text. */
 export function isPlainAscii(text: string): boolean {
@@ -8,16 +9,28 @@ export function isPlainAscii(text: string): boolean {
 }
 
 /**
- * Where "Set up this computer" keeps Java and Maestro, Windows only for now: see
+ * Where "Set up this computer" puts Java and Maestro, Windows only for now: see
  * the studio's tool-install.ts. A standard user can write to both folders, so it
  * needs no admin rights. Java's launcher reads its own path in the system code
  * page and stops with "could not find java.dll" when that cannot spell it, as
  * with a Greek user name on English Windows, so a folder outside ASCII is skipped.
  */
-export function toolsDir(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
+export function toolsTarget(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
   if (platform !== 'win32') return undefined;
   const base = [env.LOCALAPPDATA, env.ProgramData].find((dir) => dir && isPlainAscii(dir));
   return base ? win32.join(base, 'Ariadne', 'tools') : undefined;
+}
+
+/** %ProgramData%\Ariadne, when that is where toolsTarget went: the one place here other accounts can reach. */
+export function sharedToolsRoot(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
+  const target = toolsTarget(env, platform);
+  return target && env.ProgramData && target.startsWith(`${env.ProgramData}\\`) ? win32.dirname(target) : undefined;
+}
+
+/** The folder to run Java and Maestro from: toolsTarget, unless other accounts can change what is in it. */
+export function toolsDir(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, safe: (dir: string) => boolean = sharedFolderSafe): string | undefined {
+  const shared = sharedToolsRoot(env, platform);
+  return shared && !safe(shared) ? undefined : toolsTarget(env, platform);
 }
 
 /** The Java runtime "Set up this computer" put in toolsDir, when it did. */

@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { maestroCandidates, toolsDir, toolsJavaHome } from '../src/replay/maestro-bin.ts';
+import { maestroCandidates, sharedToolsRoot, toolsDir, toolsJavaHome, toolsTarget } from '../src/replay/maestro-bin.ts';
 import { maestroEnv, pathForMaestro } from '../src/replay/maestro-run.ts';
 import { quoteWindowsArgument, spawnCommand } from '../src/replay/windows-command.ts';
 
@@ -317,6 +317,38 @@ describe('the tools of "Set up this computer"', () => {
     const greek = { LOCALAPPDATA: 'C:\\Users\\Δημήτρης\\AppData\\Local', ProgramData: 'C:\\ProgramData' };
     expect(toolsDir(greek, 'win32')).toBe('C:\\ProgramData\\Ariadne\\tools');
     expect(toolsDir({ LOCALAPPDATA: greek.LOCALAPPDATA }, 'win32')).toBeUndefined();
+  });
+
+  describe('when they would go in the folder every account can reach', () => {
+    const greek = { LOCALAPPDATA: 'C:\\Users\\Δημήτρης\\AppData\\Local', ProgramData: 'C:\\ProgramData' };
+
+    it('are not used while that folder is not safe', () => {
+      expect(toolsDir(greek, 'win32', () => false)).toBeUndefined();
+    });
+
+    it('are used once that folder is safe, and the check is of the shared root', () => {
+      const safe = vi.fn(() => true);
+      expect(toolsDir(greek, 'win32', safe)).toBe('C:\\ProgramData\\Ariadne\\tools');
+      expect(safe).toHaveBeenCalledWith('C:\\ProgramData\\Ariadne');
+    });
+
+    it('are never checked when LOCALAPPDATA is plain ASCII', () => {
+      const safe = vi.fn(() => false);
+      expect(toolsDir({ ...greek, LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' }, 'win32', safe)).toBe('C:\\Users\\u\\AppData\\Local\\Ariadne\\tools');
+      expect(safe).not.toHaveBeenCalled();
+    });
+
+    it('are still named by toolsTarget, safe or not', () => {
+      expect(toolsTarget(greek, 'win32')).toBe('C:\\ProgramData\\Ariadne\\tools');
+      expect(toolsTarget(env, 'win32')).toBe('C:\\Users\\u\\AppData\\Local\\Ariadne\\tools');
+    });
+
+    it('have a shared root only in that case', () => {
+      expect(sharedToolsRoot(greek, 'win32')).toBe('C:\\ProgramData\\Ariadne');
+      expect(sharedToolsRoot(env, 'win32')).toBeUndefined();
+      expect(sharedToolsRoot({ ...env, ProgramData: 'C:\\ProgramData' }, 'win32')).toBeUndefined();
+      expect(sharedToolsRoot(greek, 'linux')).toBeUndefined();
+    });
   });
 
   it('do not mind a space in the user name', () => {

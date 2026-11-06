@@ -33,5 +33,6 @@ export * from './replay/maestro-driver.ts';
 export * from './replay/maestro-run.ts';
 export * from './replay/run-result.ts';
 export * from './replay/run-video.ts';
+export * from './replay/shared-folder.ts';
 export * from './replay/suite.ts';
 export { spawnCommand } from './replay/windows-command.ts';

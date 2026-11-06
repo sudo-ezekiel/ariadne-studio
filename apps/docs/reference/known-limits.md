@@ -12,6 +12,7 @@ What is not done, and what behaves in a way you might not expect.
 - Android only.
 - The desktop app is tested end to end on Linux. On one real Windows 11 computer with a POCO F5 Pro over USB, installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and **Use the phone** have not been tried on Windows yet.
 - The macOS build is configured but not built or tried.
+- On one Windows computer, only one account whose user name Java cannot spell can use **Set up this computer**, because those tools live in one folder locked to that account. If PowerShell is blocked, Ariadne cannot check that folder and does not use it.
 - On Windows, a project folder with letters the system code page cannot spell, such as a Greek user name on English Windows, runs fine. A folder with such letters inside the project, such as a flows folder of your own, stops Maestro at once: its Java receives that part of the path as question marks.
 
 ## One device at a time

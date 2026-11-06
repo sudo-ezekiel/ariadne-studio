@@ -184,6 +184,36 @@ describe('ToolInstaller', () => {
     expect(error).not.toContain('IT team');
   });
 
+  it('readies the tools folder before anything is fetched', async () => {
+    const order: string[] = [];
+    const io = fakeIo();
+    io.prepare = async () => {
+      order.push('prepare');
+    };
+    io.fetch.mockImplementation((async () => {
+      order.push('fetch');
+      return new Response('adb body');
+    }) as never);
+    await run(io, ['adb']);
+    expect(order[0]).toBe('prepare');
+    expect(order).toContain('fetch');
+  });
+
+  it('fetches and unpacks nothing when the tools folder cannot be readied, and says so for every tool', async () => {
+    const io = fakeIo();
+    io.prepare = async () => {
+      throw new Error('icacls failed');
+    };
+    const installer = await run(io, ['adb', 'java']);
+    expect(io.fetch).not.toHaveBeenCalled();
+    expect(io.unzip).not.toHaveBeenCalled();
+    expect(io.start).not.toHaveBeenCalled();
+    const tools = installer.status().tools;
+    expect(tools.map((tool) => tool.state)).toEqual(['failed', 'failed']);
+    // A plain Error from a fake prepare is not a PlainError, so explain words it as a failed download.
+    for (const tool of tools) expect(tool.error).toContain('Could not download');
+  });
+
   it('does not start Maestro when Java failed, which would only report the same thing again', async () => {
     const io = fakeIo({ responses: { 'https://example.test/java.zip': new TypeError('fetch failed') } });
     const installer = await run(io, ['java', 'maestro']);
@@ -268,5 +298,18 @@ describe('defaultInstallIo', () => {
     expect(io.destination('adb')).toBe(join('D:/sdk', 'platform-tools'));
     expect(io.destination('java')).toBe(join(toolsDir(WINDOWS, 'win32')!, 'java'));
     expect(io.destination('maestro')).toBe(join(toolsDir(WINDOWS, 'win32')!, 'maestro'));
+  });
+
+  it('still offers the downloads and puts Java under ProgramData for a Greek LOCALAPPDATA, without claiming the folder yet', () => {
+    const greek = { LOCALAPPDATA: 'C:\\Users\\Δημήτρης\\AppData\\Local', ProgramData: 'C:\\ProgramData' };
+    const io = defaultInstallIo(() => 'D:/sdk', greek, 'win32', 'x64');
+    expect(io.downloads.map((download) => download.id)).toEqual(['adb', 'java', 'maestro']);
+    expect(io.destination('java')).toBe(join('C:\\ProgramData\\Ariadne\\tools', 'java'));
+    expect(io.prepare).toBeTypeOf('function');
+  });
+
+  it('has nothing to claim when the tools go in the user\'s own folder', async () => {
+    const io = defaultInstallIo(() => undefined, WINDOWS, 'win32', 'x64');
+    await expect(io.prepare!()).resolves.toBeUndefined();
   });
 });

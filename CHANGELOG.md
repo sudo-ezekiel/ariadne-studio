@@ -39,6 +39,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - On Java 17, Greek and other text outside the system code page came out of Maestro as question
   marks, which also kept such a `.env` value from being redacted.
 - The end checks on offer stay the same while the screen moves on behind the picker.
+- When a user name has letters Java cannot spell, the tools go in `%ProgramData%\Ariadne`. That folder
+  is now locked to your account, and nothing runs from it if another account could change it.
 - A phone that is asleep or locked no longer records blind steps. Nothing is pressed or recorded, the
   studio says why, and the screen comes back by itself. Secure screens, which are black in a
   screenshot but still show their elements, record as before.
