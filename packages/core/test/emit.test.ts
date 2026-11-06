@@ -396,6 +396,20 @@ describe('wait', () => {
     expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: "20000"\n')).toThrow(MaestroParseError);
   });
 
+  it('refuses the Wait label with a timeout when optional is missing', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('refuses the Wait label with a timeout when optional is false', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n    optional: false\n')).toThrow(MaestroParseError);
+  });
+
+  it('reads the Wait form with optional true, with or without its label', () => {
+    const read = (body: string) => parseMaestroFlow(`appId: a\n---\n${body}`);
+    expect(read('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 20000\n    optional: true\n').steps).toEqual([{ kind: 'wait', seconds: 20 }]);
+    expect(read('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 5000\n    optional: true\n    label: "Wait 5 seconds"\n').steps).toEqual([{ kind: 'wait', seconds: 5 }]);
+  });
+
   it('refuses a bare extendedWaitUntil', () => {
     expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
   });

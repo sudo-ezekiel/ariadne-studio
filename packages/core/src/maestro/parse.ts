@@ -225,7 +225,7 @@ export function parseStep(raw: unknown, position: number): MaestroStep {
     }
     case 'extendedWaitUntil':
       // Only the form a Wait step writes. Any other wait stays Maestro's to run.
-      if (isRecord(arg) && arg.visible === NEVER_ON_SCREEN && typeof arg.timeout === 'number') return { kind: 'wait', seconds: arg.timeout / 1000 };
+      if (isRecord(arg) && arg.visible === NEVER_ON_SCREEN && arg.optional === true && typeof arg.timeout === 'number') return { kind: 'wait', seconds: arg.timeout / 1000 };
       throw new MaestroParseError(`Unsupported command "extendedWaitUntil" at ${where}`);
     case 'takeScreenshot': {
       if (typeof arg === 'string') return { kind: 'takeScreenshot', path: arg };
