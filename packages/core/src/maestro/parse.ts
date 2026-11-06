@@ -15,6 +15,9 @@ import {
 // subset throws rather than being silently dropped, so a block that uses other
 // commands is reported as "not previewable" instead of shown incompletely.
 
+/** The longest delay a timer can hold. A Wait is replayed on one, and a longer one would fire at once. */
+const LONGEST_TIMER_MS = 2_147_483_647;
+
 export class MaestroParseError extends Error {
   override name = 'MaestroParseError';
 }
@@ -225,7 +228,9 @@ export function parseStep(raw: unknown, position: number): MaestroStep {
     }
     case 'extendedWaitUntil':
       // Only the form a Wait step writes. Any other wait stays Maestro's to run.
-      if (isRecord(arg) && arg.visible === NEVER_ON_SCREEN && arg.optional === true && typeof arg.timeout === 'number') return { kind: 'wait', seconds: arg.timeout / 1000 };
+      if (isRecord(arg) && arg.visible === NEVER_ON_SCREEN && arg.optional === true && typeof arg.timeout === 'number' && arg.timeout > 0 && arg.timeout <= LONGEST_TIMER_MS) {
+        return { kind: 'wait', seconds: arg.timeout / 1000 };
+      }
       throw new MaestroParseError(`Unsupported command "extendedWaitUntil" at ${where}`);
     case 'takeScreenshot': {
       if (typeof arg === 'string') return { kind: 'takeScreenshot', path: arg };

@@ -410,6 +410,20 @@ describe('wait', () => {
     expect(read('- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: 5000\n    optional: true\n    label: "Wait 5 seconds"\n').steps).toEqual([{ kind: 'wait', seconds: 5 }]);
   });
 
+  const waitWithTimeout = (timeout: string) => parseBody(`- extendedWaitUntil:\n    visible: "ariadne-wait"\n    timeout: ${timeout}\n    optional: true\n`);
+
+  it.each(['-5000', '0', '.inf', '.nan', '2147483648'])('refuses the Wait label with timeout %s', (timeout) => {
+    expect(waitWithTimeout(timeout)).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+
+  it('reads the longest timeout a timer can hold as a Wait', () => {
+    expect(waitWithTimeout('2147483647')()).toEqual({ appId: 'a', steps: [{ kind: 'wait', seconds: 2147483.647 }] });
+  });
+
+  it('reads a timeout of 1000 as one second', () => {
+    expect(waitWithTimeout('1000')().steps).toEqual([{ kind: 'wait', seconds: 1 }]);
+  });
+
   it('refuses a bare extendedWaitUntil', () => {
     expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
   });
