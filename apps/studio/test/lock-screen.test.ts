@@ -323,6 +323,74 @@ describe('the lock screen', () => {
     });
   });
 
+  describe('a phone that stops saying whether it is locked', () => {
+    const hiddenNow = async () => {
+      const { body } = await refresh();
+      expect(body.hidden).toBe(true);
+      expect(body.nodes).toHaveLength(0);
+      expect(JSON.stringify(body)).not.toContain('Message from Mum');
+      expect((await served()).equals(black)).toBe(true);
+    };
+
+    it.each([
+      ['rejects', async (): Promise<boolean | undefined> => Promise.reject(new Error('adb: device offline'))],
+      ['says nothing', async (): Promise<boolean | undefined> => undefined],
+    ])('shows the screen when it has never answered and %s', async (_what, answer) => {
+      locked = answer;
+      await connect();
+      const { body } = await refresh();
+      expect(body.hidden).toBeUndefined();
+      expect(body.nodes.length).toBeGreaterThan(0);
+      expect((await served()).equals(LIT)).toBe(true);
+    });
+
+    it('hides the screen and keeps nothing when it answered false and then rejects', async () => {
+      await connect();
+      phone.lockUp = true;
+      locked = async () => Promise.reject(new Error('adb: device offline'));
+      await hiddenNow();
+    });
+
+    it('hides the screen when it answered false and then says nothing', async () => {
+      await connect();
+      phone.lockUp = true;
+      locked = async () => undefined;
+      await hiddenNow();
+    });
+
+    it('shows the screen again once it answers false again', async () => {
+      await connect();
+      locked = async () => undefined;
+      expect((await refresh()).body.hidden).toBe(true);
+      locked = async () => false;
+      const { body } = await refresh();
+      expect(body.hidden).toBeUndefined();
+      expect(body.nodes.length).toBeGreaterThan(0);
+      expect((await served()).equals(LIT)).toBe(true);
+    });
+
+    it('refuses a press with 409 SCREEN_HIDDEN and presses nothing while it is not answering', async () => {
+      await connect();
+      await startCase();
+      locked = async () => undefined;
+      const { status, body } = await tap();
+      expect(status).toBe(409);
+      expect(body.error?.code).toBe('SCREEN_HIDDEN');
+      expect(phone.taps).toEqual([]);
+      expect(await steps()).toEqual([]);
+    });
+
+    it('does not count another phone that has never answered as locked', async () => {
+      await connect();
+      locked = async () => undefined;
+      expect((await refresh()).body.hidden).toBe(true);
+      const other = await call<ScreenState>('POST', '/api/session/open', { deviceId: 'other', appId: 'calc' });
+      expect(other.status).toBe(200);
+      expect(other.body.hidden).toBeUndefined();
+      expect(other.body.nodes.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('acting', () => {
     it('refuses a tap when the phone locked since the last capture, and presses and records nothing', async () => {
       await connect();

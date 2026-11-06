@@ -716,13 +716,30 @@ describe('the lock screen while recording', () => {
     expect((await status(r)).paused).toBe(true);
   });
 
-  it('treats a phone that cannot say as unlocked', async () => {
+  it('treats a phone that has never been able to say as unlocked', async () => {
     const r = await rig();
-    await startPhone(r);
+    // Before the case opens, so the phone never answers at all.
     r.tools.locked.mockImplementation(async () => undefined);
+    await startPhone(r);
     await settled(r, 10);
     await sleep(1100);
     expect((await status(r)).paused).toBe(false);
+    await finger(r, SIGN_IN);
+    expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap' });
+  });
+
+  it('pauses when a phone that has answered stops saying, and resumes once it answers false again', async () => {
+    const r = await rig();
+    await startPhone(r);
+    expect(r.tools.locked).toHaveBeenCalled();
+    r.tools.locked.mockImplementation(async () => undefined);
+    await waitFor(async () => (await status(r)).paused === true, 'pause');
+    await finger(r, SIGN_IN);
+    await sleep(150);
+    expect(await currentSteps(r)).toEqual([]);
+    r.tools.locked.mockImplementation(async () => false);
+    await waitFor(async () => (await status(r)).paused === false, 'resume');
+    await settled(r);
     await finger(r, SIGN_IN);
     expect((await waitForSteps(r, 1))[0]).toMatchObject({ kind: 'tap' });
   });

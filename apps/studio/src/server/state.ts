@@ -108,6 +108,8 @@ export type ServerState = {
   scratchDir: string;
   /** What touches on the phone need from adb; tests substitute a fake. */
   phoneTools: PhoneInputTools;
+  /** The phone that has said whether it is locked: if it stops saying, it counts as locked. */
+  lockAnswered?: string;
   /** Recording from a finger on the phone, while that is on. */
   phone?: PhoneCapture;
   /** Why recording from the phone stopped by itself. */

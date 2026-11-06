@@ -43,7 +43,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   studio says why, and the screen comes back by itself. Secure screens, which are black in a
   screenshot but still show their elements, record as before.
 - The lock screen and its notifications are no longer shown in the studio or kept as a step's
-  picture, and **Use the phone** pauses on it, so a PIN never becomes steps.
+  picture, and **Use the phone** pauses on it, so a PIN never becomes steps. A phone that stops
+  saying whether it is locked counts as locked until it answers again.
 
 ## [0.1.0] - 2026-11-04
 

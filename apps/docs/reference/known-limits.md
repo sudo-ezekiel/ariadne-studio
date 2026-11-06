@@ -22,6 +22,7 @@ What is not done, and what behaves in a way you might not expect.
 ## Other apps and websites
 
 - The screen in the studio is a new picture every few seconds, not video. It stops looking during an action, a run, the end check picker and **Use the phone**, and while the window is hidden. **Refresh** looks at once.
+- A lit lock screen is found by asking Android. A phone that has never answered counts as unlocked, so its lock screen would show here. The POCO F5 Pro and the Android 16 emulator both answer.
 - A step that needs the camera, such as a selfie or a photo of a document, cannot be replayed.
 - A one-time code or a link made for one session is different on every run, so a step that depends on it fails on the next run.
 

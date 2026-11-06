@@ -80,11 +80,19 @@ export async function projectEnv(state: ServerState): Promise<Record<string, str
   return { ...(settings.env ?? {}), ...(await state.project.readEnv()) };
 }
 
-/** Whether the lock screen is up. A phone that cannot say counts as unlocked. */
+/**
+ * Whether the lock screen is up. A phone that has answered before and now cannot
+ * counts as locked, because a lock screen may be what it is showing. One that has
+ * never answered counts as unlocked: it may only word it differently, and the
+ * studio would show nothing at all on it otherwise.
+ */
 export async function phoneLocked(state: ServerState): Promise<boolean> {
   const { deviceId } = state.session;
   if (!deviceId) return false;
-  return (await state.phoneTools.locked(deviceId).catch(() => undefined)) === true;
+  const locked = await state.phoneTools.locked(deviceId).catch(() => undefined);
+  if (locked === undefined) return state.lockAnswered === deviceId;
+  state.lockAnswered = deviceId;
+  return locked;
 }
 
 /** Puts a finished picture at `path`. A rename swaps it whole, but cannot cross drives, and Windows can refuse one over a file being read. */
