@@ -34,6 +34,18 @@ export function reference(key: string): string {
   return `\${${key}}`;
 }
 
+/** Names a password. PASSPORT_NUMBER, BYPASS_CODE and COMPASS_HEADING have "pass" in them too. */
+const PASSWORD_NAME = /pass(word|wd|code|phrase)|(^|_)pass(_|$)/i;
+
+/**
+ * What a password typed while recording is written as: PASSWORD, or the saved
+ * value that looks like one. PASSWORD comes first because the others are often
+ * one test user's, such as SUPERVISOR_PASSWORD.
+ */
+export function passwordSetting(keys: readonly string[]): string {
+  return keys.includes('PASSWORD') ? 'PASSWORD' : ([...keys].sort().find((key) => PASSWORD_NAME.test(key)) ?? 'PASSWORD');
+}
+
 /** "SUPERVISOR" -> "Supervisor", "AGENT_MARIA" -> "Agent Maria". */
 function label(prefix: string): string {
   return prefix

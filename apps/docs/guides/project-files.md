@@ -15,7 +15,7 @@ The project folder is `Documents/Ariadne` for the desktop app, the folder you na
 project.json          app id and settings
 .env                  saved values as KEY=VALUE; never committed
 .gitignore            .env, evidence/, runs/ and exports/; written into a new project folder
-blocks/               setup blocks: Maestro flows written by developers, such as login.yaml
+blocks/               setup blocks: Maestro flows from the Blocks tab or a text editor, such as login.yaml
 flows/<caseId>.yaml   one Maestro flow per case, regenerated on every save
 cases/<caseId>.json   the case itself: blocks, steps, selectors, element details, screenshot paths, end checks
 evidence/<caseId>/    step-001.png, step-002.png, ... taken after each recorded step
@@ -45,7 +45,7 @@ Click a file to open it in its own tab beside Record and Cases. Closing the tab 
 - Screenshots open as images.
 - Excel documents and other binary files show only their size.
 
-The sidebar is read only, and it refreshes after every save and run. To edit a block, use your editor. Do not edit a file in `flows/`, because the next save regenerates it from the case.
+The sidebar is read only, and it refreshes after every save and run. To change a block, use the [Blocks tab](/guides/setup-blocks#edit-or-delete-a-block), or your editor for a block that shows **Show file**. Do not edit a file in `flows/`, because the next save regenerates it from the case.
 
 Hide or show the column with the button in the top bar. The studio remembers the choice.
 

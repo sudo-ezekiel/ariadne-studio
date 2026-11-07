@@ -187,7 +187,7 @@ export function BlockSettings({ block, values, envKeys, disabled, onChange, onAd
       {mode === 'pick' && missing.length > 0 && (
         <p className="piece-missing">
           {missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not saved yet, so the default {forUsers ? 'user' : 'values'} will not work. Pick or add a test
-          user, or ask a developer.
+          user, or save a value in the Blocks tab.
         </p>
       )}
       {mode === 'each' && <EachValue settable={settable} values={values} envKeys={envKeys} disabled={disabled} onChange={onChange} />}

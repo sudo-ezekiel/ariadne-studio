@@ -5,6 +5,8 @@ import type {
   CaseHealth,
   CaseStep,
   ExpectationCandidate,
+  MaestroSelector,
+  MaestroStep,
   PhoneKey,
   Point,
   Rect,
@@ -83,7 +85,47 @@ export type BlockSummary = {
   maestroOnly?: string[];
   /** Set when the file is not a Maestro flow at all; such a block cannot be used. */
   error?: string;
+  /** Ariadne reads every command and key of the file, so the Blocks tab can change it. */
+  editable?: boolean;
 };
+
+/** A block opened in the Blocks tab. */
+export type BlockDetail = {
+  file: string;
+  name: string;
+  appId: string;
+  steps: MaestroStep[];
+  /** Variables the file gives a value in its own header, which a case cannot change. */
+  fixed: string[];
+  /** The names of the saved cases and other blocks that run it. */
+  usedBy: string[];
+  /** Saving rewrites the file from its steps, so comments in it would go. */
+  hasComments: boolean;
+};
+
+export type BlockSaveRequest = {
+  name: string;
+  steps: MaestroStep[];
+  /** Which app a new block is for. An existing block keeps its own. */
+  appId?: string;
+};
+
+/** A saved case as a new block, for the form to open unsaved. */
+export type CaseBlockDraft = { name: string; appId: string; steps: MaestroStep[] };
+
+/** The steps of a recording made for a block, ready to add to the form. */
+export type BlockRecordingResponse = { steps: MaestroStep[] };
+
+/** What a click on the screen would press, for a step of a block. */
+export type ScreenPick = {
+  selector: MaestroSelector;
+  /** The element is a password field, so typing into it must use a setting. */
+  password: boolean;
+  resolved?: SnapshotNodeLite;
+};
+
+export type SavedValuesRequest = { values: Record<string, string> };
+
 export type CaseSummary = {
   id: string;
   name: string;
@@ -145,7 +187,11 @@ export type EditingInfo = {
   tailSteps: number;
 };
 
-export type CurrentCaseView = CaseView & { editing?: EditingInfo };
+export type CurrentCaseView = CaseView & {
+  editing?: EditingInfo;
+  /** These steps go into a block on Finish, and no case is saved. */
+  forBlock?: boolean;
+};
 
 export type EditRequest = { mode: 'rerecord'; step: number } | { mode: 'insert'; after: number };
 

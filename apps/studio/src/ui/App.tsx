@@ -18,6 +18,7 @@ import type {
 } from '../shared/api-types.ts';
 import { opensByItself } from '../shared/setup-steps.ts';
 import { api, ApiError } from './api.ts';
+import { blockFromCase, buildSteps, editFromDetail, isDirty, newBlock, pickedStep, withRecordedSteps, type BlockEdit } from './components/block-steps.ts';
 import { CasePanel, type Draft, type PanelTab } from './components/CasePanel.tsx';
 import { ConnectionCard } from './components/ConnectionCard.tsx';
 import { FilesPanel, useFilesOpen } from './components/FilesPanel.tsx';
@@ -55,6 +56,9 @@ export function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [tab, setTab] = useState<PanelTab>('record');
   const [draft, setDraft] = useState<Draft>({ name: '', startFrom: '', blocks: [] });
+  // Up here so a block being written survives a look at another tab.
+  const [blockEdit, setBlockEdit] = useState<BlockEdit | null>(null);
+  const [pickingKey, setPickingKey] = useState<number | null>(null);
   const [nameFocus, setNameFocus] = useState(0);
   const [setupOpen, setSetupOpen] = useState(false);
   const [phone, setPhone] = useState<PhoneStatus>(PHONE_OFF);
@@ -115,6 +119,11 @@ export function App() {
       if (setup && opensByItself(setup, sessionInfo.open, info.lastDeviceId)) setSetupOpen(true);
     });
   }, [run, loadDevices]);
+
+  // Picking belongs to the form, so it ends when the form is out of sight.
+  useEffect(() => {
+    if (tab !== 'blocks') setPickingKey(null);
+  }, [tab]);
 
   // Expect mode and the picker belong to the case being recorded, and a recording lives in the Record tab.
   const recordingId = currentCase?.id;
@@ -314,6 +323,98 @@ export function App() {
       return true;
     })) ?? false;
 
+  /** Saves a setting's value to .env and reloads the project so the block shows it as saved. */
+  const addSavedValue = async (name: string, value: string): Promise<boolean> =>
+    (await run('Saving the value', async () => {
+      setProject(await api.addSavedValues({ [name]: value }));
+      return true;
+    })) ?? false;
+
+  const openBlock = (file: string) =>
+    run('Opening the block', async () => {
+      setBlockEdit(editFromDetail(await api.blockDetail(file)));
+    });
+
+  /** Not through run(): Save and try goes on to the device under the same busy state. */
+  const writeBlock = async (edit: BlockEdit): Promise<string> => {
+    const block = { name: edit.name.trim(), steps: buildSteps(edit.steps) };
+    const detail = edit.file ? await api.saveBlock(edit.file, block) : await api.createBlock({ ...block, appId: edit.appId ?? (session.appId ?? appId).trim() });
+    setBlockEdit({ ...editFromDetail(detail), ...(edit.values ? { values: edit.values } : {}) });
+    setPickingKey(null);
+    setProject(await api.project());
+    return detail.file;
+  };
+
+  const saveBlock = (edit: BlockEdit) =>
+    run('Saving the block', async () => {
+      await writeBlock(edit);
+      toast('Block saved. Cases can use it from the Record tab.', 'info');
+    });
+
+  const tryBlock = (edit: BlockEdit) =>
+    run('Running the block', async () => {
+      const file = !edit.file || isDirty(edit) ? await writeBlock(edit) : edit.file;
+      try {
+        setScreen(await api.tryBlock(edit.values ? { file, values: edit.values } : { file }));
+        toast('The block ran to the end.', 'info');
+      } catch (error) {
+        // A failed block leaves the device where it stopped; show that screen.
+        setScreen(await api.screen().catch(() => null));
+        throw error;
+      }
+    });
+
+  /** Records steps for the block in the form. The form stays as it is until the recording ends. */
+  const recordForBlock = (edit: BlockEdit) =>
+    run('Starting recording', async () => {
+      const started = await api.recordBlock(edit.name.trim() || 'New block');
+      setScreen(started.screen);
+      setFinished(null);
+      setOpenedCase(null);
+      setCurrentCase(await api.currentCase());
+    });
+
+  /** Opens a saved case as a new block, not saved yet, so its details can become settings first. */
+  const saveCaseAsBlock = (caseId: string) => {
+    if (blockEdit && isDirty(blockEdit) && !window.confirm('Replace the block you are writing with this case?')) return;
+    void run('Reading the case', async () => {
+      setBlockEdit(blockFromCase(await api.caseBlockDraft(caseId)));
+      setTab('blocks');
+    });
+  };
+
+  const deleteBlock = (file: string, name: string) => {
+    if (!window.confirm(`Delete the block "${name}" and its file?`)) return;
+    void run('Deleting the block', async () => {
+      await api.deleteBlock(file);
+      setBlockEdit(null);
+      setPickingKey(null);
+      setDraft((current) => ({ ...current, blocks: current.blocks.filter((use) => use.file !== file) }));
+      setProject(await api.project());
+      toast('Block deleted.', 'info');
+    });
+  };
+
+  /** Fills in the step waiting for a pick with what the click on the screen found. */
+  const pickElement = (point: Point) =>
+    run('Reading the element', async () => {
+      const pick = await api.pick(point.x, point.y);
+      const steps = blockEdit?.steps ?? [];
+      const picked = steps.find((item) => item.key === pickingKey);
+      const next = picked && pickedStep(picked, pick);
+      if (!blockEdit || !next) {
+        toast('Nothing with a name or id here. Click on a text or a control.');
+        return;
+      }
+      setBlockEdit({ ...blockEdit, steps: steps.map((item) => (item === picked ? next : item)) });
+      setPickingKey(null);
+      if (pick.resolved?.rect) {
+        setHighlight(pick.resolved.rect);
+        clearTimeout(highlightTimer.current);
+        highlightTimer.current = setTimeout(() => setHighlight(null), HIGHLIGHT_MS);
+      }
+    });
+
   /** Starts recording the draft from the Record tab; without a name, asks for one first. */
   const record = () => {
     const name = draft.name.trim();
@@ -343,6 +444,17 @@ export function App() {
       }
     });
   };
+
+  /** The recording goes into the form, and the block stays unsaved until someone saves it. */
+  const finishBlockRecording = (picks: number[]) =>
+    run('Adding the steps', async () => {
+      const { steps } = await api.finishBlockRecording(picks, blockEdit?.file);
+      setPicking(null);
+      setCurrentCase(null);
+      // After a reload the form is gone, but the recording is not.
+      setBlockEdit((current) => withRecordedSteps(current ?? newBlock(), steps));
+      setTab('blocks');
+    });
 
   const saveCase = (picks: number[]) =>
     run('Saving case', async () => {
@@ -443,13 +555,23 @@ export function App() {
 
   const discardCase = () => {
     const editing = currentCase?.editing;
-    const message = editing ? 'Discard these changes? The saved case stays as it was.' : 'Discard this case and its screenshots?';
+    const forBlock = currentCase?.forBlock === true;
+    const message = forBlock
+      ? 'Discard these steps? The block stays as it was.'
+      : editing
+        ? 'Discard these changes? The saved case stays as it was.'
+        : 'Discard this case and its screenshots?';
     if (!window.confirm(message)) return;
     void run('Discarding', async () => {
       const result = await api.discardCase();
       const caseId = currentCase?.id;
       setCurrentCase(null);
       setPicking(null);
+      if (forBlock) {
+        setTab('blocks');
+        toast('Recording discarded.', 'info');
+        return;
+      }
       if (result.restored && caseId) {
         setOpenedCase(await api.caseDetail(caseId));
         setTab('cases');
@@ -497,6 +619,8 @@ export function App() {
           onFinish={() => void finishCase()}
           onOpenSetup={() => setSetupOpen(true)}
           expectMode={expectMode}
+          choosing={pickingKey !== null}
+          onChoose={(point) => void pickElement(point)}
           onTap={(point) => void tap(point)}
           onExpect={(point) => void expectAt(point)}
           onToggleExpect={() => setExpectMode((current) => !current)}
@@ -552,7 +676,7 @@ export function App() {
             onRunBlock={(file, values) => void runBlock(file, values)}
             onAddTestUser={addTestUser}
             onFinish={() => void finishCase()}
-            onSavePicks={(picks) => void saveCase(picks)}
+            onSavePicks={(picks) => void (currentCase?.forBlock ? finishBlockRecording(picks) : saveCase(picks))}
             onCancelPick={() => setPicking(null)}
             onDiscard={discardCase}
             onDismissFinished={() => setFinished(null)}
@@ -567,11 +691,31 @@ export function App() {
               onRename: (caseId, name) => changeCase('Renaming', () => api.patchCase(caseId, { name })),
               onMute: (caseId, muted) => changeCase(muted ? 'Muting' : 'Unmuting', () => api.patchCase(caseId, { muted })),
               onDuplicate: (caseId) => changeCase('Duplicating', () => api.duplicateCase(caseId)),
+              onSaveAsBlock: saveCaseAsBlock,
               onDelete: deleteCase,
               onPatchStep: (caseId, index, patch: StepPatch) => changeCase('Saving the step', () => api.patchStep(caseId, index, patch)),
               onDeleteStep: (caseId, index) => changeCase('Deleting the step', () => api.deleteStep(caseId, index)),
               onDeleteExpectation: (caseId, position) => changeCase('Deleting the check', () => api.deleteExpectation(caseId, position)),
               onSplit: (caseId, atStep) => changeCase('Splitting', () => api.splitCase(caseId, atStep)),
+            }}
+            blockEdit={blockEdit}
+            pickingKey={pickingKey}
+            blockActions={{
+              onNew: () => setBlockEdit(newBlock()),
+              onOpen: (file) => void openBlock(file),
+              onOpenFile: openFile,
+              onChange: setBlockEdit,
+              onPick: setPickingKey,
+              onSave: () => blockEdit && void saveBlock(blockEdit),
+              onTry: () => blockEdit && void tryBlock(blockEdit),
+              onRecord: () => blockEdit && void recordForBlock(blockEdit),
+              onDelete: () => blockEdit?.file && deleteBlock(blockEdit.file, blockEdit.name),
+              onClose: () => {
+                setBlockEdit(null);
+                setPickingKey(null);
+              },
+              onSaveValue: addSavedValue,
+              onAddTestUser: addTestUser,
             }}
           />
         </div>

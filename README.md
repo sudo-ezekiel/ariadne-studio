@@ -9,8 +9,8 @@ and in CI. It runs on your own computer, with no account and no cloud service. A
 ![Recording a case: the phone screen on the left with an ochre frame, the recorded steps on the right](site/img/studio-recording.png)
 
 Every tap, swipe and key press becomes a step with a stable selector and a screenshot.
-Developers write reusable setup blocks (log in, skip onboarding) that a recording can start
-after, and review the generated flows in pull requests. The person who knows the product
+Reusable setup blocks (log in, skip onboarding) come from a form in the studio or from a developer's
+editor, and developers review the generated flows in pull requests. The person who knows the product
 gets a test case document (Excel, HTML or Markdown) that matches the flow exactly.
 
 ```yaml

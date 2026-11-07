@@ -23,6 +23,7 @@ import {
   readSavedCase,
   replayNeedsMaestro,
   replayOnDevice,
+  requireNoRecording,
   requireSession,
   saveCaseAndFlow,
   writeChainFlows,
@@ -268,6 +269,7 @@ export function registerCaseRoutes(app: FastifyInstance, state: ServerState): vo
     const withMaestro = await replayNeedsMaestro(state, partial);
 
     return enqueue(state, async () => {
+      requireNoRecording(state);
       const { project, session } = state;
       const envKeys = await project.envKeys();
       if (withMaestro) {

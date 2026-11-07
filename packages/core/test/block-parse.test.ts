@@ -88,3 +88,17 @@ describe('parseBlockFlow', () => {
     expect(() => parseBlockFlow(yaml)).toThrow(MaestroParseError);
   });
 });
+
+describe('parseBlockFlow ownFlow', () => {
+  it('keeps ownFlow beside flow for a block Ariadne reads whole', () => {
+    const outline = parseBlockFlow('appId: com.example\n---\n- launchApp\n');
+    expect(outline.ownFlow).toBe(outline.flow);
+    expect(outline.ownFlow?.steps).toEqual([{ kind: 'launchApp' }]);
+  });
+
+  it('has no ownFlow for a block with runScript', () => {
+    const outline = parseBlockFlow('appId: com.example\n---\n- launchApp\n- runScript: setup.js\n');
+    expect(outline.flow).toBeUndefined();
+    expect(outline.ownFlow).toBeUndefined();
+  });
+});

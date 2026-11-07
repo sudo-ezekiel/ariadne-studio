@@ -23,6 +23,12 @@ export type BlockOutline = {
   variables: string[];
   /** The whole block, when Ariadne's own parser reads every command and key. */
   flow?: MaestroFlow;
+  /**
+   * This file on its own, when Ariadne's parser reads all of it. Unlike `flow`
+   * it stays set when a step or a file it runs sends the block to Maestro, so
+   * it says whether the Blocks tab can edit the file.
+   */
+  ownFlow?: MaestroFlow;
 };
 
 const HEADER_KEYS = ['appId', 'name', 'env'];
@@ -40,6 +46,7 @@ function fromFlow(flow: MaestroFlow): BlockOutline {
     maestroOnly: [],
     variables: flowVariables(flow),
     flow,
+    ownFlow: flow,
   };
 }
 

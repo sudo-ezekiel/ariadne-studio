@@ -61,6 +61,7 @@ The studio keeps the device's real keyboard, which agent-device would otherwise 
 
 ## Blocks
 
+- Maestro reads a setting used to find an element as a regular expression, so a value such as `Net.*` matches any text starting with Net, and `.`, `(`, `)`, `*`, `+` and `?` in a value need a `\` before them to count as themselves. Text typed into the form is escaped for you, and a setting in a **Type** step is plain text.
 - A block that needs Maestro makes starting, re-recording or running it mid-case take as long as a Maestro run, typically 10 to 20 seconds on an emulator.
 - agent-device 0.21.35 reports success for some commands it does not really run: it "replayed" a `runScript` block. That is why the studio decides from the file, not from trying agent-device first.
 - agent-device must use its shared daemon for block replay to run inside the studio's session. The studio passes agent-device's default state directory explicitly (`AGENT_DEVICE_STATE_DIR`, else `~/.agent-device`). Without it, agent-device runs a replay in a private one-shot daemon that cannot use the device the studio holds.

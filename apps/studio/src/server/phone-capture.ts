@@ -19,8 +19,10 @@ import {
   focusedField,
   SYSTEM_UI,
   foregroundApp,
+  passwordSetting,
   percentOfScreen,
   readGesture,
+  reference,
   touchToViewport,
   typedChange,
   type CaseStep,
@@ -431,9 +433,7 @@ export class PhoneCapture {
     if (typing.password) {
       if (typing.secretKeys === 0) return;
       typing.secretKeys = 0;
-      const keys = Object.keys(await projectEnv(this.state)).sort();
-      const key = keys.find((candidate) => /pass/i.test(candidate)) ?? 'PASSWORD';
-      const text = `\${${key}}`;
+      const text = reference(passwordSetting(Object.keys(await projectEnv(this.state))));
       this.record('type', text, (recorder, screenshot) => recorder.recordInput(text, screenshot), 'password');
       return;
     }

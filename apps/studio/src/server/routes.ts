@@ -15,9 +15,11 @@ import {
   focusedPasswordField,
   installRefused,
   normalizeValues,
+  passwordSetting,
   percentOfScreen,
   pointOnScreen,
   redactValues,
+  reference,
   resolveValues,
   testUserPrefix,
   rectCenter,
@@ -40,9 +42,14 @@ import {
   type CaseListItem,
   type CaseStartResponse,
   type ProjectInfo,
+  type SavedValuesRequest,
+  type ScreenPick,
+  type ScreenState,
   type SessionInfo,
   type TestUserRequest,
 } from '../shared/api-types.ts';
+import { isOpenableLink } from '../shared/block-check.ts';
+import { registerBlockRoutes } from './blocks.ts';
 import { registerCaseRoutes } from './cases.ts';
 import {
   HttpError,
@@ -55,11 +62,15 @@ import {
   exists,
   nowIso,
   phoneLocked,
+  pickedCandidates,
   projectEnv,
+  readPicks,
   readSavedCase,
   replayNeedsMaestro,
   replayOnDevice,
   requireCase,
+  requireNoRecording,
+  requireRecording,
   requireSession,
   saveCaseAndFlow,
   sendPng,
@@ -222,19 +233,9 @@ async function replayCaseNow(state: ServerState, testCase: TestCase, steps: read
   }
 }
 
-function readPicks(body: unknown): number[] {
-  const picks = ((body ?? {}) as { picks?: unknown }).picks;
-  if (picks === undefined) return [];
-  if (!Array.isArray(picks) || !picks.every((pick) => Number.isInteger(pick) && pick >= 0)) {
-    throw new HttpError(400, 'BAD_PICK', 'Expected "picks" to be a list of candidate ids.');
-  }
-  return [...new Set(picks as number[])];
-}
-
-/** http(s) links and app deep links (scheme://...); nothing that could be a shell or file trick. */
 function readLink(body: unknown): string {
   const url = readString(body, 'url').trim();
-  if (url.length > 2000 || !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/\S+$/.test(url) || /^(file|content|javascript):/i.test(url)) {
+  if (!isOpenableLink(url)) {
     throw new HttpError(400, 'BAD_LINK', 'Expected a link such as https://example.com/claims or myapp://claims/123.');
   }
   return url;
@@ -315,6 +316,7 @@ async function projectInfo(state: ServerState): Promise<ProjectInfo> {
         ...(block.runsWith ? { runsWith: block.runsWith } : {}),
         ...(outline && outline.maestroOnly.length > 0 ? { maestroOnly: outline.maestroOnly } : {}),
         ...(block.error ? { error: block.error } : {}),
+        ...(outline?.ownFlow ? { editable: true } : {}),
       };
     }),
     envKeys: envKeyList,
@@ -355,6 +357,15 @@ async function refuseHiddenScreen(state: ServerState): Promise<void> {
       ? "The phone's screen is off or locked, so nothing was pressed or recorded. Wake it and unlock it, then try again."
       : "The phone's screen is back. Nothing was pressed or recorded: have a look at it here, then try again.",
   );
+}
+
+/** Types a password nothing has saved. No list of values can hide it, so a device error must not get to repeat it. */
+async function typeUnsavedPassword(state: ServerState, text: string): Promise<void> {
+  try {
+    await state.session.typeText(text);
+  } catch {
+    throw new HttpError(502, 'TYPE_FAILED', 'Could not type into the password field. Check the phone, then try again.');
+  }
 }
 
 /**
@@ -482,6 +493,19 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     return enqueue(state, async () => toScreenState(await captureScratch(state)));
   });
 
+  /** What a click would press, for a step of a block. Nothing happens on the device. */
+  app.post('/api/screen/pick', async (request): Promise<ScreenPick> => {
+    const point = readPoint(request.body);
+    requireSession(state);
+    return enqueue(state, async () => {
+      await refuseHiddenScreen(state);
+      const latest = await freshLatest(state);
+      const node = resolveTapTarget(latest.nodes, point, latest.viewport);
+      const selector = chooseSelector(node, latest.nodes, point, latest.viewport);
+      return { selector, password: node?.password === true, ...(node ? { resolved: toLiteNode(node) } : {}) };
+    });
+  });
+
   app.get('/api/screen/image', async (_request, reply) => {
     if (!state.latest || !(await exists(state.latest.screenshotPath))) {
       throw new HttpError(404, 'NO_SCREEN', 'Nothing has been captured yet.');
@@ -517,6 +541,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       // Text equal to a project env value is recorded as its ${KEY}; the device
       // still gets the real text. That is how secrets stay out of case files.
       let recordedText = text;
+      let unsaved = false;
       if (recorder?.active) {
         const env = await projectEnv(state);
         const key = Object.keys(env)
@@ -525,7 +550,11 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
         if (key) {
           recordedText = `\${${key}}`;
         } else if (state.latest && focusedPasswordField(state.latest.nodes)) {
-          throw new HttpError(
+          // A block only needs the setting's name: each case gives it the value.
+          if (state.recordingBlock) {
+            recordedText = reference(passwordSetting(Object.keys(env)));
+            unsaved = true;
+          } else throw new HttpError(
             400,
             'PASSWORD_FIELD',
             `This is a password field. Put the password in ${join(state.project.dir, '.env')} (for example PASSWORD=...) and type exactly that value; the case then records \${PASSWORD} instead of the secret.`,
@@ -534,7 +563,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       }
       return recordedAction(
         state,
-        () => state.session.typeText(text),
+        () => (unsaved ? typeUnsavedPassword(state, text) : state.session.typeText(text)),
         (active, screenshot) => active.recordInput(recordedText, screenshot),
         'type',
         recordedText,
@@ -718,6 +747,32 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     });
   });
 
+  /** Tries a block from the Blocks tab, from the screen shown now. Nothing is recorded. */
+  app.post('/api/blocks/try', async (request): Promise<ScreenState> => {
+    const requested = readBlockUse(request.body);
+    requireSession(state);
+    const env = await projectEnv(state);
+    const block = await prepareBlockUse(state, requested, env);
+    const { use } = block;
+    return enqueue(state, async () => {
+      requireNoRecording(state);
+      await refuseHiddenScreen(state);
+      if (block.runsWithMaestro) {
+        const step: CaseStep = { index: 1, kind: 'block', file: use.file, ...(use.values ? { values: use.values } : {}), at: nowIso() };
+        const appId = state.session.appId ?? (await state.project.readSettings()).appId;
+        await runPrefixWithMaestro(state, {
+          caseId: 'try-block',
+          partial: { id: 'try-block', name: use.file, appId, deviceId: state.session.deviceId ?? '', createdAt: nowIso(), preconditionBlocks: [], steps: [step], expectations: [] },
+          skipLaunch: true,
+          what: `Block ${use.file}`,
+        });
+      } else {
+        await runBlockNow(state, block, env, `Block ${use.file}`);
+      }
+      return toScreenState(await captureScratch(state));
+    });
+  });
+
   /**
    * Saves a test user as saved values in .env: "Supervisor" with USERNAME and
    * PASSWORD becomes SUPERVISOR_USERNAME and SUPERVISOR_PASSWORD, which a
@@ -740,6 +795,20 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       await state.project.addEnvValues(saved);
     } catch (error) {
       throw new HttpError(409, 'BAD_TEST_USER', error instanceof Error ? error.message : String(error));
+    }
+    return projectInfo(state);
+  });
+
+  /** Saves a setting's default in .env, on this computer. A block only ever holds its name. */
+  app.post('/api/project/saved-values', async (request): Promise<ProjectInfo> => {
+    const { values } = (request.body ?? {}) as Partial<SavedValuesRequest>;
+    if (!isValues(values) || Object.keys(values).length === 0 || Object.values(values).some((value) => !value)) {
+      throw new HttpError(400, 'BAD_SAVED_VALUE', 'Expected { values } with a value for each setting, such as { "EMAIL": "..." }.');
+    }
+    try {
+      await state.project.addEnvValues(values);
+    } catch (error) {
+      throw new HttpError(409, 'BAD_SAVED_VALUE', error instanceof Error ? error.message : String(error));
     }
     return projectInfo(state);
   });
@@ -771,6 +840,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const preconditionBlocks = prepared.map((block) => block.use);
     const withMaestro = await replayNeedsMaestro(state, { preconditionBlocks, steps: [], ...(startFrom ? { startFrom } : {}) });
     return enqueue(state, async () => {
+      requireNoRecording(state);
       const deviceId = state.session.deviceId!;
       const appId = state.session.appId!;
       const caseId = await state.project.allocateCaseId(name);
@@ -867,18 +937,13 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
   app.post('/api/case/finish', async (request): Promise<CaseFinishResponse> => {
     const picks = readPicks(request.body);
     const recorder = requireCase(state);
+    if (state.recordingBlock) throw new HttpError(409, 'RECORDING_BLOCK', 'This recording is for a block. Finish it from the Record tab.');
     await stopPhoneCapture(state);
     return enqueue(state, async () => {
+      requireRecording(state, recorder);
       const editing = state.editing;
       if (editing?.mode !== 'insert') {
-        // Same snapshot as GET /api/case/candidates, so the same ids mean the same elements.
-        const screen = state.offered ?? state.latest;
-        const candidates = screen ? expectationCandidates(screen.nodes, screen.viewport) : [];
-        const chosen = picks.map((pick) => {
-          const candidate = candidates[pick];
-          if (!candidate) throw new HttpError(400, 'BAD_PICK', `There is no candidate ${pick} on the current screen.`);
-          return candidate;
-        });
+        const chosen = pickedCandidates(state, picks);
         if (editing) recorder.clearExpectations();
         for (const candidate of chosen) recorder.addExpectation({ selector: candidate.selector, node: candidate.node });
       }
@@ -911,10 +976,12 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const recorder = requireCase(state);
     await stopPhoneCapture(state);
     return enqueue(state, async () => {
+      requireRecording(state, recorder);
       const caseId = recorder.caseId!;
       const editing = state.editing;
       state.recorder = undefined;
       state.editing = undefined;
+      state.recordingBlock = undefined;
       if (editing) {
         // The saved case is untouched; only the screenshots of the new steps go.
         const dir = state.project.evidenceDir(caseId);
@@ -943,6 +1010,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
   });
 
   registerCaseRoutes(app, state);
+  registerBlockRoutes(app, state);
   registerReplayRoutes(app, state);
   registerExportRoutes(app, state);
   registerFileRoutes(app, state);

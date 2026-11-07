@@ -632,6 +632,10 @@ button.menu-item {
   cursor: help;
 }
 
+.screen-choose {
+  cursor: crosshair;
+}
+
 .screen img {
   display: block;
   width: 100%;
@@ -852,6 +856,11 @@ button.link-on-dark:hover:not(:disabled) {
 
 .mirror-caption-expect {
   color: var(--pass);
+  font-weight: 600;
+}
+
+.mirror-caption-choose {
+  color: var(--thread);
   font-weight: 600;
 }
 
@@ -1104,6 +1113,143 @@ button.link-on-dark:hover:not(:disabled) {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+}
+
+/* Blocks tab: the form that writes a block */
+
+.section-hint.block-intro {
+  margin: 8px 0 12px;
+}
+
+.block-note {
+  margin: 8px 0 0;
+}
+
+.piece-body.piece-body-flat {
+  margin-left: 26px;
+}
+
+.draft-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.draft-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--block-line);
+  border-radius: 8px;
+  background: var(--block-soft);
+}
+
+.draft-step-head {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-step-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.draft-field {
+  display: flex;
+  align-self: stretch;
+  gap: 6px;
+}
+
+.draft-field select {
+  flex: none;
+  max-width: 45%;
+}
+
+.draft-field input {
+  flex: 1;
+  min-width: 0;
+}
+
+.draft-setting {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.draft-point {
+  align-self: center;
+}
+
+.draft-pick {
+  height: 28px;
+  border-color: var(--block-line);
+  color: var(--block);
+}
+
+.draft-direction {
+  max-width: 45%;
+}
+
+.draft-check,
+.draft-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.draft-inline input {
+  width: 80px;
+}
+
+.draft-note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.draft-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.draft-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.draft-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.draft-setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.draft-setting-row code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.block-editor .block-settings {
+  margin-top: 12px;
 }
 
 /* Record tab: the new case composer */

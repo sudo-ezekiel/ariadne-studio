@@ -32,6 +32,9 @@ type Props = {
   onOpenSetup: () => void;
   /** While on, a click records an assertVisible instead of tapping. */
   expectMode: boolean;
+  /** While on, a click chooses an element for a step of a block; nothing is pressed. */
+  choosing: boolean;
+  onChoose: (point: Point) => void;
   onTap: (point: Point) => void;
   onExpect: (point: Point) => void;
   onToggleExpect: () => void;
@@ -214,7 +217,7 @@ function EmptyScreen({ sessionOpen, devicesFound, onOpenSetup }: Pick<Props, 'se
 }
 
 export function Mirror(props: Props) {
-  const { screen, busy, highlight, sessionOpen, caseActive, expectMode } = props;
+  const { screen, busy, highlight, sessionOpen, caseActive, expectMode, choosing } = props;
   const usingPhone = props.phone.active;
   /** Everything but Check waits while the phone is the input. */
   const inputOff = !sessionOpen || busy || usingPhone;
@@ -246,7 +249,7 @@ export function Mirror(props: Props) {
     const current = press.current;
     if (!current || !screen || event.pointerId !== current.pointerId) return;
     current.maxDistance = Math.max(current.maxDistance, distance(current.client, { x: event.clientX, y: event.clientY }));
-    if (!expectMode && current.maxDistance >= DRAG_PX) setDrag({ from: current.point, to: toViewport(event, screen) });
+    if (!expectMode && !choosing && current.maxDistance >= DRAG_PX) setDrag({ from: current.point, to: toViewport(event, screen) });
   };
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const current = press.current;
@@ -255,7 +258,9 @@ export function Mirror(props: Props) {
     if (!current || !screen || busy || event.pointerId !== current.pointerId) return;
     const durationMs = event.timeStamp - current.startedAt;
     const gesture = classifyPointer({ durationMs, maxDistancePx: current.maxDistance });
-    if (expectMode) {
+    if (choosing) {
+      if (gesture === 'tap') props.onChoose(current.point);
+    } else if (expectMode) {
       if (gesture === 'tap') props.onExpect(current.point);
     } else if (gesture === 'tap') props.onTap(current.point);
     else if (gesture === 'hold') props.onLongPress(current.point);
@@ -281,7 +286,9 @@ export function Mirror(props: Props) {
     setText('');
   };
 
-  const captionText = expectMode
+  const captionText = choosing
+    ? `Click the element for this step${hover && !busy ? `: ${caption(hover)}` : ''}`
+    : expectMode
     ? `Check mode: click what must be visible${hover && !busy ? `: ${caption(hover)}` : ''}`
     : hover && !busy
       ? caption(hover)
@@ -313,7 +320,7 @@ export function Mirror(props: Props) {
         <div className="mirror-frame">
           {screen ? (
             <div
-              className={`screen ${busy ? 'screen-busy' : ''} ${expectMode ? 'screen-expect' : ''} ${screen.width > screen.height ? 'screen-landscape' : ''}`}
+              className={`screen ${busy ? 'screen-busy' : ''} ${expectMode ? 'screen-expect' : ''} ${choosing ? 'screen-choose' : ''} ${screen.width > screen.height ? 'screen-landscape' : ''}`}
               style={{ aspectRatio: `${screen.width} / ${screen.height}`, ['--screen-ratio' as string]: screen.width / screen.height }}
               onMouseMove={(event) => setHover(resolveNodeAt(screen.nodes, toViewport(event, screen)))}
               onMouseLeave={() => setHover(undefined)}
@@ -324,7 +331,7 @@ export function Mirror(props: Props) {
               onContextMenu={(event) => {
                 event.preventDefault();
                 cancelPress();
-                if (busy || usingPhone) return;
+                if (busy || usingPhone || choosing) return;
                 setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen) });
               }}
             >
@@ -346,7 +353,7 @@ export function Mirror(props: Props) {
           )}
         </div>
       </div>
-      <div className={`mirror-caption ${expectMode ? 'mirror-caption-expect' : ''}`}>{captionText}</div>
+      <div className={`mirror-caption ${expectMode ? 'mirror-caption-expect' : ''} ${choosing ? 'mirror-caption-choose' : ''}`}>{captionText}</div>
       <PhoneButtons
         disabled={inputOff}
         recording={caseActive}

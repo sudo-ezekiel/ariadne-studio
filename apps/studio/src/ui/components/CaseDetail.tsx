@@ -16,6 +16,7 @@ export type CaseActions = {
   onRename: (caseId: string, name: string) => void;
   onMute: (caseId: string, muted: boolean) => void;
   onDuplicate: (caseId: string) => void;
+  onSaveAsBlock: (caseId: string) => void;
   onDelete: (caseId: string) => void;
   onPatchStep: (caseId: string, index: number, patch: StepPatch) => void;
   onDeleteStep: (caseId: string, index: number) => void;
@@ -180,6 +181,9 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
         </button>
         <button type="button" onClick={() => actions.onDuplicate(testCase.id)} disabled={locked}>
           Duplicate
+        </button>
+        <button type="button" onClick={() => actions.onSaveAsBlock(testCase.id)} disabled={locked} title="Opens these steps in the Blocks tab, to reuse them in other cases">
+          Save as block
         </button>
         <button type="button" onClick={() => actions.onMute(testCase.id, !testCase.muted)} disabled={locked} title="A muted case is skipped by Run all">
           {testCase.muted ? 'Unmute' : 'Mute'}
@@ -367,7 +371,7 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
                       Add steps before step 1
                     </button>
                   )}
-                  {item.kind === 'block' && <span className="hint">Blocks are edited as Maestro YAML files.</span>}
+                  {item.kind === 'block' && <span className="hint">Change this block in the Blocks tab.</span>}
                   {item.kind === 'expectation' && (
                     <button type="button" className="danger" onClick={() => actions.onDeleteExpectation(testCase.id, expectationPosition)} disabled={locked}>
                       Delete this check

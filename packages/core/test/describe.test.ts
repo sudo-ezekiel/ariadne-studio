@@ -24,6 +24,15 @@ function tap(selector: MaestroSelector, extra: Partial<CaseStep> = {}): CaseStep
 }
 
 describe('elementName', () => {
+  it('says which setting names an element when the selector is a reference', () => {
+    expect(elementName({ kind: 'text', value: '${SECTION}' })).toBe('the element the SECTION setting names');
+    expect(elementName({ kind: 'id', value: '${SECTION}' })).toBe('the element the SECTION setting names');
+  });
+
+  it('keeps naming text that only contains a reference as text', () => {
+    expect(elementName({ kind: 'text', value: 'Hello ${NAME}' })).toBe('"Hello ${NAME}"');
+  });
+
   it('quotes text, without the regex escaping Maestro needs', () => {
     expect(elementName(system)).toBe('"System"');
     expect(elementName({ kind: 'text', value: 'Storage \\(64 GB\\)' })).toBe('"Storage (64 GB)"');

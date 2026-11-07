@@ -174,7 +174,7 @@ The saved case runs its own blocks. Remove the blocks, or set **Start from** bac
 
 ### "X is not saved yet, so the default user will not work"
 
-The block needs a value that is in neither `.env` nor `project.json`. Pick or add a [test user](/guides/test-users), or ask a developer.
+The block needs a value that is in neither `.env` nor `project.json`. Pick or add a [test user](/guides/test-users), or save a value under **Settings** when you edit the block in the **Blocks** tab.
 
 ### "A saved value called X already exists."
 

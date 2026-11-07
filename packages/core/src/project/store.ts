@@ -2,8 +2,9 @@ import { access, cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'nod
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseBlockFlow, type BlockOutline } from '../maestro/block-parse.ts';
 import { toMaestroYaml } from '../maestro/emit.ts';
-import type { MaestroFlow } from '../maestro/model.ts';
+import type { MaestroFlow, MaestroStep } from '../maestro/model.ts';
 import type { TestCase } from '../recorder/case-types.ts';
+import type { FlowPaths } from '../recorder/recorder.ts';
 import { agentDeviceReplays } from '../replay/device-replay.ts';
 import type { RunSummary } from '../replay/run-result.ts';
 import type { SuiteRun } from '../replay/suite.ts';
@@ -110,7 +111,7 @@ async function writeFileAtomic(path: string, content: string): Promise<void> {
   await rename(temp, path);
 }
 
-function slugify(name: string): string {
+function slugify(name: string, fallback = 'case'): string {
   const slug = name
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
@@ -119,7 +120,7 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 48)
     .replace(/-+$/g, '');
-  return slug || 'case';
+  return slug || fallback;
 }
 
 function timestampSuffix(date: Date): string {
@@ -265,6 +266,12 @@ export class ProjectStore {
     return posixRelative(this.paths.flowsDir, resolve(this.dir, blockFile));
   }
 
+  /** How a block refers to another block: from its own folder, or from where a new block goes. */
+  blockFlowPaths(file?: string): FlowPaths {
+    const folder = file === undefined ? (this.paths.blockDirs[0] ?? this.dir) : dirname(this.blockPath(file));
+    return { runFlowFile: (blockFile) => posixRelative(folder, resolve(this.dir, blockFile)) };
+  }
+
   /** The flows folder as seen from `absoluteDir`, forward slashes, e.g. "../../flows" from runs/<runId>/. */
   flowsDirFrom(absoluteDir: string): string {
     return posixRelative(absoluteDir, this.paths.flowsDir) || '.';
@@ -368,6 +375,85 @@ export class ProjectStore {
       }
     }
     return blocks;
+  }
+
+  /**
+   * Writes a block over its own file, or with no `file` to a new one named
+   * after it in the first block folder. Returns the block's project path.
+   */
+  async writeBlock(flow: MaestroFlow, file?: string): Promise<string> {
+    const path = file === undefined ? await this.newBlockPath(flow.name ?? '') : this.blockFilePath(file);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFileAtomic(path, toMaestroYaml(flow));
+    return this.relative(path);
+  }
+
+  async deleteBlock(file: string): Promise<void> {
+    await rm(this.blockFilePath(file));
+  }
+
+  /** blockPath for changing a block: unlike reading, it refuses every other file in the project, such as .env. */
+  private blockFilePath(file: string): string {
+    const path = this.blockPath(file);
+    if (!/\.ya?ml$/i.test(path) || !this.paths.blockDirs.some((dir) => isInside(path, dir))) throw new Error(`Not a block file: ${file}`);
+    return path;
+  }
+
+  /**
+   * Whether `steps`, as the block `file`, lead back to that file, directly or
+   * through the flows they run. A flow that cannot be read leads nowhere, and
+   * listBlocks reports it on its own.
+   */
+  async reachesBlock(file: string, steps: readonly MaestroStep[]): Promise<boolean> {
+    const target = this.blockPath(file);
+    const seen = new Set<string>();
+    const follow = async (from: string, commands: readonly MaestroStep[]): Promise<boolean> => {
+      for (const step of commands) {
+        // A variable in the path is resolved by Maestro at run time; Ariadne cannot follow it.
+        if (step.kind !== 'runFlow' || step.file.includes('${')) continue;
+        const next = resolve(dirname(from), step.file);
+        if (next === target) return true;
+        if (seen.has(next)) continue;
+        seen.add(next);
+        if (await follow(next, await readSteps(next))) return true;
+      }
+      return false;
+    };
+    return follow(target, steps);
+  }
+
+  /** Where a new block with this name would go, as a project path. */
+  async newBlockFile(name: string): Promise<string> {
+    return this.relative(await this.newBlockPath(name));
+  }
+
+  /** "Log in" -> blocks/log-in.yaml, then log-in-2.yaml. A file a case or a block runs is never reused. */
+  private async newBlockPath(name: string): Promise<string> {
+    const [dir] = this.paths.blockDirs;
+    if (!dir) throw new Error('project.json lists no block folders in "paths.blocks".');
+    const slug = slugify(name, 'block');
+    for (let number = 1; ; number++) {
+      const base = join(dir, number === 1 ? slug : `${slug}-${number}`);
+      if (!(await exists(`${base}.yaml`)) && !(await exists(`${base}.yml`))) return `${base}.yaml`;
+    }
+  }
+
+  /** The names of the saved cases and the other blocks that run a block. */
+  async blockUsers(file: string): Promise<string[]> {
+    const cases: string[] = [];
+    for (const summary of await this.listCases()) {
+      const { name, preconditionBlocks, steps } = await this.readCase(summary.id);
+      if (preconditionBlocks.some((use) => use.file === file) || steps.some((step) => step.kind === 'block' && step.file === file)) cases.push(name);
+    }
+    const target = this.blockPath(file);
+    const blocks: string[] = [];
+    for (const block of await this.listBlocks()) {
+      if (block.file === file) continue;
+      // From the file itself: a block with another broken runFlow has no outline, and still runs this one.
+      const path = this.blockPath(block.file);
+      if ((await readSteps(path)).some((step) => step.kind === 'runFlow' && resolve(dirname(path), step.file) === target)) blocks.push(block.name);
+    }
+    return [...cases, ...blocks];
   }
 
   async listCases(): Promise<CaseSummary[]> {
@@ -637,6 +723,12 @@ export class ProjectStore {
   }
 }
 
+/** The steps of a flow file that Ariadne reads; none for a file it cannot. */
+async function readSteps(path: string): Promise<MaestroStep[]> {
+  const outline = await readFile(path, 'utf8').then(parseBlockFlow).catch(() => undefined);
+  return outline?.commands.flatMap((command) => (command.kind === 'step' ? [command.step] : [])) ?? [];
+}
+
 /** How deep runFlow files are followed when deciding whether a block needs Maestro. */
 const MAX_RUNFLOW_DEPTH = 8;
 
@@ -670,7 +762,9 @@ async function readBlockOutline(absolute: string, seen: readonly string[] = []):
     try {
       nested = await readBlockOutline(target, chain);
     } catch (error) {
-      throw new Error(`It runs ${file}, which cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+      // The first line only: the rest quotes the file, and a runFlow can name any file, .env included.
+      const reason = (error instanceof Error ? error.message : String(error)).split('\n')[0]!.replace(/:$/, '');
+      throw new Error(`It runs ${file}, which cannot be read: ${reason}`);
     }
     for (const name of nested.maestroOnly) nestedOnly.add(name);
   }

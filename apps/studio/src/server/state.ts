@@ -100,6 +100,8 @@ export type ServerState = {
   maestro: MaestroTools;
   recorder?: Recorder;
   editing?: EditingState;
+  /** The recording is for a block: its steps go to the form, and it never becomes a case. */
+  recordingBlock?: boolean;
   suite?: SuiteJob;
   latest?: Latest;
   /** The screen the end checks on offer came from: picks are positions in that list, and the mirror moves on. */
@@ -191,6 +193,7 @@ export function currentCaseView(state: ServerState): CurrentCaseView | null {
   if (!state.recorder?.active) return null;
   const view = toCaseView(state.recorder.toCase());
   const editing = state.editing;
+  if (state.recordingBlock) return { ...view, forBlock: true };
   return editing
     ? { ...view, editing: { mode: editing.mode, keptSteps: editing.keptSteps, tailSteps: editing.tail.length } }
     : view;

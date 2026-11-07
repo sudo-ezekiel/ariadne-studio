@@ -8,6 +8,7 @@ import {
   SYSTEM_UI,
   blackPicture,
   caseToFlow,
+  expectationCandidates,
   foregroundApp,
   looksLikeHomeApp,
   pointOnScreen,
@@ -16,6 +17,7 @@ import {
   screenView,
   toMaestroYaml,
   type DirectAction,
+  type ExpectationCandidate,
   type MaestroFlow,
   type MaestroStep,
   type Recorder,
@@ -67,6 +69,42 @@ export function requireSession(state: ServerState): void {
   if (!state.session.isOpen) {
     throw new HttpError(409, 'NO_SESSION', 'No device connected. Pick a device, enter the app id and click Connect first.');
   }
+}
+
+export function readPicks(body: unknown): number[] {
+  const picks = ((body ?? {}) as { picks?: unknown }).picks;
+  if (picks === undefined) return [];
+  if (!Array.isArray(picks) || !picks.every((pick) => Number.isInteger(pick) && pick >= 0)) {
+    throw new HttpError(400, 'BAD_PICK', 'Expected "picks" to be a list of candidate ids.');
+  }
+  return [...new Set(picks as number[])];
+}
+
+/** The end checks ticked. Same snapshot as GET /api/case/candidates, so the same ids mean the same elements. */
+export function pickedCandidates(state: ServerState, picks: readonly number[]): ExpectationCandidate[] {
+  const screen = state.offered ?? state.latest;
+  const candidates = screen ? expectationCandidates(screen.nodes, screen.viewport) : [];
+  return picks.map((pick) => {
+    const candidate = candidates[pick];
+    if (!candidate) throw new HttpError(400, 'BAD_PICK', `There is no candidate ${pick} on the current screen.`);
+    return candidate;
+  });
+}
+
+/**
+ * Refuses to start or change anything while a recording is going. Call it inside
+ * the queue: a request checked before it can be overtaken by the one in front.
+ */
+export function requireNoRecording(state: ServerState): void {
+  if (state.recorder?.active) throw new HttpError(409, 'CASE_ACTIVE', 'Finish or discard the recording first.');
+}
+
+/**
+ * For a queued change to a recording: refuses one that ended or was replaced
+ * while the request waited, so it cannot end the recording that came after it.
+ */
+export function requireRecording(state: ServerState, recorder: Recorder): void {
+  if (state.recorder !== recorder) throw new HttpError(409, 'NO_CASE', 'That recording has already ended.');
 }
 
 export function requireCase(state: ServerState): Recorder {

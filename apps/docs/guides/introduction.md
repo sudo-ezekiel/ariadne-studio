@@ -13,7 +13,7 @@ In Ariadne, "record" means capturing steps. If you came here looking for a video
 
 ## Who it is for
 
-- **The person who knows the product.** Record cases without writing YAML, run them, and hand over a [test case document](/guides/test-case-documents) in Excel, HTML or Markdown that matches the flow exactly.
+- **The person who knows the product.** Record cases and write [setup blocks](/guides/setup-blocks) without touching YAML, run them, and hand over a [test case document](/guides/test-case-documents) in Excel, HTML or Markdown that matches the flow exactly.
 - **Developers.** Write reusable Maestro flows as [setup blocks](/guides/setup-blocks) (log in, skip onboarding) that a recording can start after, review the generated flows in pull requests, and get per-step screenshots, flaky tags and shareable reports for every run.
 
 ## The loop
