@@ -812,7 +812,9 @@ the same thing by the time the form sees them:
   block must not depend on a generated flow. It opens unsaved, so details can become settings first.
 - Paths in a block are relative to the block's folder, not the flows folder (`blockFlowPaths`).
 - A block cannot run itself: Run a setup block now can put any block into a recording, so saving
-  follows its `runFlow` steps and refuses one that leads back to its own file (`reachesBlock`).
+  follows its `runFlow` steps and refuses one that leads back to its own file (`reachesBlock`). It
+  cannot follow a path with a `${VAR}` in it, which Maestro resolves at run time, or a `runFlow`
+  inside a command Ariadne does not read. Only a hand-written block can hold either.
 
 ## 17. Later
 

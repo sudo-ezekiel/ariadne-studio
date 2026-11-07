@@ -56,7 +56,7 @@ Every block the studio can read fully has an **Edit** button, including ones wri
 - Saving rewrites the file from its steps, so comments in a hand-written file go. The form says so when a file has any.
 - The file name stays when you rename a block, because cases refer to it by file.
 - **Delete block** refuses while a case or another block uses it.
-- Saving refuses a block that would run itself, directly or through a block it runs.
+- Saving refuses a block that would run itself, directly or through a block it runs. In a hand-written block, a `runFlow` path with a variable in it, or one inside a command Ariadne does not read, cannot be followed, so it is not checked.
 
 A block with a command Ariadne does not read, such as `runScript`, or a header key other than `appId`, `name` and `env`, has **Show file** instead, and stays a job for a text editor. Running with Maestro is a separate matter: a block with a **Wait** step does, and it can still be edited here.
 
