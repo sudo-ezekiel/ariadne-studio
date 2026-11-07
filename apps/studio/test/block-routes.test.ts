@@ -993,6 +993,69 @@ describe('POST /api/blocks with a runFlow step', () => {
   });
 });
 
+describe('POST /api/blocks leading back to its own new file', () => {
+  const runs = (file: string) => [{ kind: 'runFlow', file }];
+
+  it('refuses a runFlow of the file the block would get, and writes nothing', async () => {
+    const refused = await call('POST', '/api/blocks', { name: 'Loop', appId: APP, steps: runs('loop.yaml') });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.code).toBe('BAD_BLOCK');
+    expect(refused.body.error.message).toMatch(/run itself/);
+    expect(await folderFiles('blocks')).toEqual([]);
+  });
+
+  it('judges the numbered file the block would get when the plain name is taken', async () => {
+    await writeBlock('loop.yaml', '- launchApp\n');
+    const refused = await call('POST', '/api/blocks', { name: 'Loop', appId: APP, steps: runs('loop-2.yaml') });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.code).toBe('BAD_BLOCK');
+    expect(await blockFiles()).toEqual(['loop.yaml']);
+  });
+
+  it('accepts a runFlow of the file that is taken, as the new block gets another file', async () => {
+    await writeBlock('loop.yaml', '- launchApp\n');
+    const saved = await call('POST', '/api/blocks', { name: 'Loop', appId: APP, steps: runs('loop.yaml') });
+    expect(saved.status).toBe(200);
+    expect(saved.body.file).toBe('blocks/loop-2.yaml');
+    expect(await blockFiles()).toEqual(['loop-2.yaml', 'loop.yaml']);
+  });
+
+  it('refuses a loop through a block that runs the file the new block would get', async () => {
+    await writeBlock('b.yaml', '- runFlow: x.yaml\n');
+    const refused = await call('POST', '/api/blocks', { name: 'X', appId: APP, steps: runs('b.yaml') });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.code).toBe('BAD_BLOCK');
+    expect(await blockFiles()).toEqual(['b.yaml']);
+  });
+
+  it('answers an ordinary save with its file and writes it', async () => {
+    const saved = await call('POST', '/api/blocks', { name: 'Open settings', appId: APP, steps: [{ kind: 'launchApp' }] });
+    expect(saved.status).toBe(200);
+    expect(saved.body.file).toBe('blocks/open-settings.yaml');
+    expect(await blockFiles()).toEqual(['open-settings.yaml']);
+  });
+});
+
+describe('DELETE /api/blocks/detail of a block run by a broken block', () => {
+  it('answers 409 BLOCK_IN_USE naming the broken block, keeps the file, and lists it in usedBy', async () => {
+    await writeBlock('login.yaml', '- launchApp\n');
+    await writeBlock('morning.yaml', '- runFlow: login.yaml\n- runFlow: missing.yaml\n', 'name: Morning\n');
+    const store = await ProjectStore.open(dir);
+    const morning = (await store.listBlocks()).find((block) => block.file === 'blocks/morning.yaml');
+    expect(morning?.outline).toBeUndefined();
+
+    const refused = await call('DELETE', '/api/blocks/detail?file=blocks/login.yaml');
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('BLOCK_IN_USE');
+    // A broken block is listed by its file name, as it has no readable name.
+    expect(refused.body.error.message).toContain('morning');
+    expect(await blockFiles()).toEqual(['login.yaml', 'morning.yaml']);
+
+    const detail = await call('GET', '/api/blocks/detail?file=blocks/login.yaml');
+    expect(detail.body.usedBy).toEqual(['morning']);
+  });
+});
+
 /**
  * Holds the device queue with a screen refresh that waits on the fake's capture.
  * Whatever is sent while it is held queues up behind it, in the order sent.
@@ -1102,6 +1165,25 @@ describe('requests that overlap', () => {
       expect(saved!.status).toBe(404);
       expect(saved!.body.error.code).toBe('UNKNOWN_BLOCK');
       expect(await blockFiles()).toEqual([]);
+    });
+  });
+
+  describe('two new blocks with the same name', () => {
+    it('both save, each to a file of its own', async () => {
+      await openSession();
+      const send = () => call('POST', '/api/blocks', { name: 'Same', appId: APP, steps: [{ kind: 'launchApp' }] });
+      const answers = await sendQueued([send, send]);
+      expect(statusesOf(answers)).toEqual([200, 200]);
+      expect(answers.map((answer) => answer.body.file).sort()).toEqual(['blocks/same-2.yaml', 'blocks/same.yaml']);
+      expect(await blockFiles()).toEqual(['same-2.yaml', 'same.yaml']);
+    });
+
+    it('both save when sent at once', async () => {
+      const send = () => call('POST', '/api/blocks', { name: 'Same', appId: APP, steps: [{ kind: 'launchApp' }] });
+      const answers = await Promise.all([send(), send()]);
+      expect(statusesOf(answers)).toEqual([200, 200]);
+      expect(new Set(answers.map((answer) => answer.body.file)).size).toBe(2);
+      expect(await blockFiles()).toHaveLength(2);
     });
   });
 

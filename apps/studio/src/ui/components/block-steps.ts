@@ -12,6 +12,8 @@ export type Field = {
   value: string;
   /** A regular expression someone wrote by hand. It stays as it is until someone types over it. */
   pattern?: boolean;
+  /** A setting's name is being typed here, unlike one read from a file, which stays exactly as it is. */
+  typing?: boolean;
 };
 
 export type DraftStep = {
@@ -102,8 +104,8 @@ export function draftStep(step: MaestroStep): DraftStep {
   return { key: ++lastKey, step, ...(field ? { field } : {}) };
 }
 
-/** A trailing "_" is only a name still being typed. */
-const settingReference = (field: Field) => reference(field.value.replace(/_+$/, ''));
+/** A trailing "_" in a name being typed is only the next word to come; in a file it is part of the name, and cases pass it. */
+const settingReference = (field: Field) => reference(field.typing ? field.value.replace(/_+$/, '') : field.value);
 
 const fieldText = (field: Field) => (field.mode === 'setting' ? settingReference(field) : field.value);
 

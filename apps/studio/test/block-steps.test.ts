@@ -139,9 +139,56 @@ describe('settings in a field', () => {
     expect(buildStep(typed)).toEqual(tap(text('${BUTTON}')));
   });
 
-  it('drops trailing underscores from a setting name when it is written', () => {
-    const draft: DraftStep = { ...draftStep(type('')), field: { mode: 'setting', value: 'EMAIL__' } };
+  it('drops trailing underscores from a setting name that is being typed when it is written', () => {
+    const draft: DraftStep = { ...draftStep(type('')), field: { mode: 'setting', value: 'EMAIL__', typing: true } };
     expect(buildStep(draft)).toEqual(type('${EMAIL}'));
+  });
+
+  it('drops trailing underscores from a setting name being typed in a text selector', () => {
+    const draft: DraftStep = { ...draftStep(tap(text(''))), field: { mode: 'setting', value: 'EMAIL_', typing: true } };
+    expect(buildStep(draft)).toEqual(tap(text('${EMAIL}')));
+  });
+
+  it('drops trailing underscores from a setting name being typed in an id selector', () => {
+    const draft: DraftStep = { ...draftStep(tap(id('${OLD}'))), field: { mode: 'setting', value: 'EMAIL_', typing: true } };
+    expect(buildStep(draft)).toEqual(tap(id('${EMAIL}')));
+  });
+
+  it.each<[string, MaestroStep]>([
+    ['an inputText', type('${EMAIL_}')],
+    ['a tapOn with a text selector', tap(text('${EMAIL_}'))],
+    ['a tapOn with an id selector', tap(id('${EMAIL_}'))],
+  ])('keeps the trailing underscore of a setting read from a file in %s', (_where, step) => {
+    const draft = draftStep(step);
+    expect(draft.field).toMatchObject({ mode: 'setting', value: 'EMAIL_' });
+    expect(draft.field?.typing).toBeFalsy();
+    expect(buildStep(draft)).toEqual(step);
+  });
+
+  it('is clean right after a block with a trailing underscore setting is opened', () => {
+    const detail: BlockDetail = { file: 'blocks/a.yaml', name: 'A', appId: 'com.x', steps: [type('${EMAIL_}'), tap(id('${EMAIL_}'))], fixed: [], usedBy: [], hasComments: false };
+    expect(isDirty(editFromDetail(detail))).toBe(false);
+  });
+
+  it('keeps the name read from a file when another step is changed', () => {
+    const detail: BlockDetail = { file: 'blocks/a.yaml', name: 'A', appId: 'com.x', steps: [type('${EMAIL_}'), tap(text('Go'))], fixed: [], usedBy: [], hasComments: false };
+    const edit = editFromDetail(detail);
+    const steps = [edit.steps[0]!, typedStep(edit.steps[1]!, { mode: 'text', value: 'Stop' })];
+    expect(buildSteps(steps)).toEqual([type('${EMAIL_}'), tap(text('Stop'))]);
+    expect(buildSteps([edit.steps[0]!, edit.steps[1]!])).toEqual([type('${EMAIL_}'), tap(text('Go'))]);
+  });
+
+  it('keeps the name read from a file when the block name is changed', () => {
+    const detail: BlockDetail = { file: 'blocks/a.yaml', name: 'A', appId: 'com.x', steps: [tap(id('${EMAIL_}'))], fixed: [], usedBy: [], hasComments: false };
+    const edit = { ...editFromDetail(detail), name: 'B' };
+    expect(isDirty(edit)).toBe(true);
+    expect(buildSteps(edit.steps)).toEqual([tap(id('${EMAIL_}'))]);
+  });
+
+  it('strips the underscore once someone types over the name read from a file', () => {
+    const draft = draftStep(type('${EMAIL_}'));
+    const typed = typedStep(draft, { mode: 'setting', value: 'EMAIL_', typing: true });
+    expect(buildStep(typed)).toEqual(type('${EMAIL}'));
   });
 
   it('writes an empty setting name as ${}', () => {

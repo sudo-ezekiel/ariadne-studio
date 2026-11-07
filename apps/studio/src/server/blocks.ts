@@ -65,6 +65,13 @@ async function checkedFlow(state: ServerState, header: Omit<MaestroFlow, 'steps'
   return { ...flow, steps: hideSavedValues(flow.steps, await projectEnv(state)) };
 }
 
+/** Recording can put any block in, and a block that leads back to itself would never end. */
+async function refuseLoop(state: ServerState, file: string, steps: readonly MaestroStep[]): Promise<void> {
+  if (await state.project.reachesBlock(file, steps)) {
+    throw new HttpError(400, 'BAD_BLOCK', 'A block cannot run itself, directly or through a block it runs. Remove the step that leads back to it.');
+  }
+}
+
 /** A chain of cases as one list of commands: each flow but the first begins by running the one before it. */
 function chainSteps(chain: readonly TestCase[], paths: FlowPaths): MaestroStep[] {
   return [...chain].reverse().flatMap((testCase, position) => caseToFlow(testCase, [], paths).steps.slice(position === 0 ? 0 : 1));
@@ -84,7 +91,9 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
       requireNoRecording(state);
       const flow = await checkedFlow(state, { appId, name }, steps);
       try {
-        return await savedBlock(state, await state.project.writeBlock(flow));
+        const file = await state.project.newBlockFile(name);
+        await refuseLoop(state, file, flow.steps);
+        return await savedBlock(state, await state.project.writeBlock(flow, file));
       } catch (error) {
         if (error instanceof HttpError) throw error;
         throw new HttpError(409, 'BAD_BLOCK', error instanceof Error ? error.message : String(error));
@@ -101,10 +110,7 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
       const block = await readBlock(state, request.query);
       const { appId, env } = ownFlow(block);
       const flow = await checkedFlow(state, { appId, name, ...(env ? { env } : {}) }, steps);
-      // Recording can put any block in, and a block that leads back to itself would never end.
-      if (await state.project.reachesBlock(block.file, flow.steps)) {
-        throw new HttpError(400, 'BAD_BLOCK', 'A block cannot run itself, directly or through a block it runs. Remove the step that leads back to it.');
-      }
+      await refuseLoop(state, block.file, flow.steps);
       await state.project.writeBlock(flow, block.file);
       return savedBlock(state, block.file);
     });

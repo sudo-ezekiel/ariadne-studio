@@ -70,7 +70,7 @@ function TargetField({ field, disabled, picking, pickOff, onChange, onPick }: Ta
           {field.mode === 'point' && <option value="point">A place on the screen</option>}
         </select>
         {field.mode === 'setting' ? (
-          <SettingName value={field.value} label="Setting name" disabled={disabled} onChange={(value) => onChange({ mode: 'setting', value })} />
+          <SettingName value={field.value} label="Setting name" disabled={disabled} onChange={(value) => onChange({ mode: 'setting', value, typing: true })} />
         ) : field.mode === 'point' ? (
           <span className="hint draft-point">Pick a named element if there is one: a place can miss on another phone.</span>
         ) : (
@@ -100,7 +100,7 @@ function TextField({ field, label, placeholder, disabled, onChange }: { field: F
         <option value="setting">A setting</option>
       </select>
       {field.mode === 'setting' ? (
-        <SettingName value={field.value} label="Setting name" disabled={disabled} onChange={(value) => onChange({ mode: 'setting', value })} />
+        <SettingName value={field.value} label="Setting name" disabled={disabled} onChange={(value) => onChange({ mode: 'setting', value, typing: true })} />
       ) : (
         <input aria-label={label} value={field.value} placeholder={placeholder} disabled={disabled} onChange={(event) => onChange({ mode: 'text', value: event.target.value })} />
       )}

@@ -415,13 +415,16 @@ export class ProjectStore {
         if (next === target) return true;
         if (seen.has(next)) continue;
         seen.add(next);
-        const outline = await readFile(next, 'utf8').then(parseBlockFlow).catch(() => undefined);
-        const nested = outline?.commands.flatMap((command) => (command.kind === 'step' ? [command.step] : [])) ?? [];
-        if (await follow(next, nested)) return true;
+        if (await follow(next, await readSteps(next))) return true;
       }
       return false;
     };
     return follow(target, steps);
+  }
+
+  /** Where a new block with this name would go, as a project path. */
+  async newBlockFile(name: string): Promise<string> {
+    return this.relative(await this.newBlockPath(name));
   }
 
   /** "Log in" -> blocks/log-in.yaml, then log-in-2.yaml. A file a case or a block runs is never reused. */
@@ -443,14 +446,14 @@ export class ProjectStore {
       if (preconditionBlocks.some((use) => use.file === file) || steps.some((step) => step.kind === 'block' && step.file === file)) cases.push(name);
     }
     const target = this.blockPath(file);
-    const blocks = (await this.listBlocks()).filter(
-      (block) =>
-        block.file !== file &&
-        block.outline?.commands.some(
-          (command) => command.kind === 'step' && command.step.kind === 'runFlow' && resolve(dirname(this.blockPath(block.file)), command.step.file) === target,
-        ),
-    );
-    return [...cases, ...blocks.map((block) => block.name)];
+    const blocks: string[] = [];
+    for (const block of await this.listBlocks()) {
+      if (block.file === file) continue;
+      // From the file itself: a block with another broken runFlow has no outline, and still runs this one.
+      const path = this.blockPath(block.file);
+      if ((await readSteps(path)).some((step) => step.kind === 'runFlow' && resolve(dirname(path), step.file) === target)) blocks.push(block.name);
+    }
+    return [...cases, ...blocks];
   }
 
   async listCases(): Promise<CaseSummary[]> {
@@ -718,6 +721,12 @@ export class ProjectStore {
     await writeFile(flowPath, yaml, 'utf8');
     return { flowPath, yaml };
   }
+}
+
+/** The steps of a flow file that Ariadne reads; none for a file it cannot. */
+async function readSteps(path: string): Promise<MaestroStep[]> {
+  const outline = await readFile(path, 'utf8').then(parseBlockFlow).catch(() => undefined);
+  return outline?.commands.flatMap((command) => (command.kind === 'step' ? [command.step] : [])) ?? [];
 }
 
 /** How deep runFlow files are followed when deciding whether a block needs Maestro. */

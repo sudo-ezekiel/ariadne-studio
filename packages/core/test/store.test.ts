@@ -507,6 +507,37 @@ describe('ProjectStore blocks written from the Blocks tab', () => {
     expect(await store.writeBlock(flowOf('Log in'))).toBe('blocks/log-in-3.yaml');
   });
 
+  it('says the project path a new block would get, and creates nothing', async () => {
+    const store = await ProjectStore.open(dir);
+    expect(await store.newBlockFile('Log in')).toBe('blocks/log-in.yaml');
+    expect(await readdir(join(dir, 'blocks'))).toEqual([]);
+  });
+
+  it('says the next free name when one is taken', async () => {
+    const store = await ProjectStore.open(dir);
+    await store.writeBlock(flowOf('Log in'));
+    expect(await store.newBlockFile('Log in')).toBe('blocks/log-in-2.yaml');
+    expect(await readdir(join(dir, 'blocks'))).toEqual(['log-in.yaml']);
+  });
+
+  it('says the file that writeBlock with no file then uses', async () => {
+    const store = await ProjectStore.open(dir);
+    await store.writeBlock(flowOf('Log in'));
+    await store.writeBlock(flowOf('Log in'));
+    const said = await store.newBlockFile('Log in');
+    expect(await store.writeBlock(flowOf('Log in'))).toBe(said);
+  });
+
+  it('says a path in the block folder outside the project in the form writeBlock answers', async () => {
+    const project = join(dir, 'repo', '.ariadne');
+    await mkdir(project, { recursive: true });
+    await writeFile(join(project, 'project.json'), JSON.stringify({ appId: 'com.example', platform: 'android', paths: { blocks: ['../.maestro/subflows'] } }));
+    const store = await ProjectStore.open(project);
+    const said = await store.newBlockFile('Log in');
+    expect(said).toBe('../.maestro/subflows/log-in.yaml');
+    expect(await store.writeBlock(flowOf('Log in'))).toBe(said);
+  });
+
   it('counts an existing .yml file as taken', async () => {
     const store = await ProjectStore.open(dir);
     await writeFile(join(dir, 'blocks', 'log-in.yml'), `${HEADER}- back\n`);
@@ -745,6 +776,29 @@ describe('ProjectStore blocks written from the Blocks tab', () => {
       await store.writeBlock(flowOf('Elsewhere', [{ kind: 'runFlow', file: 'other.yaml' }]));
       expect(await store.blockUsers('blocks/log-in.yaml')).toEqual(['Morning']);
       expect(await store.blockUsers('blocks/loop.yaml')).toEqual([]);
+    });
+
+    it('still lists a block that runs it and also a flow that is missing', async () => {
+      const store = await ProjectStore.open(dir);
+      await store.writeBlock(flowOf('Log in'));
+      await writeFile(join(dir, 'blocks', 'morning.yaml'), `appId: com.example\nname: Morning\n---\n- runFlow: log-in.yaml\n- runFlow: missing.yaml\n`);
+      // The broken block has no readable name, so it is listed by its file name.
+      expect(await store.blockUsers('blocks/log-in.yaml')).toEqual(['morning']);
+    });
+
+    it('still lists a block that runs it and also a flow that is not valid YAML', async () => {
+      const store = await ProjectStore.open(dir);
+      await store.writeBlock(flowOf('Log in'));
+      await writeFile(join(dir, 'blocks', 'garbled.yaml'), 'appId: [unclosed\n---\n- : : :\n');
+      await writeFile(join(dir, 'blocks', 'morning.yaml'), `appId: com.example\nname: Morning\n---\n- runFlow: log-in.yaml\n- runFlow: garbled.yaml\n`);
+      expect(await store.blockUsers('blocks/log-in.yaml')).toEqual(['morning']);
+    });
+
+    it('does not list a block whose own file is not valid YAML, and does not throw', async () => {
+      const store = await ProjectStore.open(dir);
+      await store.writeBlock(flowOf('Log in'));
+      await writeFile(join(dir, 'blocks', 'garbled.yaml'), 'appId: [unclosed\n---\n- runFlow: log-in.yaml\n- : : :\n');
+      await expect(store.blockUsers('blocks/log-in.yaml')).resolves.toEqual([]);
     });
 
     it('is empty for a block nothing uses', async () => {
