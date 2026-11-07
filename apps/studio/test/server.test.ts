@@ -365,6 +365,7 @@ describe('studio server', () => {
           settable: ['PASSWORD', 'USERNAME'],
           clearsAppData: true,
           runsWith: 'agent-device',
+          editable: true,
         },
       ]);
     });
@@ -391,7 +392,7 @@ describe('studio server', () => {
       expect(blocks.map((block) => block.file)).toEqual(['blocks/login.yaml', 'blocks/plain.yaml']);
       expect(blocks[0]).toMatchObject({ variables: ['PASSWORD', 'USERNAME'] });
       expect(blocks[0]).not.toHaveProperty('missingVariables');
-      expect(blocks[1]).toEqual({ file: 'blocks/plain.yaml', name: 'plain', stepCount: 2, steps: ['Start the app', 'Press Back'], runsWith: 'agent-device' });
+      expect(blocks[1]).toEqual({ file: 'blocks/plain.yaml', name: 'plain', stepCount: 2, steps: ['Start the app', 'Press Back'], runsWith: 'agent-device', editable: true });
     });
 
     it('counts a variable as set by .env, by project.json env or by the block header env', async () => {

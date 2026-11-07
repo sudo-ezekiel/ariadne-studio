@@ -8,6 +8,7 @@ import {
   isSecretName,
   matchingTestUser,
   normalizeValues,
+  passwordSetting,
   reference,
   referencedKey,
   resolveValues,
@@ -382,5 +383,27 @@ describe('resolveValues', () => {
 
   it('leaves text that merely looks like a reference alone', () => {
     expect(resolveValues({ USERNAME: 'x${SUPERVISOR_USERNAME}' }, env)).toEqual({ USERNAME: 'x${SUPERVISOR_USERNAME}' });
+  });
+});
+
+describe('passwordSetting', () => {
+  it('is PASSWORD when no saved value looks like a password', () => {
+    expect(passwordSetting([])).toBe('PASSWORD');
+    expect(passwordSetting(['EMAIL', 'API_TOKEN'])).toBe('PASSWORD');
+  });
+
+  it('is the saved value with PASS in its name, in any case', () => {
+    expect(passwordSetting(['EMAIL', 'ADMIN_PASSCODE'])).toBe('ADMIN_PASSCODE');
+    expect(passwordSetting(['admin_Passcode'])).toBe('admin_Passcode');
+  });
+
+  it('is the first in sort order when several fit', () => {
+    expect(passwordSetting(['USER_PASSWORD', 'ADMIN_PASSWORD', 'PASSWORD'])).toBe('ADMIN_PASSWORD');
+  });
+
+  it('does not change the list it is given', () => {
+    const keys = ['USER_PASSWORD', 'ADMIN_PASSWORD'];
+    passwordSetting(keys);
+    expect(keys).toEqual(['USER_PASSWORD', 'ADMIN_PASSWORD']);
   });
 });

@@ -38,7 +38,7 @@ function Variables({ block }: { block: BlockSummary }) {
       {missing.length > 0 && (
         <span className="piece-missing">
           {' '}
-          ({missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not set yet; ask a developer)
+          ({missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not set yet; save a value in the Blocks tab)
         </span>
       )}
     </div>
@@ -84,8 +84,7 @@ export function BlockPalette({ blocks, lockedReason, warnClears, addLabel = 'Add
   if (blocks.length === 0) {
     return (
       <p className="empty palette-empty">
-        No blocks in this project yet. A developer adds them as Maestro files in <code>blocks/</code> (or the folders{' '}
-        <code>paths.blocks</code> names in project.json), for example a log in that every case can start with.
+        No blocks in this project yet. Write one in the Blocks tab, for example a log in that every case can start with.
       </p>
     );
   }

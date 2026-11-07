@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { makeCaseId, makeRunId, makeSuiteId, parseDotEnv, PROJECT_GITIGNORE, ProjectStore, resolveProjectPaths } from '../src/project/store.ts';
+import type { MaestroFlow, MaestroStep } from '../src/maestro/model.ts';
 import type { TestCase } from '../src/recorder/case-types.ts';
 import { caseToFlow, Recorder } from '../src/recorder/recorder.ts';
 import type { RunSummary } from '../src/replay/run-result.ts';
@@ -414,6 +415,32 @@ describe('ProjectStore with paths beside a Maestro workspace', () => {
     expect(() => store.blockPath('../.maestro/subflows-other/x.yaml')).toThrow(/outside the project/);
   });
 
+  it('points a new block at another block from the first block folder', async () => {
+    const store = await openWithPaths({ blocks: ['../.maestro/subflows', 'blocks'] });
+    const paths = store.blockFlowPaths();
+    expect(paths.runFlowFile('../.maestro/subflows/login.yaml')).toBe('login.yaml');
+    expect(paths.runFlowFile('../.maestro/subflows/more/deep.yaml')).toBe('more/deep.yaml');
+    // A block in a later folder is reached through the project, which sits beside the first folder's parent.
+    expect(paths.runFlowFile('blocks/own.yaml')).toBe('../../.ariadne/blocks/own.yaml');
+  });
+
+  it('points a saved block at another block from the folder of that block, even one outside the project', async () => {
+    const store = await openWithPaths({ blocks: ['../.maestro/subflows', 'blocks'] });
+    expect(store.blockFlowPaths('../.maestro/subflows/login.yaml').runFlowFile('blocks/own.yaml')).toBe('../../.ariadne/blocks/own.yaml');
+    expect(store.blockFlowPaths('blocks/own.yaml').runFlowFile('../.maestro/subflows/login.yaml')).toBe('../../.maestro/subflows/login.yaml');
+    expect(store.blockFlowPaths('blocks/own.yaml').runFlowFile('blocks/other.yaml')).toBe('other.yaml');
+  });
+
+  it('refuses a block path outside the project and its block folders', async () => {
+    const store = await openWithPaths({ blocks: ['blocks'] });
+    expect(() => store.blockFlowPaths('../../etc/x.yaml')).toThrow(/outside the project/);
+  });
+
+  it('falls back to the project folder when project.json lists no block folders', async () => {
+    const store = await openWithPaths({ blocks: [] });
+    expect(store.blockFlowPaths().runFlowFile('blocks/login.yaml')).toBe('blocks/login.yaml');
+  });
+
   it('writes case flows to the flows folder with runFlow paths relative to it, and nothing else there', async () => {
     const store = await openWithPaths({ blocks: ['../.maestro/subflows', 'blocks'], flows: '../.maestro/recorded' });
     const testCase: TestCase = {
@@ -462,6 +489,138 @@ describe('ProjectStore with paths beside a Maestro workspace', () => {
     expect(byName.get('loop')).toMatchObject({ runsWith: 'agent-device' });
     expect(byName.get('missing')!.error).toMatch(/nowhere\.yaml, which does not exist/);
     expect(byName.get('variable')).toMatchObject({ runsWith: 'maestro', outline: { maestroOnly: ['runFlow ${FLOW}.yaml'] } });
+  });
+});
+
+describe('ProjectStore blocks written from the Blocks tab', () => {
+  const HEADER = 'appId: com.example\n---\n';
+  const flowOf = (name: string, steps: MaestroStep[] = [{ kind: 'launchApp' }, { kind: 'tapOn', selector: { kind: 'text', value: 'Log in' } }]): MaestroFlow => ({
+    appId: 'com.example',
+    name,
+    steps,
+  });
+
+  it('names a new block file after the block, and numbers the next one with the same name', async () => {
+    const store = await ProjectStore.open(dir);
+    expect(await store.writeBlock(flowOf('Log in'))).toBe('blocks/log-in.yaml');
+    expect(await store.writeBlock(flowOf('Log in'))).toBe('blocks/log-in-2.yaml');
+    expect(await store.writeBlock(flowOf('Log in'))).toBe('blocks/log-in-3.yaml');
+  });
+
+  it('counts an existing .yml file as taken', async () => {
+    const store = await ProjectStore.open(dir);
+    await writeFile(join(dir, 'blocks', 'log-in.yml'), `${HEADER}- back\n`);
+    expect(await store.writeBlock(flowOf('Log in'))).toBe('blocks/log-in-2.yaml');
+    expect(await readFile(join(dir, 'blocks', 'log-in.yml'), 'utf8')).toBe(`${HEADER}- back\n`);
+  });
+
+  it('falls back to block.yaml when the name has no letters or digits a file name can keep', async () => {
+    const store = await ProjectStore.open(dir);
+    expect(await store.writeBlock(flowOf('Σύνδεση'))).toBe('blocks/block.yaml');
+    expect(await store.writeBlock(flowOf('Σύνδεση'))).toBe('blocks/block-2.yaml');
+  });
+
+  it('writes to the first block folder and creates it when it is outside the project', async () => {
+    const project = join(dir, 'repo', '.ariadne');
+    await mkdir(project, { recursive: true });
+    await writeFile(join(project, 'project.json'), JSON.stringify({ appId: 'com.example', platform: 'android', paths: { blocks: ['../.maestro/subflows', 'blocks'] } }));
+    const store = await ProjectStore.open(project);
+    expect(await store.writeBlock(flowOf('Log in'))).toBe('../.maestro/subflows/log-in.yaml');
+    expect(await readdir(join(dir, 'repo', '.maestro', 'subflows'))).toEqual(['log-in.yaml']);
+    expect(await readdir(join(project, 'blocks'))).toEqual([]);
+  });
+
+  it('refuses to write a new block when project.json lists no block folders', async () => {
+    const project = join(dir, 'nofolders');
+    await mkdir(project, { recursive: true });
+    await writeFile(join(project, 'project.json'), JSON.stringify({ appId: 'com.example', platform: 'android', paths: { blocks: [] } }));
+    const store = await ProjectStore.open(project);
+    await expect(store.writeBlock(flowOf('Log in'))).rejects.toThrow(/no block folders/);
+  });
+
+  it('reads back through listBlocks with the same name and steps', async () => {
+    const store = await ProjectStore.open(dir);
+    const steps: MaestroStep[] = [
+      { kind: 'launchApp', clearState: true },
+      { kind: 'tapOn', selector: { kind: 'text', value: 'Display \\(beta\\)' } },
+      { kind: 'inputText', text: '${EMAIL}' },
+      { kind: 'wait', seconds: 3 },
+    ];
+    const file = await store.writeBlock(flowOf('Log in', steps));
+    const block = (await store.listBlocks()).find((candidate) => candidate.file === file);
+    expect(block?.name).toBe('Log in');
+    expect(block?.outline?.ownFlow?.steps).toEqual(steps);
+    expect(block?.outline?.ownFlow?.appId).toBe('com.example');
+  });
+
+  it('lists a block with a wait step as run by Maestro with no flow, yet keeps ownFlow so it can be edited', async () => {
+    const store = await ProjectStore.open(dir);
+    const steps: MaestroStep[] = [{ kind: 'launchApp' }, { kind: 'wait', seconds: 3 }];
+    await store.writeBlock(flowOf('Pause', steps));
+    const [block] = await store.listBlocks();
+    expect(block!.runsWith).toBe('maestro');
+    expect(block!.flow).toBeUndefined();
+    expect(block!.outline?.ownFlow?.steps).toEqual(steps);
+  });
+
+  it('keeps ownFlow for a block that runs a file with a wait, but not for one with runScript', async () => {
+    const store = await ProjectStore.open(dir);
+    await store.writeBlock(flowOf('Pause', [{ kind: 'wait', seconds: 3 }]));
+    await store.writeBlock(flowOf('Outer', [{ kind: 'runFlow', file: 'pause.yaml' }]));
+    await writeFile(join(dir, 'blocks', 'scripted.yaml'), `${HEADER}- launchApp\n- runScript: setup.js\n`);
+    const byName = new Map((await store.listBlocks()).map((block) => [block.name, block]));
+    expect(byName.get('Outer')).toMatchObject({ runsWith: 'maestro' });
+    expect(byName.get('Outer')!.outline?.ownFlow?.steps).toEqual([{ kind: 'runFlow', file: 'pause.yaml' }]);
+    expect(byName.get('scripted')).toMatchObject({ runsWith: 'maestro' });
+    expect(byName.get('scripted')!.outline?.ownFlow).toBeUndefined();
+  });
+
+  it('overwrites the file it is given and returns that path', async () => {
+    const store = await ProjectStore.open(dir);
+    const file = await store.writeBlock(flowOf('Log in'));
+    expect(await store.writeBlock(flowOf('Sign in', [{ kind: 'back' }]), file)).toBe(file);
+    expect(await readdir(join(dir, 'blocks'))).toEqual(['log-in.yaml']);
+    const [block] = await store.listBlocks();
+    expect(block).toMatchObject({ file, name: 'Sign in' });
+    expect(block!.outline?.ownFlow?.steps).toEqual([{ kind: 'back' }]);
+  });
+
+  it('removes a deleted block from the folder and from the list', async () => {
+    const store = await ProjectStore.open(dir);
+    const file = await store.writeBlock(flowOf('Log in'));
+    await store.deleteBlock(file);
+    expect(await readdir(join(dir, 'blocks'))).toEqual([]);
+    expect(await store.listBlocks()).toEqual([]);
+  });
+
+  describe('blockUsers', () => {
+    it('finds a case by its setup blocks and another by a block step', async () => {
+      const store = await ProjectStore.open(dir);
+      await store.writeBlock(flowOf('Log in'));
+      await store.writeCase(testCase('uses-precondition', { name: 'Precondition case', preconditionBlocks: [{ file: 'blocks/log-in.yaml' }] }));
+      await store.writeCase(
+        testCase('uses-step', { name: 'Step case', steps: [{ index: 1, kind: 'block', file: 'blocks/log-in.yaml', at: '2026-10-30T17:12:00.000Z' }] }),
+      );
+      await store.writeCase(testCase('unrelated', { name: 'Other case', preconditionBlocks: [{ file: 'blocks/other.yaml' }] }));
+      expect((await store.blockUsers('blocks/log-in.yaml')).sort()).toEqual(['Precondition case', 'Step case']);
+    });
+
+    it('finds another block that runs it with a relative runFlow, and not the block itself', async () => {
+      const store = await ProjectStore.open(dir);
+      await store.writeBlock(flowOf('Log in'));
+      await store.writeBlock(flowOf('Morning', [{ kind: 'runFlow', file: 'log-in.yaml' }, { kind: 'back' }]));
+      await store.writeBlock(flowOf('Loop', [{ kind: 'runFlow', file: 'loop.yaml' }]));
+      await store.writeBlock(flowOf('Elsewhere', [{ kind: 'runFlow', file: 'other.yaml' }]));
+      expect(await store.blockUsers('blocks/log-in.yaml')).toEqual(['Morning']);
+      expect(await store.blockUsers('blocks/loop.yaml')).toEqual([]);
+    });
+
+    it('is empty for a block nothing uses', async () => {
+      const store = await ProjectStore.open(dir);
+      await store.writeBlock(flowOf('Log in'));
+      await store.writeCase(testCase('plain'));
+      expect(await store.blockUsers('blocks/log-in.yaml')).toEqual([]);
+    });
   });
 });
 

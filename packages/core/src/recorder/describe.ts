@@ -30,6 +30,8 @@ function readableId(id: string): string {
 
 /** How a person refers to the element: "System" in quotes, or the id's readable tail. */
 export function elementName(selector: MaestroSelector): string {
+  const setting = selector.kind === 'point' ? null : ENV_PLACEHOLDER.exec(selector.value);
+  if (setting) return `the element the ${setting[1]} setting names`;
   switch (selector.kind) {
     case 'text': {
       const nth = selector.index === undefined ? '' : ` (number ${selector.index + 1} on screen)`;

@@ -5,6 +5,23 @@ All notable changes to Ariadne Studio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Blocks** tab: write, edit, try and delete setup blocks in a form, with no YAML and no developer.
+  A step's element can be picked on the screen, and any text in a step can be a setting that each
+  case chooses. A block written here is an ordinary Maestro file in `blocks/`.
+- **Record steps** fills a block by using the app, with the same end checks as a case. A password
+  typed into a password field is not kept: its step becomes a setting.
+- **Save as block** opens a saved case in the form as a new block. A case it starts from is written
+  out in full, so the block stands alone.
+
+### Changed
+
+- The studio no longer says to ask a developer about a block's missing values. Save them under
+  **Settings** in the Blocks tab.
+
 ## [0.1.1] - 2026-11-06
 
 ### Added

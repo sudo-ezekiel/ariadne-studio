@@ -64,9 +64,10 @@ The case header has:
 - **Rename**.
 - **Duplicate**, which saves a copy as "`<name>` (copy)".
 - **Mute**: Run all skips muted cases. The button then reads **Unmute**.
+- **Save as block**: opens the steps in the [Blocks tab](/guides/setup-blocks#save-a-case-as-a-block), to reuse them in other cases.
 - **Delete**.
 
-Setup blocks in a case are edited as Maestro YAML files, in your editor.
+Setup blocks are edited in the [Blocks tab](/guides/setup-blocks#edit-or-delete-a-block), and a change reaches every case that uses them.
 
 ## What an edit does to history
 

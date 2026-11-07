@@ -1,6 +1,6 @@
 # Spec: BA recorder for Maestro flows
 
-Status: decided design for Milestones 1 to 7. Section 16 lists what comes later.
+Status: decided design for Milestones 1 to 8. Section 17 lists what comes later.
 Product name: Ariadne (decided 2026-11-02). Branding, colours and the words the studio uses are in docs/brand.md; where this spec says Open/Close, Start case, Expect and Replay, the studio now says Connect/Disconnect, Start recording, Check and Run.
 Owner: Ezekiel. Written 2026-10-30.
 
@@ -769,7 +769,52 @@ app can log the same line, and marking a real failure as a device problem would 
 case health. Only Xiaomi and Samsung have been tried; the other notes in the install guide are
 from other tools' docs and user reports.
 
-## 16. Later
+## 16. Milestone 8: writing blocks in the studio
+
+Built 2026-11-07. A BA writes a setup block in the Blocks tab, so a log in no longer waits on a
+developer. Tested on an emulator: picked an element, saved, tried, and ran a case through Maestro
+with a setting as a tap target and its own values.
+
+The file format does not change. The form saves a Maestro flow to the first folder of
+`paths.blocks`, so a block from the form and one from an editor are the same thing to everything
+else: the palette, the stack, `runFlow`, CI. `server/blocks.ts` holds the routes.
+
+- A block is editable when Ariadne's parser reads the whole file (`BlockOutline.ownFlow`). That is
+  wider than `flow`, which goes away when a Wait or a key sends the block to Maestro.
+- `ui/components/block-steps.ts` is the only place that converts between what a form field shows
+  and what Maestro reads: a person sees "Display (beta)", the file holds `Display \(beta\)`, and a
+  setting is `${NAME}`. A hand-written regular expression stays as it is until someone types over it.
+- A step the form has no fields for is kept and can be moved or removed.
+- Saving goes through `toMaestroYaml` and back through `parseMaestroFlow`, so nothing is saved that
+  would not read as a block. `shared/block-check.ts` holds the rules the UI and the server share.
+- Secrets. Typed text equal to a saved value is saved as `${KEY}`. Plain text after a tap on a field
+  picked as a password field stops the save; plain text after a tap on something named like a
+  password only warns, because the name check also matches "Shopping".
+- Pick on the screen is `POST /api/screen/pick`: it resolves a click the way a tap does and presses
+  nothing. Taps on the mirror still work outside a recording, so a BA walks to the screen first.
+- Try on the device runs from the current screen and records nothing. A block with a Wait goes
+  through `runPrefixWithMaestro`, like any block that needs Maestro.
+- A setting's default goes to `.env`, never to the block's own `env:` header, which would stop cases
+  from setting it (see `recorder/block-values.ts`).
+- Delete refuses a block a case or another block uses, as deleting a case with dependents does.
+
+Both other ways into the form go through `caseToFlow`, so recorded steps and hand-added steps are
+the same thing by the time the form sees them:
+
+- Record steps (`POST /api/blocks/record`) is an ordinary `Recorder` with `state.recordingBlock` set,
+  so every action route, Use the phone and the end checks work unchanged. It differs from a case in
+  three ways. It starts from the current screen with no relaunch, because a block can run in the
+  middle of a case. It ends in `POST /api/blocks/record/finish`, which drops the leading `launchApp`,
+  deletes the evidence and saves no case. And typing into a password field records the setting
+  instead of refusing: a case needs a real value to run, while a block only needs the name, and each
+  case gives the value. `POST /api/case/finish` refuses such a recording, so it cannot become a case.
+- Save as block (`GET /api/cases/:caseId/block-draft`) flattens `startFrom` into one list, because a
+  block must not depend on a generated flow. It opens unsaved, so details can become settings first.
+- Paths in a block are relative to the block's folder, not the flows folder (`blockFlowPaths`).
+- A block cannot run itself: Run a setup block now can put any block into a recording, so saving
+  refuses a `runFlow` of its own file.
+
+## 17. Later
 
 AI cleanup pass (step titles, selector hardening) with an explicit opt-in and key; voice
 narration aligned to steps; iOS simulator through the same agent-device API on macOS;
@@ -777,7 +822,7 @@ signed macOS and Windows desktop builds (the Electron app and the npm package ex
 2026-11-03, Linux tested end to end, Windows built and run under Wine); CI recipe with Maestro's `--format junit`; Maestro
 `assertScreenshot` as an opt-in hard check for screens that must not change.
 
-## 17. Conventions
+## 18. Conventions
 
 - No em dash character anywhere in code, comments, docs or commit messages. Use a comma,
   colon, or parentheses.

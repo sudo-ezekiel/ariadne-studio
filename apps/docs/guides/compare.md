@@ -24,7 +24,7 @@ Waldo works differently. Its [documentation](https://docs.tricentis.com/waldo/co
 
 - A business analyst or product manager should record the tests, with no YAML to write.
 - You want a screenshot after every step beside the recorded one, a flaky tag from Run all, and a [test case document](/guides/test-case-documents) in Excel, HTML or Markdown.
-- A case should start where another ends, or from a [setup block](/guides/setup-blocks) a developer wrote once.
+- A case should start where another ends, or from a [setup block](/guides/setup-blocks) written once.
 - Tests have to stay on your machine and in your repository. Ariadne [uploads nothing](/guides/if-you-know-maestro#privacy).
 
 ## Choose Maestro Studio when

@@ -4,6 +4,8 @@ import { scrollTargets } from '@ariadne/core/flow-layout';
 import type { BlockUse, ExpectationCandidate } from '@ariadne/core/types';
 import type { CaseDetailResponse, CaseFinishResponse, CurrentCaseView, EditRequest, FileContent, ProjectInfo, SuiteView } from '../../shared/api-types.ts';
 import { BlockDropSlot, BlockPalette, SetupStack, SetupSummary } from './Blocks.tsx';
+import type { BlockEdit } from './block-steps.ts';
+import { BlocksTab, type BlockTabActions } from './BlocksTab.tsx';
 import { CaseDetail, kindLabel, type CaseActions } from './CaseDetail.tsx';
 import { ExpectationPicker } from './ExpectationPicker.tsx';
 import { FileView } from './FilesPanel.tsx';
@@ -11,7 +13,7 @@ import { CheckIcon, CrossIcon, PuzzleIcon } from './Icons.tsx';
 import { caseTree, SavedCases } from './SavedCases.tsx';
 import { count, isFragile, stepSelector, stepText } from './format.ts';
 
-export type PanelTab = 'record' | 'cases' | 'file';
+export type PanelTab = 'record' | 'cases' | 'blocks' | 'file';
 
 /** The new case being put together in the Record tab: its name and what runs before recording. */
 export type Draft = { name: string; startFrom: string; blocks: BlockUse[] };
@@ -55,6 +57,11 @@ type Props = {
   onRunAll: (retryFailed: boolean) => void;
   onStopSuite: () => void;
   caseActions: Omit<CaseActions, 'onClose' | 'onReplay' | 'onEdit'> & { onEdit: (caseId: string, edit: EditRequest) => void };
+  /** The block being written in the Blocks tab. */
+  blockEdit: BlockEdit | null;
+  /** The step of that block whose target is being picked on the screen. */
+  pickingKey: number | null;
+  blockActions: BlockTabActions;
 };
 
 function Recording({
@@ -87,9 +94,10 @@ function Recording({
         </span>
       </h2>
       <div className="case-meta">
-        {currentCase.id} / {currentCase.appId} on {currentCase.deviceId}
+        {currentCase.forBlock ? 'Block' : currentCase.id} / {currentCase.appId} on {currentCase.deviceId}
       </div>
-      {!editing && (
+      {currentCase.forBlock && <p className="editing-note">Finish recording adds these steps to the block, and you can turn details into settings there. Discard leaves the block as it was.</p>}
+      {!editing && !currentCase.forBlock && (
         <SetupSummary blocks={project?.blocks ?? []} lane={currentCase.preconditionBlocks} startFromName={startFromName} appId={currentCase.appId} />
       )}
       {editing && (
@@ -138,6 +146,7 @@ function Recording({
         <ExpectationPicker
           candidates={picking.candidates}
           {...(picking.preselected ? { preselected: picking.preselected } : {})}
+          {...(currentCase.forBlock ? { saveLabel: 'Add to block' } : {})}
           busy={busy}
           onSave={props.onSavePicks}
           onCancel={props.onCancelPick}
@@ -254,7 +263,7 @@ function Composer({
       </div>
 
       <h3>Setup blocks</h3>
-      <p className="hint section-hint">Steps a developer prepared, such as logging in. Drag one into "Before recording", or press Add.</p>
+      <p className="hint section-hint">Steps to reuse, such as logging in. Drag one into "Before recording", or press Add. Write your own in the Blocks tab.</p>
       <BlockPalette
         blocks={blocks}
         lockedReason={startFrom ? 'This case starts from another case, which runs its own setup blocks' : busy ? 'Wait for the studio to finish' : undefined}
@@ -299,6 +308,18 @@ export function CasePanel(props: Props) {
   let body;
   if (tab === 'file' && openedFile) {
     body = <FileView file={openedFile} />;
+  } else if (tab === 'blocks') {
+    body = (
+      <BlocksTab
+        blocks={project?.blocks ?? []}
+        edit={props.blockEdit}
+        envKeys={project?.envKeys ?? []}
+        busy={busy}
+        sessionOpen={sessionOpen}
+        pickingKey={props.pickingKey}
+        actions={props.blockActions}
+      />
+    );
   } else if (tab === 'record') {
     body = currentCase ? (
       <Recording
@@ -381,6 +402,17 @@ export function CasePanel(props: Props) {
           title={recording ? 'Finish or discard the recording first' : undefined}
         >
           Cases <span className="tab-count">{caseCount}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'blocks'}
+          className={tab === 'blocks' ? 'tab-on' : ''}
+          onClick={() => props.onTabChange('blocks')}
+          disabled={recording}
+          title={recording ? 'Finish or discard the recording first' : undefined}
+        >
+          Blocks <span className="tab-count">{project?.blocks.length ?? 0}</span>
         </button>
         {openedFile && (
           <span className="tab-file">

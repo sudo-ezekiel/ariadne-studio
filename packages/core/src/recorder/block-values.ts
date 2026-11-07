@@ -34,6 +34,11 @@ export function reference(key: string): string {
   return `\${${key}}`;
 }
 
+/** What a password typed while recording is written as: the saved value that looks like one, or PASSWORD. */
+export function passwordSetting(keys: readonly string[]): string {
+  return [...keys].sort().find((key) => /pass/i.test(key)) ?? 'PASSWORD';
+}
+
 /** "SUPERVISOR" -> "Supervisor", "AGENT_MARIA" -> "Agent Maria". */
 function label(prefix: string): string {
   return prefix

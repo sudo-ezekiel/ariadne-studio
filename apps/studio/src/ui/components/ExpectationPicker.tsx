@@ -9,12 +9,14 @@ type Props = {
   /** Ticked at first: the end expectations the case had before it was re-recorded. */
   preselected?: number[];
   busy: boolean;
+  /** What the main button says. */
+  saveLabel?: string;
   onSave: (picks: number[]) => void;
   onCancel: () => void;
 };
 
 /** Inline picker shown by Finish case: tick up to three things that must be visible at the end. */
-export function ExpectationPicker({ candidates, preselected, busy, onSave, onCancel }: Props) {
+export function ExpectationPicker({ candidates, preselected, busy, saveLabel = 'Save case', onSave, onCancel }: Props) {
   const [picked, setPicked] = useState<number[]>(() => (preselected ?? []).slice(0, MAX_PICKS));
 
   const toggle = (id: number) =>
@@ -50,7 +52,7 @@ export function ExpectationPicker({ candidates, preselected, busy, onSave, onCan
       )}
       <div className="case-actions">
         <button type="button" className="primary" onClick={() => onSave([...picked].sort((a, b) => a - b))} disabled={busy}>
-          Save case
+          {saveLabel}
         </button>
         <button type="button" onClick={onCancel} disabled={busy}>
           Cancel

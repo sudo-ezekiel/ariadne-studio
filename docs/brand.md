@@ -97,7 +97,7 @@ darkest surface, and lifts navy and the semantic colours so they read on dark pa
 Meaning of colour in the studio, in one line each. Green: it passed, or you are recording a
 check. Red: it failed, or this deletes something. Amber: look at this before trusting it.
 Ochre: this is the thread, where you are and what you are about to tap. Navy: the main
-thing to do on this screen. Violet: a setup block a developer wrote, never a recorded
+thing to do on this screen. Violet: a setup block, never a recorded
 step. Everything else is neutral.
 
 ## 4. Type and spacing
@@ -139,7 +139,9 @@ the code and the Maestro files still call things; the right column is what a per
 | Recording that something is visible | check; Check mode (the toggle is "Check"); end checks | Expect, expectation, assert |
 | Making a run pause at a point in a case | Wait | Sleep, delay, pause step |
 | Running a saved case with Maestro | Run; Run all; "Last run passed"; "Not run yet" | Replay |
-| A developer-written Maestro file that brings the app to a state | setup block (the Record tab lists them under "Setup blocks" and stacks the chosen ones under "Before recording"); "block" in developer docs | precondition, fixture, subflow |
+| A Maestro file that brings the app to a state | setup block (the Record tab lists them under "Setup blocks" and stacks the chosen ones under "Before recording"; the Blocks tab writes them); "block" in developer docs | precondition, fixture, subflow |
+| Choosing a step's target by clicking the screen | Pick on the screen | inspect, select element, locate |
+| Turning recorded steps into a block | Record steps, then Add to block; Save as block for a saved case | capture, import, convert |
 | Help with the emulator, the USB phone and the tools | Device setup; the dialog is "Set up a device" | config, settings, preferences |
 | A set of saved values a log in block runs with | test user ("Test user: Supervisor", "Add a test user...", "as Supervisor" in step rows) | profile, persona, credentials |
 | A block's `${KEY}` variables | settings; "Values" for blocks that are not about logging in | parameters, variables, env |

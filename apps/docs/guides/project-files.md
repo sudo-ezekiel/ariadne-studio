@@ -15,7 +15,7 @@ The project folder is `Documents/Ariadne` for the desktop app, the folder you na
 project.json          app id and settings
 .env                  saved values as KEY=VALUE; never committed
 .gitignore            .env, evidence/, runs/ and exports/; written into a new project folder
-blocks/               setup blocks: Maestro flows written by developers, such as login.yaml
+blocks/               setup blocks: Maestro flows from the Blocks tab or a text editor, such as login.yaml
 flows/<caseId>.yaml   one Maestro flow per case, regenerated on every save
 cases/<caseId>.json   the case itself: blocks, steps, selectors, element details, screenshot paths, end checks
 evidence/<caseId>/    step-001.png, step-002.png, ... taken after each recorded step

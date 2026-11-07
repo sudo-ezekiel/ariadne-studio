@@ -29,7 +29,7 @@ For recording tests without writing them, yes. As with Waldo, you record a test 
 
 ## Do I need to know YAML?
 
-No. A developer can write [setup blocks](/guides/setup-blocks) for you, and those are YAML, but recording, checking, running and exporting happen in the studio.
+No. Recording, checking, running and exporting happen in the studio, and so does writing [setup blocks](/guides/setup-blocks): they are YAML files, but the **Blocks** tab writes them from a form.
 
 ## Does Ariadne need the cloud?
 

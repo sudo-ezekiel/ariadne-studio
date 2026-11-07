@@ -20,7 +20,7 @@ A block's `${KEY}` variables are its settings, and a BA sets them per case in th
 
 Anything whose name looks like a secret (`PASS`, `PWD`, `SECRET`, `TOKEN`, `PIN`, `OTP`, `API_KEY`, `PRIVATE`) only takes saved values, and typed text that equals a saved value is stored as a reference to it.
 
-If a setting has no saved value, the row says so: "USERNAME is not saved yet, so the default user will not work."
+If a setting has no saved value, the row says so: "USERNAME is not saved yet, so the default user will not work." Save one under **Settings** when you edit the block in the **Blocks** tab.
 
 ## What the case stores
 

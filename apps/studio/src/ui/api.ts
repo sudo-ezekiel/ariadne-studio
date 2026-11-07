@@ -2,6 +2,10 @@ import type { ScrollDirection } from '@ariadne/core/types';
 import type {
   ActionResponse,
   ApiErrorBody,
+  BlockDetail,
+  BlockRecordingResponse,
+  BlockSaveRequest,
+  CaseBlockDraft,
   CaseBlockRequest,
   CandidatesResponse,
   CaseDetailResponse,
@@ -21,6 +25,7 @@ import type {
   ProjectInfo,
   RotateRequest,
   RunView,
+  ScreenPick,
   ScreenState,
   SessionInfo,
   SetupInfo,
@@ -57,6 +62,7 @@ async function request<T>(method: Method, url: string, body?: unknown): Promise<
   return data as T;
 }
 
+const blockUrl = (file: string) => `/api/blocks/detail?file=${encodeURIComponent(file)}`;
 const caseUrl = (caseId: string) => `/api/cases/${encodeURIComponent(caseId)}`;
 
 export type ExportFormat = 'md' | 'html' | 'xlsx';
@@ -92,6 +98,17 @@ export const api = {
     request<CaseStartResponse>('POST', '/api/case/start', { name, ...start }),
   runBlock: (use: CaseBlockRequest) => request<ActionResponse>('POST', '/api/case/block', use),
   addTestUser: (name: string, values: Record<string, string>) => request<ProjectInfo>('POST', '/api/project/test-users', { name, values }),
+  addSavedValues: (values: Record<string, string>) => request<ProjectInfo>('POST', '/api/project/saved-values', { values }),
+  blockDetail: (file: string) => request<BlockDetail>('GET', blockUrl(file)),
+  createBlock: (block: BlockSaveRequest) => request<BlockDetail>('POST', '/api/blocks', block),
+  saveBlock: (file: string, block: BlockSaveRequest) => request<BlockDetail>('PUT', blockUrl(file), block),
+  deleteBlock: (file: string) => request<{ ok: true }>('DELETE', blockUrl(file)),
+  tryBlock: (use: CaseBlockRequest) => request<ScreenState>('POST', '/api/blocks/try', use),
+  recordBlock: (name: string) => request<CaseStartResponse>('POST', '/api/blocks/record', { name }),
+  finishBlockRecording: (picks: number[], file: string | undefined) =>
+    request<BlockRecordingResponse>('POST', '/api/blocks/record/finish', file === undefined ? { picks } : { picks, file }),
+  caseBlockDraft: (caseId: string) => request<CaseBlockDraft>('GET', `${caseUrl(caseId)}/block-draft`),
+  pick: (x: number, y: number) => request<ScreenPick>('POST', '/api/screen/pick', { x, y }),
   candidates: () => request<CandidatesResponse>('GET', '/api/case/candidates'),
   finishCase: (picks: number[]) => request<CaseFinishResponse>('POST', '/api/case/finish', { picks }),
   discardCase: () => request<{ ok: true; restored?: boolean }>('POST', '/api/case/discard'),
