@@ -3,15 +3,32 @@
 // a setting's value to .env. The device is a fake that records what it was
 // asked to do; none of these tests reach a real phone.
 import { existsSync, mkdirSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { inspect } from 'node:util';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseMaestroFlow, type DeviceSnapshot, type OpenOptions, type Point, type TestCase } from '@ariadne/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProjectStore, parseMaestroFlow, type DeviceSnapshot, type OpenOptions, type Point, type TestCase } from '@ariadne/core';
 import type { BlockDetail, CandidatesResponse, ProjectInfo, ScreenPick } from '../src/shared/api-types.ts';
 import { buildServer } from '../src/server/index.ts';
 import type { DeviceLike } from '../src/server/state.ts';
+
+// Counts how often a request reaches the device queue, then does what enqueue
+// always does. The overlapping-request tests use the count to know a request is
+// waiting in the queue, instead of guessing with a timer.
+const queued = vi.hoisted(() => ({ count: 0, listeners: new Set<() => void>() }));
+vi.mock('../src/server/state.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/server/state.ts')>();
+  return {
+    ...original,
+    enqueue: <T>(...args: Parameters<typeof original.enqueue>) => {
+      queued.count += 1;
+      for (const listener of [...queued.listeners]) listener();
+      return original.enqueue(...args) as Promise<T>;
+    },
+  };
+});
 
 const APP = 'com.android.settings';
 const DEVICE = 'emulator-5556';
@@ -43,6 +60,12 @@ class FakeDevice implements DeviceLike {
   events: string[] = [];
   replays: Array<{ path: string; env: Record<string, string> }> = [];
   failReplay: Error | undefined;
+  /** Makes typeText throw, as a device does when the keyboard is gone. */
+  failType: Error | undefined;
+  /** Runs inside the next replay, so a test can look at the studio while a block is on the phone. */
+  onReplay: (() => Promise<void>) | undefined;
+  /** The next capture says it has started, then waits: that holds the queue so a test can line requests up behind it. */
+  holdNext: { entered: () => void; until: Promise<void> } | undefined;
 
   get isOpen() {
     return this.target !== undefined;
@@ -67,6 +90,12 @@ class FakeDevice implements DeviceLike {
     return { nodes: screens[this.screen], viewport: { width: 1080, height: 2400 }, takenAt: new Date().toISOString() };
   }
   async capture(screenshotPath: string) {
+    const hold = this.holdNext;
+    this.holdNext = undefined;
+    if (hold) {
+      hold.entered();
+      await hold.until;
+    }
     mkdirSync(dirname(screenshotPath), { recursive: true });
     await writeFile(screenshotPath, PNG);
     return { ...(await this.snapshot()), screenshotPath };
@@ -75,6 +104,7 @@ class FakeDevice implements DeviceLike {
     this.presses.push(`tap ${point.x},${point.y}`);
   }
   async typeText(text: string) {
+    if (this.failType) throw this.failType;
     this.presses.push(`type ${text}`);
   }
   async back() {
@@ -110,6 +140,7 @@ class FakeDevice implements DeviceLike {
   async replayFlow(path: string, env: Readonly<Record<string, string>>) {
     this.replays.push({ path, env: { ...env } });
     this.events.push(`replay ${basename(path)}`);
+    await this.onReplay?.();
     if (this.failReplay) throw this.failReplay;
     return { replayed: 1 };
   }
@@ -959,5 +990,439 @@ describe('POST /api/blocks with a runFlow step', () => {
     expect(refused.status).toBe(400);
     expect(refused.body.error.code).toBe('BAD_BLOCK');
     expect(await blockFiles()).toEqual([]);
+  });
+});
+
+/**
+ * Holds the device queue with a screen refresh that waits on the fake's capture.
+ * Whatever is sent while it is held queues up behind it, in the order sent.
+ */
+async function holdQueue() {
+  let release!: () => void;
+  let entered!: () => void;
+  const until = new Promise<void>((resolve) => { release = resolve; });
+  const inside = new Promise<void>((resolve) => { entered = resolve; });
+  device.holdNext = { entered, until };
+  const refresh = call('POST', '/api/screen/refresh');
+  await inside;
+  return { release, refresh };
+}
+
+/** How long to wait for a request to reach the queue or answer before calling the test broken. */
+const QUEUE_WAIT_MS = 10_000;
+
+/**
+ * Waits until the request has joined the queue (the count went up) or has
+ * already answered, as a request refused early never queues. Fails loudly
+ * instead of letting the next request go out in the wrong order.
+ */
+async function untilQueuedOrAnswered(before: number, answered: Promise<unknown>) {
+  let listener!: () => void;
+  let timer!: NodeJS.Timeout;
+  const joined = new Promise<void>((resolve) => {
+    listener = () => {
+      if (queued.count > before) resolve();
+    };
+    queued.listeners.add(listener);
+    listener();
+  });
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`A request neither reached the queue nor answered within ${QUEUE_WAIT_MS} ms`)), QUEUE_WAIT_MS);
+  });
+  try {
+    await Promise.race([joined, answered, timedOut]);
+  } finally {
+    queued.listeners.delete(listener);
+    clearTimeout(timer);
+  }
+}
+
+/** Sends the requests one after another without waiting for any answer, with the queue held until all are in it. */
+async function sendQueued(requests: Array<() => ReturnType<typeof call>>) {
+  const held = await holdQueue();
+  const pending: Array<ReturnType<typeof call>> = [];
+  for (const send of requests) {
+    const before = queued.count;
+    const answer = send();
+    pending.push(answer);
+    await untilQueuedOrAnswered(before, answer);
+  }
+  held.release();
+  const answers = await Promise.all(pending);
+  expect((await held.refresh).status).toBe(200);
+  return answers;
+}
+
+const statusesOf = (answers: Array<{ status: number }>) => answers.map((answer) => answer.status).sort();
+
+describe('requests that overlap', () => {
+  describe('two saves that together make a loop', () => {
+    it('lets exactly one through, and the blocks on disk do not lead back to each other', async () => {
+      await writeBlock('a.yaml', '- launchApp\n');
+      await writeBlock('b.yaml', '- launchApp\n');
+      const [first, second] = await Promise.all([
+        call('PUT', '/api/blocks/detail?file=blocks/a.yaml', { name: 'A', steps: [{ kind: 'runFlow', file: 'b.yaml' }] }),
+        call('PUT', '/api/blocks/detail?file=blocks/b.yaml', { name: 'B', steps: [{ kind: 'runFlow', file: 'a.yaml' }] }),
+      ]);
+      expect(statusesOf([first!, second!])).toEqual([200, 400]);
+      const refused = first!.status === 400 ? first! : second!;
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(refused.body.error.message).toMatch(/run itself/);
+
+      const store = await ProjectStore.open(dir);
+      const blocks = await store.listBlocks();
+      expect(blocks.map((block) => block.file).sort()).toEqual(['blocks/a.yaml', 'blocks/b.yaml']);
+      for (const block of blocks) {
+        expect(await store.reachesBlock(block.file, block.outline!.ownFlow!.steps), block.file).toBe(false);
+      }
+    });
+  });
+
+  describe('a save and a delete of the same unused block', () => {
+    it('removes the file when the delete is last', async () => {
+      await writeBlock('spare.yaml', '- launchApp\n');
+      await openSession();
+      const [saved, removed] = await sendQueued([
+        () => call('PUT', '/api/blocks/detail?file=blocks/spare.yaml', { name: 'Spare', steps: [{ kind: 'back' }] }),
+        () => call('DELETE', '/api/blocks/detail?file=blocks/spare.yaml'),
+      ]);
+      expect(saved!.status).toBe(200);
+      expect(removed!.status).toBe(200);
+      expect(await blockFiles()).toEqual([]);
+    });
+
+    it('answers the save 404 UNKNOWN_BLOCK and does not bring the file back when the delete is first', async () => {
+      await writeBlock('spare.yaml', '- launchApp\n');
+      await openSession();
+      const [removed, saved] = await sendQueued([
+        () => call('DELETE', '/api/blocks/detail?file=blocks/spare.yaml'),
+        () => call('PUT', '/api/blocks/detail?file=blocks/spare.yaml', { name: 'Spare', steps: [{ kind: 'back' }] }),
+      ]);
+      expect(removed!.status).toBe(200);
+      expect(saved!.status).toBe(404);
+      expect(saved!.body.error.code).toBe('UNKNOWN_BLOCK');
+      expect(await blockFiles()).toEqual([]);
+    });
+  });
+
+  describe('two block recordings', () => {
+    it('start exactly one, and the other is refused with 409 CASE_ACTIVE', async () => {
+      await openSession();
+      const answers = await Promise.all([
+        call('POST', '/api/blocks/record', { name: 'First' }),
+        call('POST', '/api/blocks/record', { name: 'Second' }),
+      ]);
+      expect(statusesOf(answers)).toEqual([200, 409]);
+      const won = answers.find((answer) => answer.status === 200)!;
+      const lost = answers.find((answer) => answer.status === 409)!;
+      expect(lost.body.error.code).toBe('CASE_ACTIVE');
+      const current = await call('GET', '/api/case/current');
+      expect(current.body).toMatchObject({ id: won.body.caseId, forBlock: true });
+    });
+  });
+
+  describe('a block recording and a case start', () => {
+    it('keeps the case a normal case when the case wins, and /api/case/finish saves it', async () => {
+      await openSession();
+      const [started, refused] = await sendQueued([
+        () => call('POST', '/api/case/start', { name: 'A case' }),
+        () => call('POST', '/api/blocks/record', { name: 'A block' }),
+      ]);
+      expect(started!.status).toBe(200);
+      expect(refused!.status).toBe(409);
+      expect(refused!.body.error.code).toBe('CASE_ACTIVE');
+      const current = await call('GET', '/api/case/current');
+      expect(current.body.id).toBe(started!.body.caseId);
+      expect(current.body).not.toHaveProperty('forBlock');
+      expect((await call('POST', '/api/case/finish', {})).status).toBe(200);
+      expect(await folderFiles('cases')).toEqual([`${started!.body.caseId}.json`]);
+    });
+
+    it('marks the recording for a block when the block wins, and the case start is refused', async () => {
+      await openSession();
+      const [recording, refused] = await sendQueued([
+        () => call('POST', '/api/blocks/record', { name: 'A block' }),
+        () => call('POST', '/api/case/start', { name: 'A case' }),
+      ]);
+      expect(recording!.status).toBe(200);
+      expect(refused!.status).toBe(409);
+      expect(refused!.body.error.code).toBe('CASE_ACTIVE');
+      expect((await call('GET', '/api/case/current')).body).toMatchObject({ id: recording!.body.caseId, forBlock: true });
+    });
+
+    it('lets exactly one win when both are sent at the same moment, and the mark agrees with the winner', async () => {
+      await openSession();
+      const [recording, started] = await Promise.all([
+        call('POST', '/api/blocks/record', { name: 'A block' }),
+        call('POST', '/api/case/start', { name: 'A case' }),
+      ]);
+      expect(statusesOf([recording!, started!])).toEqual([200, 409]);
+      const current = (await call('GET', '/api/case/current')).body;
+      if (recording!.status === 200) expect(current.forBlock).toBe(true);
+      else expect(current).not.toHaveProperty('forBlock');
+    });
+  });
+
+  describe('a block recording and editing a saved case', () => {
+    const EDIT = { mode: 'insert', after: 0 };
+
+    it('starts the edit and refuses the recording when the edit is first', async () => {
+      await writeCaseUsing('saved', 'Saved', []);
+      await openSession();
+      const [edit, recording] = await sendQueued([
+        () => call('POST', '/api/cases/saved/edit', EDIT),
+        () => call('POST', '/api/blocks/record', { name: 'A block' }),
+      ]);
+      expect(edit!.status).toBe(200);
+      expect(recording!.status).toBe(409);
+      expect(recording!.body.error.code).toBe('CASE_ACTIVE');
+      const current = (await call('GET', '/api/case/current')).body;
+      expect(current).toMatchObject({ id: 'saved', editing: { mode: 'insert' } });
+      expect(current).not.toHaveProperty('forBlock');
+    });
+
+    it('starts the recording and refuses the edit when the recording is first', async () => {
+      await writeCaseUsing('saved', 'Saved', []);
+      await openSession();
+      const [recording, edit] = await sendQueued([
+        () => call('POST', '/api/blocks/record', { name: 'A block' }),
+        () => call('POST', '/api/cases/saved/edit', EDIT),
+      ]);
+      expect(recording!.status).toBe(200);
+      expect(edit!.status).toBe(409);
+      expect(edit!.body.error.code).toBe('CASE_ACTIVE');
+      const current = (await call('GET', '/api/case/current')).body;
+      expect(current).toMatchObject({ id: recording!.body.caseId, forBlock: true });
+      expect(current).not.toHaveProperty('editing');
+    });
+
+    it('lets exactly one win when both are sent at the same moment, and forBlock agrees with the winner', async () => {
+      await writeCaseUsing('saved', 'Saved', []);
+      await openSession();
+      const [recording, edit] = await Promise.all([
+        call('POST', '/api/blocks/record', { name: 'A block' }),
+        call('POST', `/api/cases/saved/edit`, EDIT),
+      ]);
+      expect(statusesOf([recording!, edit!])).toEqual([200, 409]);
+      const current = (await call('GET', '/api/case/current')).body;
+      expect(current.forBlock === true).toBe(recording!.status === 200);
+    });
+  });
+
+  describe('finishing and discarding one block recording', () => {
+    it.each([
+      ['finish first', () => [call('POST', '/api/blocks/record/finish', {}), call('POST', '/api/case/discard')]],
+      ['discard first', () => [call('POST', '/api/case/discard'), call('POST', '/api/blocks/record/finish', {})]],
+    ])('lets exactly one end it, the other gets 409 NO_CASE, and nothing is left recording (%s)', async (_order, send) => {
+      await openSession();
+      await startBlockRecording();
+      const answers = await Promise.all(send());
+      expect(statusesOf(answers)).toEqual([200, 409]);
+      expect(answers.find((answer) => answer.status === 409)!.body.error.code).toBe('NO_CASE');
+      expect((await call('GET', '/api/case/current')).body).toBeNull();
+    });
+  });
+
+  describe('an end that waited while its recording was replaced', () => {
+    // Sent in this order with the queue held: finish of recording A, a new
+    // recording B, then a discard that was aimed at A. The discard's task runs
+    // after B exists, which is the order that used to throw B away.
+    it('is refused with 409 NO_CASE and the new recording survives', async () => {
+      await openSession();
+      await startBlockRecording('First');
+      expect((await call('POST', '/api/action/back')).status).toBe(200);
+      const [finished, started, discarded] = await sendQueued([
+        () => call('POST', '/api/blocks/record/finish', {}),
+        () => call('POST', '/api/blocks/record', { name: 'Second' }),
+        () => call('POST', '/api/case/discard'),
+      ]);
+      expect(finished!.status).toBe(200);
+      expect(finished!.body.steps).toEqual([{ kind: 'back' }]);
+      expect(started!.status).toBe(200);
+      expect(discarded!.status).toBe(409);
+      expect(discarded!.body.error.code).toBe('NO_CASE');
+      const current = (await call('GET', '/api/case/current')).body;
+      expect(current).toMatchObject({ id: started!.body.caseId, name: 'Second', forBlock: true });
+      expect(current.steps).toHaveLength(0);
+    });
+
+    it('is refused for a stale finish too, and the new recording keeps its steps', async () => {
+      await openSession();
+      await startBlockRecording('First');
+      const [discarded, started, finished] = await sendQueued([
+        () => call('POST', '/api/case/discard'),
+        () => call('POST', '/api/blocks/record', { name: 'Second' }),
+        () => call('POST', '/api/blocks/record/finish', {}),
+      ]);
+      expect(discarded!.status).toBe(200);
+      expect(started!.status).toBe(200);
+      expect(finished!.status).toBe(409);
+      expect(finished!.body.error.code).toBe('NO_CASE');
+      expect((await call('GET', '/api/case/current')).body).toMatchObject({ id: started!.body.caseId, name: 'Second', forBlock: true });
+    });
+  });
+
+  describe('ending a case recording twice', () => {
+    it('saves once for two finishes, and the second gets 409 NO_CASE', async () => {
+      await openSession();
+      await call('POST', '/api/case/start', { name: 'A case' });
+      const answers = await Promise.all([call('POST', '/api/case/finish', {}), call('POST', '/api/case/finish', {})]);
+      expect(statusesOf(answers)).toEqual([200, 409]);
+      expect(answers.find((answer) => answer.status === 409)!.body.error.code).toBe('NO_CASE');
+      expect(await folderFiles('cases')).toHaveLength(1);
+      expect((await call('GET', '/api/case/current')).body).toBeNull();
+    });
+
+    it.each([
+      ['finish first', () => [call('POST', '/api/case/finish', {}), call('POST', '/api/case/discard')]],
+      ['discard first', () => [call('POST', '/api/case/discard'), call('POST', '/api/case/finish', {})]],
+    ])('lets exactly one of a finish and a discard through (%s)', async (_order, send) => {
+      await openSession();
+      await call('POST', '/api/case/start', { name: 'A case' });
+      const answers = await Promise.all(send());
+      expect(statusesOf(answers)).toEqual([200, 409]);
+      expect(answers.find((answer) => answer.status === 409)!.body.error.code).toBe('NO_CASE');
+      expect((await call('GET', '/api/case/current')).body).toBeNull();
+    });
+  });
+
+  describe('trying a block and starting a block recording', () => {
+    beforeEach(async () => {
+      await writeBlock('greet.yaml', '- inputText: "hello"\n');
+      await openSession();
+    });
+
+    it('replays the block only while nothing is recording when the try is first', async () => {
+      const seen: unknown[] = [];
+      device.onReplay = async () => {
+        seen.push((await call('GET', '/api/case/current')).body);
+      };
+      const [tried, recording] = await sendQueued([
+        () => call('POST', '/api/blocks/try', { file: 'blocks/greet.yaml' }),
+        () => call('POST', '/api/blocks/record', { name: 'A block' }),
+      ]);
+      expect(tried!.status).toBe(200);
+      expect(recording!.status).toBe(200);
+      expect(device.replays).toHaveLength(1);
+      expect(seen).toEqual([null]);
+    });
+
+    it('refuses the try with 409 CASE_ACTIVE and replays nothing when the recording is first', async () => {
+      const [recording, tried] = await sendQueued([
+        () => call('POST', '/api/blocks/record', { name: 'A block' }),
+        () => call('POST', '/api/blocks/try', { file: 'blocks/greet.yaml' }),
+      ]);
+      expect(recording!.status).toBe(200);
+      expect(tried!.status).toBe(409);
+      expect(tried!.body.error.code).toBe('CASE_ACTIVE');
+      expect(device.replays).toEqual([]);
+    });
+
+    it('never replays while a recording is active when both are sent at the same moment', async () => {
+      const seen: unknown[] = [];
+      device.onReplay = async () => {
+        seen.push((await call('GET', '/api/case/current')).body);
+      };
+      const [tried, recording] = await Promise.all([
+        call('POST', '/api/blocks/try', { file: 'blocks/greet.yaml' }),
+        call('POST', '/api/blocks/record', { name: 'A block' }),
+      ]);
+      expect(recording!.status).toBe(200);
+      expect([200, 409]).toContain(tried!.status);
+      expect(device.replays).toHaveLength(tried!.status === 200 ? 1 : 0);
+      expect(seen.every((current) => current === null)).toBe(true);
+    });
+  });
+
+  describe('a clean-up that fails', () => {
+    // Removing a folder needs write access to the folder that holds it.
+    const cannotRemove = process.platform === 'win32' || process.getuid?.() === 0;
+
+    it.skipIf(cannotRemove)('still hands over the steps, ends the recording and logs the folder', async () => {
+      await openSession();
+      const id = await startBlockRecording();
+      expect((await call('POST', '/api/action/back')).status).toBe(200);
+      const evidence = join(dir, 'evidence');
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      await chmod(evidence, 0o555);
+      try {
+        const finished = await call('POST', '/api/blocks/record/finish', {});
+        expect(finished.status).toBe(200);
+        expect(finished.body.steps).toEqual([{ kind: 'back' }]);
+        expect((await call('GET', '/api/case/current')).body).toBeNull();
+        const text = logged.mock.calls.map((args) => args.map((arg) => String(arg)).join(' ')).join('\n');
+        expect(text).toContain(id);
+        expect(text).toContain('evidence');
+        // The folder really was left behind, so this test is not passing on a clean-up that worked.
+        expect(existsSync(join(evidence, id))).toBe(true);
+      } finally {
+        await chmod(evidence, 0o755);
+        logged.mockRestore();
+      }
+    });
+  });
+
+  describe('a password nothing has saved', () => {
+    const SECRET = 'hunter22-real-password';
+
+    async function recordOnLoginScreen() {
+      await openSession();
+      await startBlockRecording();
+      device.screen = 'login';
+      expect((await call('POST', '/api/screen/refresh')).status).toBe(200);
+    }
+
+    /** Everything the studio printed while the spies were on, as one string. */
+    function listen() {
+      const spies = (['error', 'log', 'warn', 'info'] as const).map((method) => vi.spyOn(console, method).mockImplementation(() => undefined));
+      return {
+        printed: () => spies.flatMap((spy) => spy.mock.calls).map((args) => args.map((arg) => inspect(arg)).join(' ')).join('\n'),
+        stop: () => spies.forEach((spy) => spy.mockRestore()),
+      };
+    }
+
+    it('is not repeated in a device error: 502 TYPE_FAILED, nothing printed, no step, still recording', async () => {
+      await recordOnLoginScreen();
+      device.failType = new Error(`keyboard gone while typing ${SECRET}`);
+      const output = listen();
+      try {
+        const failed = await call('POST', '/api/action/type', { text: SECRET });
+        expect(failed.status).toBe(502);
+        expect(failed.body.error.code).toBe('TYPE_FAILED');
+        expect(failed.text).not.toContain(SECRET);
+        expect(output.printed()).not.toContain(SECRET);
+      } finally {
+        output.stop();
+      }
+      const current = await call('GET', '/api/case/current');
+      expect(current.body).toMatchObject({ forBlock: true });
+      expect(current.body.steps).toHaveLength(0);
+      expect(current.text).not.toContain(SECRET);
+    });
+
+    it('still records the step once the device works again', async () => {
+      await recordOnLoginScreen();
+      device.failType = new Error(`keyboard gone while typing ${SECRET}`);
+      expect((await call('POST', '/api/action/type', { text: SECRET })).status).toBe(502);
+      device.failType = undefined;
+      expect((await call('POST', '/api/action/type', { text: SECRET })).status).toBe(200);
+      const finished = await call('POST', '/api/blocks/record/finish', {});
+      expect(finished.body.steps).toEqual([{ kind: 'inputText', text: '${PASSWORD}' }]);
+    });
+
+    it('leaves a saved value on the normal error path, not TYPE_FAILED', async () => {
+      await writeEnv({ OTHER_SECRET: SECRET });
+      await recordOnLoginScreen();
+      device.failType = new Error('keyboard gone');
+      const output = listen();
+      try {
+        const failed = await call('POST', '/api/action/type', { text: SECRET });
+        expect(failed.status).toBe(502);
+        expect(failed.body.error.code).not.toBe('TYPE_FAILED');
+      } finally {
+        output.stop();
+      }
+      expect((await call('GET', '/api/case/current')).body.steps).toHaveLength(0);
+    });
   });
 });

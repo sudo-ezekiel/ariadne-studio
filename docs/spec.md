@@ -811,6 +811,11 @@ the same thing by the time the form sees them:
 - Save as block (`GET /api/cases/:caseId/block-draft`) flattens `startFrom` into one list, because a
   block must not depend on a generated flow. It opens unsaved, so details can become settings first.
 - Paths in a block are relative to the block's folder, not the flows folder (`blockFlowPaths`).
+- The block routes do their checks inside `enqueue`, and the routes that end a recording check it is
+  still the one they were asked about (`requireRecording`). A check before the queue can be overtaken:
+  two saves could each pass the loop check, and a case start could leave `recordingBlock` set.
+- A password nothing has saved reaches agent-device, whose session log records `type` with no text
+  (checked on 2026-11-07). Its errors go unrepeated, because no list of saved values can redact it.
 - A block cannot run itself: Run a setup block now can put any block into a recording, so saving
   follows its `runFlow` steps and refuses one that leads back to its own file (`reachesBlock`). It
   cannot follow a path with a `${VAR}` in it, which Maestro resolves at run time, or a `runFlow`

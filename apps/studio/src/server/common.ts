@@ -91,6 +91,22 @@ export function pickedCandidates(state: ServerState, picks: readonly number[]): 
   });
 }
 
+/**
+ * Refuses to start or change anything while a recording is going. Call it inside
+ * the queue: a request checked before it can be overtaken by the one in front.
+ */
+export function requireNoRecording(state: ServerState): void {
+  if (state.recorder?.active) throw new HttpError(409, 'CASE_ACTIVE', 'Finish or discard the recording first.');
+}
+
+/**
+ * For a queued change to a recording: refuses one that ended or was replaced
+ * while the request waited, so it cannot end the recording that came after it.
+ */
+export function requireRecording(state: ServerState, recorder: Recorder): void {
+  if (state.recorder !== recorder) throw new HttpError(409, 'NO_CASE', 'That recording has already ended.');
+}
+
 export function requireCase(state: ServerState): Recorder {
   if (!state.recorder?.active) throw new HttpError(409, 'NO_CASE', 'No case is being recorded. Start a case first.');
   return state.recorder;

@@ -69,6 +69,8 @@ import {
   replayNeedsMaestro,
   replayOnDevice,
   requireCase,
+  requireNoRecording,
+  requireRecording,
   requireSession,
   saveCaseAndFlow,
   sendPng,
@@ -357,6 +359,15 @@ async function refuseHiddenScreen(state: ServerState): Promise<void> {
   );
 }
 
+/** Types a password nothing has saved. No list of values can hide it, so a device error must not get to repeat it. */
+async function typeUnsavedPassword(state: ServerState, text: string): Promise<void> {
+  try {
+    await state.session.typeText(text);
+  } catch {
+    throw new HttpError(502, 'TYPE_FAILED', 'Could not type into the password field. Check the phone, then try again.');
+  }
+}
+
 /**
  * Runs a device action, records `record`'s step when a case is active, and
  * captures the screen into the step's evidence file (or the scratch file).
@@ -530,6 +541,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       // Text equal to a project env value is recorded as its ${KEY}; the device
       // still gets the real text. That is how secrets stay out of case files.
       let recordedText = text;
+      let unsaved = false;
       if (recorder?.active) {
         const env = await projectEnv(state);
         const key = Object.keys(env)
@@ -539,8 +551,10 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
           recordedText = `\${${key}}`;
         } else if (state.latest && focusedPasswordField(state.latest.nodes)) {
           // A block only needs the setting's name: each case gives it the value.
-          if (state.recordingBlock) recordedText = reference(passwordSetting(Object.keys(env)));
-          else throw new HttpError(
+          if (state.recordingBlock) {
+            recordedText = reference(passwordSetting(Object.keys(env)));
+            unsaved = true;
+          } else throw new HttpError(
             400,
             'PASSWORD_FIELD',
             `This is a password field. Put the password in ${join(state.project.dir, '.env')} (for example PASSWORD=...) and type exactly that value; the case then records \${PASSWORD} instead of the secret.`,
@@ -549,7 +563,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       }
       return recordedAction(
         state,
-        () => state.session.typeText(text),
+        () => (unsaved ? typeUnsavedPassword(state, text) : state.session.typeText(text)),
         (active, screenshot) => active.recordInput(recordedText, screenshot),
         'type',
         recordedText,
@@ -737,11 +751,11 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
   app.post('/api/blocks/try', async (request): Promise<ScreenState> => {
     const requested = readBlockUse(request.body);
     requireSession(state);
-    if (state.recorder?.active) throw new HttpError(409, 'CASE_ACTIVE', 'Finish or discard the recording first.');
     const env = await projectEnv(state);
     const block = await prepareBlockUse(state, requested, env);
     const { use } = block;
     return enqueue(state, async () => {
+      requireNoRecording(state);
       await refuseHiddenScreen(state);
       if (block.runsWithMaestro) {
         const step: CaseStep = { index: 1, kind: 'block', file: use.file, ...(use.values ? { values: use.values } : {}), at: nowIso() };
@@ -826,6 +840,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const preconditionBlocks = prepared.map((block) => block.use);
     const withMaestro = await replayNeedsMaestro(state, { preconditionBlocks, steps: [], ...(startFrom ? { startFrom } : {}) });
     return enqueue(state, async () => {
+      requireNoRecording(state);
       const deviceId = state.session.deviceId!;
       const appId = state.session.appId!;
       const caseId = await state.project.allocateCaseId(name);
@@ -925,6 +940,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     if (state.recordingBlock) throw new HttpError(409, 'RECORDING_BLOCK', 'This recording is for a block. Finish it from the Record tab.');
     await stopPhoneCapture(state);
     return enqueue(state, async () => {
+      requireRecording(state, recorder);
       const editing = state.editing;
       if (editing?.mode !== 'insert') {
         const chosen = pickedCandidates(state, picks);
@@ -960,6 +976,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const recorder = requireCase(state);
     await stopPhoneCapture(state);
     return enqueue(state, async () => {
+      requireRecording(state, recorder);
       const caseId = recorder.caseId!;
       const editing = state.editing;
       state.recorder = undefined;

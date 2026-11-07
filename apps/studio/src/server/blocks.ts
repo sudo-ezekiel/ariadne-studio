@@ -6,16 +6,12 @@ import type { FastifyInstance } from 'fastify';
 import { Recorder, caseToFlow, parseMaestroFlow, toMaestroYaml, type BlockInfo, type FlowPaths, type MaestroFlow, type MaestroStep, type TestCase } from '@ariadne/core';
 import type { BlockDetail, BlockRecordingResponse, BlockSaveRequest, CaseBlockDraft, CaseStartResponse } from '../shared/api-types.ts';
 import { blockProblem, hideSavedValues } from '../shared/block-check.ts';
-import { HttpError, captureScratch, pickedCandidates, projectEnv, readId, readPicks, readSavedCase, requireCase, requireSession } from './common.ts';
+import { HttpError, captureScratch, pickedCandidates, projectEnv, readId, readPicks, readSavedCase, requireCase, requireNoRecording, requireRecording, requireSession } from './common.ts';
 import { stopPhoneCapture } from './phone-capture.ts';
 import { enqueue, toScreenState, type ServerState } from './state.ts';
 
 /** A comment line, or one after a value. Text with " # " in it only adds a needless note. */
 const COMMENT = /^\s*#|\s#\s/m;
-
-function refuseWhileRecording(state: ServerState): void {
-  if (state.recorder?.active) throw new HttpError(409, 'CASE_ACTIVE', 'Finish or discard the recording first.');
-}
 
 async function readBlock(state: ServerState, query: unknown): Promise<BlockInfo> {
   const { file } = (query ?? {}) as { file?: unknown };
@@ -83,10 +79,10 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
 
   app.post('/api/blocks', async (request): Promise<BlockDetail> => {
     const { name, steps, appId } = readSave(request.body);
-    refuseWhileRecording(state);
     if (!appId) throw new HttpError(400, 'BAD_BLOCK', 'Enter the app id under Device first: a block says which app it is for.');
-    const flow = await checkedFlow(state, { appId, name }, steps);
     return enqueue(state, async () => {
+      requireNoRecording(state);
+      const flow = await checkedFlow(state, { appId, name }, steps);
       try {
         return await savedBlock(state, await state.project.writeBlock(flow));
       } catch (error) {
@@ -97,17 +93,18 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
   });
 
   // Keeps the file's own app id and header values, and the file name that cases refer to it by.
+  // All in the queue: two saves checked before it could each pass, and make a loop between them.
   app.put('/api/blocks/detail', async (request): Promise<BlockDetail> => {
     const { name, steps } = readSave(request.body);
-    refuseWhileRecording(state);
-    const block = await readBlock(state, request.query);
-    const { appId, env } = ownFlow(block);
-    const flow = await checkedFlow(state, { appId, name, ...(env ? { env } : {}) }, steps);
-    // Recording can put any block in, and a block that leads back to itself would never end.
-    if (await state.project.reachesBlock(block.file, flow.steps)) {
-      throw new HttpError(400, 'BAD_BLOCK', 'A block cannot run itself, directly or through a block it runs. Remove the step that leads back to it.');
-    }
     return enqueue(state, async () => {
+      requireNoRecording(state);
+      const block = await readBlock(state, request.query);
+      const { appId, env } = ownFlow(block);
+      const flow = await checkedFlow(state, { appId, name, ...(env ? { env } : {}) }, steps);
+      // Recording can put any block in, and a block that leads back to itself would never end.
+      if (await state.project.reachesBlock(block.file, flow.steps)) {
+        throw new HttpError(400, 'BAD_BLOCK', 'A block cannot run itself, directly or through a block it runs. Remove the step that leads back to it.');
+      }
       await state.project.writeBlock(flow, block.file);
       return savedBlock(state, block.file);
     });
@@ -118,8 +115,8 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
     const { name } = (request.body ?? {}) as { name?: unknown };
     if (typeof name !== 'string' || !name.trim()) throw new HttpError(400, 'BAD_REQUEST', 'Expected the name of the block.');
     requireSession(state);
-    refuseWhileRecording(state);
     return enqueue(state, async () => {
+      requireNoRecording(state);
       const id = await state.project.allocateCaseId('block');
       const screen = toScreenState(await captureScratch(state));
       const recorder = new Recorder();
@@ -140,6 +137,7 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
     const block = file === undefined ? undefined : await readBlock(state, { file });
     await stopPhoneCapture(state);
     return enqueue(state, async () => {
+      requireRecording(state, recorder);
       for (const candidate of pickedCandidates(state, picks)) recorder.addExpectation({ selector: candidate.selector, node: candidate.node });
       const testCase = recorder.toCase();
       // A flow's first command is the launchApp every case has, and a block starts where the recording did.
@@ -147,7 +145,10 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
       state.recorder = undefined;
       state.recordingBlock = undefined;
       state.offered = undefined;
-      await rm(state.project.evidenceDir(testCase.id), { recursive: true, force: true });
+      // The steps are the point of the recording, so leftover pictures must not cost them. Windows can hold a file open.
+      await rm(state.project.evidenceDir(testCase.id), { recursive: true, force: true, maxRetries: 3 }).catch((error: unknown) => {
+        console.error(`[studio] could not remove the screenshots in ${state.project.relative(state.project.evidenceDir(testCase.id))}: ${error instanceof Error ? error.message : String(error)}`);
+      });
       return { steps };
     });
   });
@@ -166,10 +167,10 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
   });
 
   app.delete('/api/blocks/detail', async (request) => {
-    const block = await readBlock(state, request.query);
-    refuseWhileRecording(state);
     // Queued so a delete never pulls a file out from under a run that reads it.
     return enqueue(state, async () => {
+      requireNoRecording(state);
+      const block = await readBlock(state, request.query);
       const users = await state.project.blockUsers(block.file);
       if (users.length > 0) {
         throw new HttpError(409, 'BLOCK_IN_USE', `${block.name} is used by ${users.join(', ')}. Take it out of those first, or keep it.`);
