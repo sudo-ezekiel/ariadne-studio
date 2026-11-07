@@ -593,6 +593,138 @@ describe('ProjectStore blocks written from the Blocks tab', () => {
     expect(await store.listBlocks()).toEqual([]);
   });
 
+  describe('reachesBlock', () => {
+    /** Writes blocks/<name>.yaml with the given steps as YAML lines. */
+    async function blockOn(store: ProjectStore, name: string, steps: MaestroStep[]) {
+      await store.writeBlock(flowOf(name, steps), `blocks/${name}.yaml`);
+    }
+    const runs = (file: string): MaestroStep => ({ kind: 'runFlow', file });
+
+    it('is true for a runFlow of the file itself', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/a.yaml', [{ kind: 'back' }, runs('a.yaml')])).toBe(true);
+    });
+
+    it('is true for the file itself spelled through another folder', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/a.yaml', [runs('../blocks/a.yaml')])).toBe(true);
+    });
+
+    it('is true for A to B to A, asked for B with steps that run A', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [runs('b.yaml')]);
+      await blockOn(store, 'b', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/b.yaml', [runs('a.yaml')])).toBe(true);
+    });
+
+    it('is true through three blocks', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [runs('b.yaml')]);
+      await blockOn(store, 'b', [runs('c.yaml')]);
+      await blockOn(store, 'c', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/c.yaml', [runs('a.yaml')])).toBe(true);
+    });
+
+    it('is false for a chain that never returns', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [runs('b.yaml')]);
+      await blockOn(store, 'b', [{ kind: 'back' }]);
+      await blockOn(store, 'c', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/c.yaml', [runs('a.yaml')])).toBe(false);
+    });
+
+    it('is false, and finishes, when two other blocks loop between themselves', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'x', [runs('y.yaml')]);
+      await blockOn(store, 'y', [runs('x.yaml')]);
+      await blockOn(store, 'c', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/c.yaml', [runs('x.yaml')])).toBe(false);
+    });
+
+    it('is false for a runFlow path with a variable, even when the name would match', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/a.yaml', [runs('${NEXT}.yaml'), runs('${DIR}/a.yaml')])).toBe(false);
+    });
+
+    it('is false for a runFlow of a file that is not there', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [{ kind: 'back' }]);
+      expect(await store.reachesBlock('blocks/a.yaml', [runs('missing.yaml')])).toBe(false);
+    });
+
+    it('is false for a runFlow of a file that is not valid YAML', async () => {
+      const store = await ProjectStore.open(dir);
+      await blockOn(store, 'a', [{ kind: 'back' }]);
+      await writeFile(join(dir, 'blocks', 'broken.yaml'), 'appId: [unclosed\n---\n- runFlow: a.yaml: :\n  - {\n');
+      expect(await store.reachesBlock('blocks/a.yaml', [runs('broken.yaml')])).toBe(false);
+    });
+
+    it('follows a block in a second block folder by its relative path', async () => {
+      const project = join(dir, 'repo', '.ariadne');
+      await mkdir(project, { recursive: true });
+      await writeFile(join(project, 'project.json'), JSON.stringify({ appId: 'com.example', platform: 'android', paths: { blocks: ['blocks', '../.maestro/subflows'] } }));
+      const store = await ProjectStore.open(project);
+      await mkdir(join(dir, 'repo', '.maestro', 'subflows'), { recursive: true });
+      await writeFile(join(dir, 'repo', '.maestro', 'subflows', 'shared.yaml'), `${HEADER}- runFlow: ../../.ariadne/blocks/own.yaml\n`);
+      await store.writeBlock(flowOf('Own', [{ kind: 'back' }]), 'blocks/own.yaml');
+      expect(await store.reachesBlock('blocks/own.yaml', [runs('../../.maestro/subflows/shared.yaml')])).toBe(true);
+    });
+  });
+
+  describe('changing a file that is not a block', () => {
+    it.each([
+      ['project.json', 'project.json'],
+      ['.env', '.env'],
+      ['a case file', 'cases/x.json'],
+      ['a flow outside every block folder', 'flows/x.yaml'],
+    ])('refuses to write over %s and leaves it as it was', async (_what, file) => {
+      const store = await ProjectStore.open(dir);
+      await mkdir(join(dir, 'cases'), { recursive: true });
+      await mkdir(join(dir, 'flows'), { recursive: true });
+      const path = join(dir, file);
+      const before = file === 'project.json' ? await readFile(path, 'utf8') : 'KEEP=me\n';
+      if (file !== 'project.json') await writeFile(path, before);
+      await expect(store.writeBlock(flowOf('Log in'), file)).rejects.toThrow(/Not a block file/);
+      expect(await readFile(path, 'utf8')).toBe(before);
+    });
+
+    it.each([
+      ['project.json', 'project.json'],
+      ['.env', '.env'],
+      ['a case file', 'cases/x.json'],
+      ['a flow outside every block folder', 'flows/x.yaml'],
+    ])('refuses to delete %s and leaves it there', async (_what, file) => {
+      const store = await ProjectStore.open(dir);
+      await mkdir(join(dir, 'cases'), { recursive: true });
+      await mkdir(join(dir, 'flows'), { recursive: true });
+      const path = join(dir, file);
+      if (file !== 'project.json') await writeFile(path, 'KEEP=me\n');
+      const before = await readFile(path, 'utf8');
+      await expect(store.deleteBlock(file)).rejects.toThrow(/Not a block file/);
+      expect(await readFile(path, 'utf8')).toBe(before);
+    });
+
+    it('still accepts a .yml block inside a block folder', async () => {
+      const store = await ProjectStore.open(dir);
+      await writeFile(join(dir, 'blocks', 'old.yml'), `${HEADER}- back\n`);
+      expect(await store.writeBlock(flowOf('Old', [{ kind: 'launchApp' }]), 'blocks/old.yml')).toBe('blocks/old.yml');
+      expect(await readFile(join(dir, 'blocks', 'old.yml'), 'utf8')).toContain('launchApp');
+      await store.deleteBlock('blocks/old.yml');
+      expect(await readdir(join(dir, 'blocks'))).toEqual([]);
+    });
+
+    it('still writes a new block with no file when the block folder is outside the project', async () => {
+      const project = join(dir, 'repo', '.ariadne');
+      await mkdir(project, { recursive: true });
+      await writeFile(join(project, 'project.json'), JSON.stringify({ appId: 'com.example', platform: 'android', paths: { blocks: ['../.maestro/subflows'] } }));
+      const store = await ProjectStore.open(project);
+      expect(await store.writeBlock(flowOf('Log in'))).toBe('../.maestro/subflows/log-in.yaml');
+    });
+  });
+
   describe('blockUsers', () => {
     it('finds a case by its setup blocks and another by a block step', async () => {
       const store = await ProjectStore.open(dir);

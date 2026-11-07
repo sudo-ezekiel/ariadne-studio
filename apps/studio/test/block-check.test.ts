@@ -87,6 +87,16 @@ describe('blockProblem per step', () => {
   });
 });
 
+describe('blockProblem runFlow', () => {
+  it.each(['', '   '])('refuses the flow file %j, names the step and asks for a flow file', (file) => {
+    expect(blockProblem('Log in', [...ok, { kind: 'runFlow', file }])).toBe('Step 2 needs a flow file.');
+  });
+
+  it('accepts a runFlow with a file', () => {
+    expect(blockProblem('Log in', [{ kind: 'runFlow', file: 'log-in.yaml' }])).toBeUndefined();
+  });
+});
+
 describe('blockProblem openLink', () => {
   const problemOf = (link: string) => blockProblem('Log in', [{ kind: 'openLink', link }]);
 

@@ -2,7 +2,6 @@
 // saved as the same kind of Maestro file a developer writes by hand, so
 // everything that reads blocks treats it the same way.
 import { readFile, rm } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { Recorder, caseToFlow, parseMaestroFlow, toMaestroYaml, type BlockInfo, type FlowPaths, type MaestroFlow, type MaestroStep, type TestCase } from '@ariadne/core';
 import type { BlockDetail, BlockRecordingResponse, BlockSaveRequest, CaseBlockDraft, CaseStartResponse } from '../shared/api-types.ts';
@@ -104,10 +103,9 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
     const block = await readBlock(state, request.query);
     const { appId, env } = ownFlow(block);
     const flow = await checkedFlow(state, { appId, name, ...(env ? { env } : {}) }, steps);
-    // Recording can put any block in, and Maestro would run this one for ever.
-    const path = state.project.blockPath(block.file);
-    if (flow.steps.some((step) => step.kind === 'runFlow' && resolve(dirname(path), step.file) === path)) {
-      throw new HttpError(400, 'BAD_BLOCK', 'A block cannot run itself. Remove the step that runs it.');
+    // Recording can put any block in, and a block that leads back to itself would never end.
+    if (await state.project.reachesBlock(block.file, flow.steps)) {
+      throw new HttpError(400, 'BAD_BLOCK', 'A block cannot run itself, directly or through a block it runs. Remove the step that leads back to it.');
     }
     return enqueue(state, async () => {
       await state.project.writeBlock(flow, block.file);

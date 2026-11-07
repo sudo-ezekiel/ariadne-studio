@@ -199,6 +199,12 @@ describe('typedStep', () => {
     expect(typedStep(draft, field)).toMatchObject({ key: draft.key, field });
   });
 
+  it('clears the password field of a picked step, so the field is no longer a sure password', () => {
+    const picked = pickedStep(draftStep(tap(text(''))), { selector: id('pw'), password: true })!;
+    expect(picked.passwordField).toBe(true);
+    expect(typedStep(picked, { mode: 'text', value: 'Email' })).not.toHaveProperty('passwordField');
+  });
+
   it('only sets the field on a step with no selector', () => {
     const draft = draftStep(type(''));
     const typed = typedStep(draft, { mode: 'text', value: 'hi' });
@@ -302,6 +308,26 @@ describe('passwordInText', () => {
   it('is sure when the tapped field was picked as a password field', () => {
     const picked = pickedStep(draftStep(tap(text(''))), { selector: id('pw'), password: true })!;
     expect(passwordInText(typedAfter(picked), 1)).toBe('sure');
+  });
+
+  it('is undefined for a following Type step once the picked field is typed over', () => {
+    const picked = pickedStep(draftStep(tap(text(''))), { selector: id('pw'), password: true })!;
+    expect(passwordInText(typedAfter(picked), 1)).toBe('sure');
+    const typedOver = typedStep(picked, { mode: 'text', value: 'Email' });
+    expect(passwordInText(typedAfter(typedOver), 1)).toBeUndefined();
+  });
+
+  it('is undefined after the mode of a picked field is switched and a value typed', () => {
+    const picked = pickedStep(draftStep(tap(text(''))), { selector: id('pw'), password: true })!;
+    const typedOver = typedStep(picked, switchedField(picked.field!, 'text'));
+    expect(typedOver).not.toHaveProperty('passwordField');
+    expect(passwordInText(typedAfter(typedOver), 1)).toBeUndefined();
+  });
+
+  it('is maybe, not sure, when the newly typed text still looks like a password', () => {
+    const picked = pickedStep(draftStep(tap(text(''))), { selector: id('pw'), password: true })!;
+    const typedOver = typedStep(picked, { mode: 'text', value: 'Password' });
+    expect(passwordInText(typedAfter(typedOver), 1)).toBe('maybe');
   });
 
   it('is maybe when the tapped field has a secret-looking name', () => {

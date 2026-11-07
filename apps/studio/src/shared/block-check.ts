@@ -45,6 +45,8 @@ function stepProblem(step: MaestroStep): string | undefined {
       return Number.isInteger(step.seconds) && step.seconds >= 1 && step.seconds <= MAX_WAIT_SECONDS ? undefined : `must wait 1 to ${MAX_WAIT_SECONDS} seconds`;
     case 'eraseText':
       return step.chars === undefined || (Number.isInteger(step.chars) && step.chars >= 1) ? undefined : 'must erase at least 1 character';
+    case 'runFlow':
+      return textProblem(step.file, 'a flow file');
     default:
       return undefined;
   }

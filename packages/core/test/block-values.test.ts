@@ -397,8 +397,25 @@ describe('passwordSetting', () => {
     expect(passwordSetting(['admin_Passcode'])).toBe('admin_Passcode');
   });
 
-  it('is the first in sort order when several fit', () => {
-    expect(passwordSetting(['USER_PASSWORD', 'ADMIN_PASSWORD', 'PASSWORD'])).toBe('ADMIN_PASSWORD');
+  it('is the first in sort order when several fit and none is PASSWORD', () => {
+    expect(passwordSetting(['USER_PASSWORD', 'ADMIN_PASSWORD', 'SUPERVISOR_PASSWORD'])).toBe('ADMIN_PASSWORD');
+  });
+
+  it('is PASSWORD itself when it is saved, even beside others that sort first', () => {
+    expect(passwordSetting(['USER_PASSWORD', 'ADMIN_PASSWORD', 'PASSWORD'])).toBe('PASSWORD');
+    expect(passwordSetting(['PASSWORD', 'SUPERVISOR_PASSWORD'])).toBe('PASSWORD');
+  });
+
+  it.each(['PASSPORT_NUMBER', 'BYPASS_CODE', 'COMPASS_HEADING', 'ADMIN_PASSPORT'])('does not take %s for a password', (key) => {
+    expect(passwordSetting([key])).toBe('PASSWORD');
+  });
+
+  it('skips a name that only contains pass for the password beside it', () => {
+    expect(passwordSetting(['ADMIN_PASSPORT', 'USER_PASSWORD'])).toBe('USER_PASSWORD');
+  });
+
+  it.each(['USER_PASS', 'PASS', 'ADMIN_PASSWD', 'ADMIN_PASSCODE', 'WIFI_PASSPHRASE', 'MYPASSWORD'])('takes %s for a password', (key) => {
+    expect(passwordSetting([key])).toBe(key);
   });
 
   it('does not change the list it is given', () => {

@@ -170,10 +170,12 @@ export function switchedField(field: Field, mode: Field['mode']): Field {
 
 /** A typed value replaces the step's target as a whole, so the number of a repeated element goes too. */
 export function typedStep(draft: DraftStep, field: Field): DraftStep {
+  // What was picked on the screen is no longer the target, so neither is its password field.
+  const { passwordField: _picked, ...kept } = draft;
   const selector = selectorOf(draft.step);
-  if (!selector || selector.kind === 'point') return { ...draft, field };
+  if (!selector || selector.kind === 'point') return { ...kept, field };
   const { kind, value } = selector;
-  return { ...draft, step: { ...draft.step, selector: { kind, value } } as MaestroStep, field };
+  return { ...kept, step: { ...draft.step, selector: { kind, value } } as MaestroStep, field };
 }
 
 /** What the steps ask a case to set, in the order of the name. */

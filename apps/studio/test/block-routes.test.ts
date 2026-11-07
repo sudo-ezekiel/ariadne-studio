@@ -932,3 +932,32 @@ describe('PUT /api/blocks/detail running itself', () => {
     expect(saved.body.steps).toEqual([{ kind: 'runFlow', file: 'b.yaml' }]);
   });
 });
+
+describe('a block that leads back to itself through another block', () => {
+  it('is refused on save with 400 BAD_BLOCK, and the file is left as it was', async () => {
+    await writeBlock('a.yaml', '- runFlow: b.yaml\n');
+    await writeBlock('b.yaml', '- launchApp\n');
+    const before = await readBlockFile('b.yaml');
+    const refused = await call('PUT', '/api/blocks/detail?file=blocks/b.yaml', { name: 'B', steps: [{ kind: 'runFlow', file: 'a.yaml' }] });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.code).toBe('BAD_BLOCK');
+    expect(refused.body.error.message).toMatch(/run itself/);
+    expect(await readBlockFile('b.yaml')).toBe(before);
+  });
+
+  it('is accepted when the block it runs does not lead back', async () => {
+    await writeBlock('a.yaml', '- launchApp\n');
+    await writeBlock('b.yaml', '- launchApp\n');
+    const saved = await call('PUT', '/api/blocks/detail?file=blocks/b.yaml', { name: 'B', steps: [{ kind: 'runFlow', file: 'a.yaml' }] });
+    expect(saved.status).toBe(200);
+  });
+});
+
+describe('POST /api/blocks with a runFlow step', () => {
+  it('refuses an empty flow file with 400 BAD_BLOCK and writes nothing', async () => {
+    const refused = await call('POST', '/api/blocks', { name: 'Chain', appId: APP, steps: [{ kind: 'runFlow', file: '' }] });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.code).toBe('BAD_BLOCK');
+    expect(await blockFiles()).toEqual([]);
+  });
+});

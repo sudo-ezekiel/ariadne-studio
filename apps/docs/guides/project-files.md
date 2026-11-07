@@ -45,7 +45,7 @@ Click a file to open it in its own tab beside Record and Cases. Closing the tab 
 - Screenshots open as images.
 - Excel documents and other binary files show only their size.
 
-The sidebar is read only, and it refreshes after every save and run. To edit a block, use your editor. Do not edit a file in `flows/`, because the next save regenerates it from the case.
+The sidebar is read only, and it refreshes after every save and run. To change a block, use the [Blocks tab](/guides/setup-blocks#edit-or-delete-a-block), or your editor for a block that shows **Show file**. Do not edit a file in `flows/`, because the next save regenerates it from the case.
 
 Hide or show the column with the button in the top bar. The studio remembers the choice.
 

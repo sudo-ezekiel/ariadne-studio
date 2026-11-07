@@ -812,7 +812,7 @@ the same thing by the time the form sees them:
   block must not depend on a generated flow. It opens unsaved, so details can become settings first.
 - Paths in a block are relative to the block's folder, not the flows folder (`blockFlowPaths`).
 - A block cannot run itself: Run a setup block now can put any block into a recording, so saving
-  refuses a `runFlow` of its own file.
+  follows its `runFlow` steps and refuses one that leads back to its own file (`reachesBlock`).
 
 ## 17. Later
 
