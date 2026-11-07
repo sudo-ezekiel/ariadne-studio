@@ -2,6 +2,7 @@
 // saved as the same kind of Maestro file a developer writes by hand, so
 // everything that reads blocks treats it the same way.
 import { readFile, rm } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { Recorder, caseToFlow, parseMaestroFlow, toMaestroYaml, type BlockInfo, type FlowPaths, type MaestroFlow, type MaestroStep, type TestCase } from '@ariadne/core';
 import type { BlockDetail, BlockRecordingResponse, BlockSaveRequest, CaseBlockDraft, CaseStartResponse } from '../shared/api-types.ts';
@@ -65,6 +66,23 @@ async function checkedFlow(state: ServerState, header: Omit<MaestroFlow, 'steps'
   return { ...flow, steps: hideSavedValues(flow.steps, await projectEnv(state)) };
 }
 
+/**
+ * A save can add only what the form and a recording add: a working block of
+ * this project. Steps already in the file stay, since a hand-written block may
+ * run flows of its own. Listing blocks reads what they run, so without this a
+ * request could point the studio at any file on the computer, .env included.
+ */
+async function refuseOtherFlows(state: ServerState, file: string, steps: readonly MaestroStep[], existing: readonly MaestroStep[]): Promise<void> {
+  const kept = new Set(existing.map((step) => JSON.stringify(step)));
+  const blocks = (await state.project.listBlocks()).filter((block) => !block.error);
+  const working = new Set(blocks.map((block) => state.project.blockPath(block.file)));
+  const folder = dirname(state.project.blockPath(file));
+  for (const step of steps) {
+    if (step.kind !== 'runFlow' || kept.has(JSON.stringify(step)) || working.has(resolve(folder, step.file))) continue;
+    throw new HttpError(400, 'BAD_BLOCK', `A block can only run another working block of this project, and ${step.file} is not one.`);
+  }
+}
+
 /** Recording can put any block in, and a block that leads back to itself would never end. */
 async function refuseLoop(state: ServerState, file: string, steps: readonly MaestroStep[]): Promise<void> {
   if (await state.project.reachesBlock(file, steps)) {
@@ -92,6 +110,7 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
       const flow = await checkedFlow(state, { appId, name }, steps);
       try {
         const file = await state.project.newBlockFile(name);
+        await refuseOtherFlows(state, file, flow.steps, []);
         await refuseLoop(state, file, flow.steps);
         return await savedBlock(state, await state.project.writeBlock(flow, file));
       } catch (error) {
@@ -108,8 +127,9 @@ export function registerBlockRoutes(app: FastifyInstance, state: ServerState): v
     return enqueue(state, async () => {
       requireNoRecording(state);
       const block = await readBlock(state, request.query);
-      const { appId, env } = ownFlow(block);
+      const { appId, env, steps: existing } = ownFlow(block);
       const flow = await checkedFlow(state, { appId, name, ...(env ? { env } : {}) }, steps);
+      await refuseOtherFlows(state, block.file, flow.steps, existing);
       await refuseLoop(state, block.file, flow.steps);
       await state.project.writeBlock(flow, block.file);
       return savedBlock(state, block.file);

@@ -762,7 +762,9 @@ async function readBlockOutline(absolute: string, seen: readonly string[] = []):
     try {
       nested = await readBlockOutline(target, chain);
     } catch (error) {
-      throw new Error(`It runs ${file}, which cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+      // The first line only: the rest quotes the file, and a runFlow can name any file, .env included.
+      const reason = (error instanceof Error ? error.message : String(error)).split('\n')[0]!.replace(/:$/, '');
+      throw new Error(`It runs ${file}, which cannot be read: ${reason}`);
     }
     for (const name of nested.maestroOnly) nestedOnly.add(name);
   }

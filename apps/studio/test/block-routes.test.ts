@@ -1000,7 +1000,8 @@ describe('POST /api/blocks leading back to its own new file', () => {
     const refused = await call('POST', '/api/blocks', { name: 'Loop', appId: APP, steps: runs('loop.yaml') });
     expect(refused.status).toBe(400);
     expect(refused.body.error.code).toBe('BAD_BLOCK');
-    expect(refused.body.error.message).toMatch(/run itself/);
+    // The file does not exist yet, so it is not a working block to run.
+    expect(refused.body.error.message).toMatch(/not one/);
     expect(await folderFiles('blocks')).toEqual([]);
   });
 
@@ -1053,6 +1054,259 @@ describe('DELETE /api/blocks/detail of a block run by a broken block', () => {
 
     const detail = await call('GET', '/api/blocks/detail?file=blocks/login.yaml');
     expect(detail.body.usedBy).toEqual(['morning']);
+  });
+});
+
+describe('a runFlow step can only run a working block of this project', () => {
+  const SECRET = 'SECRET-ENV-VALUE';
+  const runs = (file: string, env?: Record<string, string>) => ({ kind: 'runFlow', file, ...(env ? { env } : {}) });
+  const save = (name: string, steps: object[]) => call('POST', '/api/blocks', { name, appId: APP, steps });
+  const put = (file: string, name: string, steps: object[]) => call('PUT', `/api/blocks/detail?file=${file}`, { name, steps });
+
+  /** A .env line that yaml quotes in its error message, since it reads as a mapping inside a mapping. */
+  async function writeQuotedEnv() {
+    await writeEnv({ PASSWORD: `a: b: ${SECRET}`, OTHER: 'second-line-value' });
+  }
+
+  async function writeFlow(file: string, text = `appId: ${APP}\n---\n- launchApp\n`) {
+    await mkdir(join(dir, 'flows'), { recursive: true });
+    await writeFile(join(dir, 'flows', file), text);
+  }
+
+  const expectNoSecret = (text: string) => {
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain('second-line-value');
+  };
+
+  describe('refused on POST', () => {
+    it('refuses a runFlow of ../.env with 400 BAD_BLOCK, writes no block, and keeps the secret out of the project', async () => {
+      await writeQuotedEnv();
+      const refused = await save('Leak', [runs('../.env')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await folderFiles('blocks')).toEqual([]);
+      const project = await call('GET', '/api/project');
+      expect(project.status).toBe(200);
+      expectNoSecret(project.text);
+      expect((project.body as ProjectInfo).blocks).toEqual([]);
+      expectNoSecret(refused.text);
+    });
+
+    it('refuses a runFlow of a file outside the project that is not valid YAML, and writes no block', async () => {
+      // Named uniquely, as the temp folder is shared with other tests running at the same time.
+      const outside = `ariadne-outside-${basename(dir)}.txt`;
+      const outsidePath = join(dirname(dir), outside);
+      await writeFile(outsidePath, `key: a: b: ${SECRET}\n`);
+      try {
+        const refused = await save('Leak', [runs(`../../${outside}`)]);
+        expect(refused.status).toBe(400);
+        expect(refused.body.error.code).toBe('BAD_BLOCK');
+        expect(await folderFiles('blocks')).toEqual([]);
+        const project = await call('GET', '/api/project');
+        expect(project.text).not.toContain(SECRET);
+        expect((project.body as ProjectInfo).blocks).toEqual([]);
+      } finally {
+        await rm(outsidePath, { force: true });
+      }
+    });
+
+    it('refuses a runFlow of a real flow outside the block folders', async () => {
+      await writeFlow('helper.yaml');
+      const refused = await save('Uses helper', [runs('../flows/helper.yaml')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await folderFiles('blocks')).toEqual([]);
+    });
+
+    it('refuses a new runFlow with a ${VAR} in its path', async () => {
+      const refused = await save('Variable', [runs('${FLOW}.yaml')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await folderFiles('blocks')).toEqual([]);
+    });
+
+    it('refuses a runFlow of a block that is itself broken, answers 400 and not 409, and leaves no stray file', async () => {
+      await writeBlock('broken.yaml', '- runFlow: missing.yaml\n');
+      const refused = await save('Uses broken', [runs('broken.yaml')]);
+      expect(refused.status).toBe(400);
+      expect(refused.status).not.toBe(409);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await blockFiles()).toEqual(['broken.yaml']);
+      // The plain file name is free again, so nothing was written under it.
+      const retry = await save('Uses broken', [{ kind: 'launchApp' }]);
+      expect(retry.status).toBe(200);
+      expect(retry.body.file).toBe('blocks/uses-broken.yaml');
+    });
+  });
+
+  describe('accepted on POST', () => {
+    it.each([
+      ['by plain name', runs('other.yaml')],
+      ['by plain name with env', runs('other.yaml', { USERNAME: '${AGENT_USERNAME}' })],
+      ['through a path that goes up and back in', runs('../blocks/other.yaml')],
+    ])('accepts a runFlow of a working block %s', async (_how, step) => {
+      await writeBlock('other.yaml', '- launchApp\n');
+      const saved = await save('Chain', [step]);
+      expect(saved.status).toBe(200);
+      expect(saved.body.file).toBe('blocks/chain.yaml');
+      expect(await blockFiles()).toEqual(['chain.yaml', 'other.yaml']);
+      expect((await call('GET', '/api/blocks/detail?file=blocks/chain.yaml')).body.steps).toEqual([step]);
+    });
+
+    it('accepts a block saved from a case draft that runs setup blocks', async () => {
+      await writeBlock('base.yaml', '- launchApp\n');
+      await writeBlock('login.yaml', '- runFlow: base.yaml\n- inputText: "${USERNAME}"\n');
+      await writeCaseUsing('smoke', 'Smoke', ['blocks/login.yaml', 'blocks/base.yaml']);
+      const draft = await call('GET', '/api/cases/smoke/block-draft');
+      expect(draft.status).toBe(200);
+      const saved = await call('POST', '/api/blocks', draft.body);
+      expect(saved.status).toBe(200);
+      expect((await call('GET', `/api/blocks/detail?file=${saved.body.file}`)).body.steps).toEqual(draft.body.steps);
+    });
+
+    it('accepts a runFlow of a sibling block by plain name when the block folder is outside the project', async () => {
+      const folder = `${basename(dir)}-blocks`;
+      const folderPath = join(dirname(dir), folder);
+      await mkdir(folderPath, { recursive: true });
+      try {
+        await writeFile(join(folderPath, 'sibling.yaml'), `appId: ${APP}\n---\n- launchApp\n`);
+        await withBlockFolders([`../${folder}`]);
+        const saved = await save('Chain', [runs('sibling.yaml')]);
+        expect(saved.status).toBe(200);
+        expect(await readdir(folderPath)).toEqual(['chain.yaml', 'sibling.yaml']);
+      } finally {
+        await rm(folderPath, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('PUT', () => {
+    it('refuses adding a runFlow of ../.env to an editable block, and leaves the file unchanged', async () => {
+      await writeQuotedEnv();
+      await writeBlock('morning.yaml', '- launchApp\n');
+      const before = await readBlockFile('morning.yaml');
+      const refused = await put('blocks/morning.yaml', 'Morning', [{ kind: 'launchApp' }, runs('../.env')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await readBlockFile('morning.yaml')).toBe(before);
+      expectNoSecret((await call('GET', '/api/project')).text);
+    });
+
+    it('refuses adding a new runFlow with a ${VAR} in its path, and leaves the file unchanged', async () => {
+      await writeBlock('morning.yaml', '- launchApp\n');
+      const before = await readBlockFile('morning.yaml');
+      const refused = await put('blocks/morning.yaml', 'Morning', [runs('${FLOW}.yaml')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await readBlockFile('morning.yaml')).toBe(before);
+    });
+
+    it('refuses a runFlow of a block that is itself broken, and leaves the file unchanged', async () => {
+      await writeBlock('broken.yaml', '- runFlow: missing.yaml\n');
+      await writeBlock('morning.yaml', '- launchApp\n');
+      const before = await readBlockFile('morning.yaml');
+      const refused = await put('blocks/morning.yaml', 'Morning', [runs('broken.yaml')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await readBlockFile('morning.yaml')).toBe(before);
+    });
+
+    it('accepts a runFlow of a working block, with and without env', async () => {
+      await writeBlock('other.yaml', '- launchApp\n');
+      await writeBlock('morning.yaml', '- launchApp\n');
+      const steps = [runs('other.yaml'), runs('../blocks/other.yaml', { USERNAME: 'agent' })];
+      const saved = await put('blocks/morning.yaml', 'Morning', steps);
+      expect(saved.status).toBe(200);
+      expect(saved.body.steps).toEqual(steps);
+    });
+  });
+
+  describe('a hand-written block that runs a flow outside the block folders', () => {
+    const HELPER = '../flows/helper.yaml';
+
+    beforeEach(async () => {
+      await writeFlow('helper.yaml');
+      await writeFlow('other.yaml');
+      await writeBlock('uses-helper.yaml', `- runFlow: ${HELPER}\n- back\n`, 'name: Uses helper\n');
+    });
+
+    it('is editable, so the steps it holds can be kept', async () => {
+      const detail = await call('GET', '/api/blocks/detail?file=blocks/uses-helper.yaml');
+      expect(detail.status).toBe(200);
+      expect(detail.body.steps).toEqual([runs(HELPER), { kind: 'back' }]);
+    });
+
+    it('keeps the step and renames the block', async () => {
+      const saved = await put('blocks/uses-helper.yaml', 'Renamed', [runs(HELPER), { kind: 'back' }]);
+      expect(saved.status).toBe(200);
+      expect(saved.body.name).toBe('Renamed');
+      expect(saved.body.steps).toEqual([runs(HELPER), { kind: 'back' }]);
+    });
+
+    it('keeps the step when it moves to another position among the steps', async () => {
+      const saved = await put('blocks/uses-helper.yaml', 'Uses helper', [{ kind: 'back' }, runs(HELPER), { kind: 'launchApp' }]);
+      expect(saved.status).toBe(200);
+      expect(saved.body.steps).toEqual([{ kind: 'back' }, runs(HELPER), { kind: 'launchApp' }]);
+    });
+
+    it('refuses changing the file of that step to another path that is not a block, and leaves the file unchanged', async () => {
+      const before = await readBlockFile('uses-helper.yaml');
+      const refused = await put('blocks/uses-helper.yaml', 'Uses helper', [runs('../flows/other.yaml'), { kind: 'back' }]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+      expect(await readBlockFile('uses-helper.yaml')).toBe(before);
+    });
+
+    it('refuses adding the same flow with env, as that is a different step from the kept one', async () => {
+      const before = await readBlockFile('uses-helper.yaml');
+      const refused = await put('blocks/uses-helper.yaml', 'Uses helper', [runs(HELPER, { A: '1' }), { kind: 'back' }]);
+      expect(refused.status).toBe(400);
+      expect(await readBlockFile('uses-helper.yaml')).toBe(before);
+    });
+  });
+
+  describe('a hand-written block with a ${VAR} in the path of a runFlow', () => {
+    beforeEach(async () => {
+      await writeBlock('dynamic.yaml', '- runFlow: ${FLOW}.yaml\n- back\n', 'name: Dynamic\n');
+    });
+
+    it('keeps that step when the block is renamed', async () => {
+      const saved = await put('blocks/dynamic.yaml', 'Renamed', [runs('${FLOW}.yaml'), { kind: 'back' }]);
+      expect(saved.status).toBe(200);
+      expect(saved.body.steps).toEqual([runs('${FLOW}.yaml'), { kind: 'back' }]);
+    });
+
+    it('refuses a second runFlow with a ${VAR} in its path', async () => {
+      const refused = await put('blocks/dynamic.yaml', 'Dynamic', [runs('${FLOW}.yaml'), runs('${OTHER}.yaml')]);
+      expect(refused.status).toBe(400);
+      expect(refused.body.error.code).toBe('BAD_BLOCK');
+    });
+  });
+
+  describe('a hand-written block that runs ../.env', () => {
+    beforeEach(async () => {
+      await writeQuotedEnv();
+      await writeBlock('leak.yaml', '- runFlow: ../.env\n', 'name: Leak\n');
+    });
+
+    it('is listed as an error block, saying which file it runs and that it cannot be read, with nothing from .env', async () => {
+      const project = await call('GET', '/api/project');
+      expect(project.status).toBe(200);
+      expectNoSecret(project.text);
+      const leak = (project.body as ProjectInfo).blocks.find((block) => block.file === 'blocks/leak.yaml');
+      expect(leak?.error).toMatch(/^It runs \.\.\/\.env, which cannot be read: /);
+      expect(leak?.error).not.toContain('\n');
+    });
+
+    it('answers an error from trying it that names the file and carries nothing from .env', async () => {
+      await openSession();
+      const tried = await call('POST', '/api/blocks/try', { file: 'blocks/leak.yaml' });
+      expect(tried.status).toBeGreaterThanOrEqual(400);
+      expectNoSecret(tried.text);
+      expect(tried.body.error.message).toContain('../.env');
+      expect(tried.body.error.message).toContain('cannot be read');
+      expect(device.replays).toEqual([]);
+    });
   });
 });
 

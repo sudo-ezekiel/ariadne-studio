@@ -616,6 +616,42 @@ describe('ProjectStore blocks written from the Blocks tab', () => {
     expect(block!.outline?.ownFlow?.steps).toEqual([{ kind: 'back' }]);
   });
 
+  describe('a block that runs a file with invalid YAML', () => {
+    const INNER = 'SECRET-INNER-VALUE';
+
+    async function listBroken(text: string) {
+      const store = await ProjectStore.open(dir);
+      await mkdir(join(dir, 'flows'), { recursive: true });
+      await writeFile(join(dir, 'flows', 'broken.yaml'), text);
+      await writeFile(join(dir, 'blocks', 'outer.yaml'), `${HEADER}- runFlow: ../flows/broken.yaml\n`);
+      const [block] = await store.listBlocks();
+      return block!;
+    }
+
+    it('gives an error in the "It runs ..., which cannot be read:" form that names the failure', async () => {
+      const block = await listBroken(`key: a: b: ${INNER}\n`);
+      expect(block.error).toMatch(/^It runs \.\.\/flows\/broken\.yaml, which cannot be read: \S/);
+      expect(block.outline).toBeUndefined();
+    });
+
+    it('keeps the error to one line and does not quote the broken file or end in a colon', async () => {
+      const block = await listBroken(`key: a: b: ${INNER}\nsecond: line-two\n`);
+      expect(block.error).toBeDefined();
+      expect(block.error).not.toContain('\n');
+      expect(block.error).not.toContain(INNER);
+      expect(block.error).not.toContain('line-two');
+      expect(block.error).not.toMatch(/:$/);
+    });
+
+    it('keeps the full message when the block own YAML is invalid', async () => {
+      const store = await ProjectStore.open(dir);
+      await writeFile(join(dir, 'blocks', 'own.yaml'), `${HEADER}key: a: b: ${INNER}\n`);
+      const [block] = await store.listBlocks();
+      expect(block!.error).toContain('\n');
+      expect(block!.error).toContain(INNER);
+    });
+  });
+
   it('removes a deleted block from the folder and from the list', async () => {
     const store = await ProjectStore.open(dir);
     const file = await store.writeBlock(flowOf('Log in'));

@@ -816,6 +816,10 @@ the same thing by the time the form sees them:
   two saves could each pass the loop check, and a case start could leave `recordingBlock` set.
 - A password nothing has saved reaches agent-device, whose session log records `type` with no text
   (checked on 2026-11-07). Its errors go unrepeated, because no list of saved values can redact it.
+- A save can only add a `runFlow` to a working block of this project; one already in the file stays.
+  Listing blocks reads what they run, so an unchecked path would let a request point the studio at
+  any file. For the same reason an error about a flow a block runs never quotes that file: the YAML
+  library's message includes the line it failed on, which for `.env` would be a saved value.
 - A block cannot run itself: Run a setup block now can put any block into a recording, so saving
   follows its `runFlow` steps and refuses one that leads back to its own file (`reachesBlock`). It
   cannot follow a path with a `${VAR}` in it, which Maestro resolves at run time, or a `runFlow`
