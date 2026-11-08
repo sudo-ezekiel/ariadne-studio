@@ -104,7 +104,8 @@ describe('onlyTrustedCanChange', () => {
   });
 });
 
-describe.runIf(process.platform === 'win32')('folders in %ProgramData%', () => {
+// The first test starts PowerShell for the first time on the machine: 2.8 to 10.9 s on GitHub's Windows runners.
+describe.runIf(process.platform === 'win32')('folders in %ProgramData%', { timeout: 30_000 }, () => {
   const made: string[] = [];
 
   function icacls(...args: string[]): string {
