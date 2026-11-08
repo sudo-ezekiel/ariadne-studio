@@ -31,6 +31,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The studio no longer says to ask a developer about a block's missing values. Save them under
   **Settings** in the Blocks tab.
 
+### Fixed
+
+- On Windows, saving a project file failed when something was reading it at that moment, such as a
+  virus scan. The end of a Run all could then stay saved as "running". The studio now tries again
+  for about 2 seconds.
+
 ## [0.1.1] - 2026-11-06
 
 ### Added

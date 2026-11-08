@@ -106,11 +106,39 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+// What Windows says when it refuses to replace a file something has open, such
+// as a reader polling it or a virus scan. The reader lets go in a moment.
+const IN_USE = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_TRIES = 10;
+
+/**
+ * rename, tried again for about 2 s while Windows says the target is in use.
+ * Seen on GitHub's Windows runners: the last save of a Run all was refused and
+ * its file said "running" for good. Elsewhere those codes mean no permission, so
+ * the first error stands.
+ */
+export async function renameWhenFree(from: string, to: string, platform: NodeJS.Platform = process.platform, move = rename): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await move(from, to);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (platform !== 'win32' || !code || !IN_USE.has(code) || attempt >= RENAME_TRIES) throw error;
+      await new Promise((wake) => setTimeout(wake, Math.min(20 * 2 ** (attempt - 1), 400)));
+    }
+  }
+}
+
 /** Writes via a temp file and rename so a crash never leaves half a JSON file. */
 async function writeFileAtomic(path: string, content: string): Promise<void> {
   const temp = `${path}.${process.pid}.tmp`;
   await writeFile(temp, content, 'utf8');
-  await rename(temp, path);
+  try {
+    await renameWhenFree(temp, path);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
 }
 
 function slugify(name: string, fallback = 'case'): string {
