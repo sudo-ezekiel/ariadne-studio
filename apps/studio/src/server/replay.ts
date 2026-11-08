@@ -32,6 +32,7 @@ import {
   type RunCommand,
   type RunSummary,
   type SuiteRun,
+  type TestedOn,
   type TestCase,
 } from '@ariadne/core';
 import type { RunView, SuiteView } from '../shared/api-types.ts';
@@ -388,11 +389,32 @@ async function failedStepText(state: ServerState, testCase: TestCase, summary: R
   return describeFlowItem(item, testCase.appId, { caseName: (id) => names.get(id), blockName: (file) => blocks.get(file) });
 }
 
+/** The phone and the version of each app Run all is about to test, for its evidence pack. Never stops Run all. */
+async function readTestedOn(state: ServerState, suite: SuiteRun): Promise<TestedOn | undefined> {
+  const appIds: string[] = [];
+  for (const item of suite.cases) {
+    if (item.outcome === 'muted') continue;
+    const testCase = await state.project.readCase(item.caseId).catch(() => undefined);
+    if (testCase) appIds.push(testCase.appId);
+  }
+  try {
+    return await state.phoneTools.testedOn(suite.deviceId, [...new Set(appIds)]);
+  } catch (error) {
+    console.error(`[studio] could not read the phone and app versions for ${suite.suiteId}: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+}
+
 async function runSuite(state: ServerState, job: { run: SuiteRun; stopRequested: boolean }): Promise<void> {
   const { project } = state;
   const suite = job.run;
   const save = () => project.saveSuite(suite).catch((error: unknown) => console.error(`[studio] could not save ${suite.suiteId}:`, error));
   await save();
+  const testedOn = await readTestedOn(state, suite);
+  if (testedOn) {
+    suite.testedOn = testedOn;
+    await save();
+  }
   try {
     await withSessionHandedToMaestro(state, async () => {
       for (const item of suite.cases) {
@@ -471,10 +493,10 @@ async function imageDataUrl(state: ServerState, projectRelative: string, maxWidt
 }
 
 /** Resolves every image a report needs up front, so the pure HTML builders can stay synchronous. */
-async function imageMap(state: ServerState, paths: Array<string | undefined>): Promise<(path: string) => string | undefined> {
+export async function imageMap(state: ServerState, paths: Array<string | undefined>, maxWidth?: number): Promise<(path: string) => string | undefined> {
   const map = new Map<string, string>();
   for (const path of new Set(paths.filter((item): item is string => Boolean(item)))) {
-    const url = await imageDataUrl(state, path);
+    const url = await imageDataUrl(state, path, maxWidth);
     if (url) map.set(path, url);
   }
   return (path) => map.get(path);

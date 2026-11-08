@@ -28,6 +28,8 @@ export type ProjectSettings = {
   paths?: ProjectPaths;
   /** Keep a video of each run. Off unless set. */
   runVideo?: boolean;
+  /** Offer an evidence pack after Run all. Off unless set. */
+  evidencePack?: boolean;
 };
 
 /** The folders of ProjectPaths, absolute. */
@@ -104,11 +106,56 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** Writes via a temp file and rename so a crash never leaves half a JSON file. */
-async function writeFileAtomic(path: string, content: string): Promise<void> {
-  const temp = `${path}.${process.pid}.tmp`;
-  await writeFile(temp, content, 'utf8');
-  await rename(temp, path);
+// What Windows says when it refuses to replace a file something has open, such
+// as a reader polling it or a virus scan. The reader lets go in a moment.
+const IN_USE = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_TRIES = 10;
+
+/**
+ * rename, tried again for about 2 s while Windows says the target is in use.
+ * Seen on GitHub's Windows runners: the last save of a Run all was refused and
+ * its file said "running" for good. Elsewhere those codes mean no permission, so
+ * the first error stands.
+ */
+export async function renameWhenFree(from: string, to: string, platform: NodeJS.Platform = process.platform, move = rename): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await move(from, to);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (platform !== 'win32' || !code || !IN_USE.has(code) || attempt >= RENAME_TRIES) throw error;
+      await new Promise((wake) => setTimeout(wake, Math.min(20 * 2 ** (attempt - 1), 400)));
+    }
+  }
+}
+
+// The write of each file under way, so the next one waits for it: a write waiting
+// out a busy file must not be overtaken by a later one, and two must not share
+// the temp file, where one could rename the other's half-written content.
+const writing = new Map<string, Promise<void>>();
+
+/**
+ * Writes via a temp file and rename so a crash never leaves half a JSON file.
+ * Writes of one file go in the order they were asked for.
+ */
+export async function writeFileAtomic(path: string, content: string, move = rename): Promise<void> {
+  const write = async () => {
+    const temp = `${path}.${process.pid}.tmp`;
+    await writeFile(temp, content, 'utf8');
+    try {
+      await renameWhenFree(temp, path, process.platform, move);
+    } catch (error) {
+      await rm(temp, { force: true }).catch(() => undefined);
+      throw error;
+    }
+  };
+  const current = (writing.get(path) ?? Promise.resolve()).then(write, write);
+  writing.set(path, current);
+  try {
+    await current;
+  } finally {
+    if (writing.get(path) === current) writing.delete(path);
+  }
 }
 
 function slugify(name: string, fallback = 'case'): string {

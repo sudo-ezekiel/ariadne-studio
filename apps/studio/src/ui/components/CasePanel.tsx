@@ -376,6 +376,7 @@ export function CasePanel(props: Props) {
         cases={project?.cases ?? []}
         suite={props.suite}
         busy={busy}
+        evidencePack={project?.evidencePack ?? false}
         onOpen={props.onOpenCase}
         onReplay={props.onReplayCase}
         onRunAll={props.onRunAll}

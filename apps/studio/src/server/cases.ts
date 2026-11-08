@@ -106,12 +106,13 @@ export function registerCaseRoutes(app: FastifyInstance, state: ServerState): vo
     });
   });
 
-  // Rename and mute do not change what the flow does, so runs stay current.
+  // Rename, mute and reference do not change what the flow does, so runs stay current.
   app.patch('/api/cases/:caseId', async (request): Promise<CaseDetailResponse> => {
     const caseId = readId(request.params, 'caseId');
     refuseIfRecording(state, caseId);
     const testCase = await readSavedCase(state, caseId);
     const name = optionalText(request.body, 'name', 200);
+    const reference = optionalText(request.body, 'reference', 100);
     const muted = (request.body as { muted?: unknown } | undefined)?.muted;
     if (muted !== undefined && typeof muted !== 'boolean') throw new HttpError(400, 'BAD_REQUEST', 'Expected "muted" to be true or false.');
     if (name !== undefined) {
@@ -120,6 +121,8 @@ export function registerCaseRoutes(app: FastifyInstance, state: ServerState): vo
     }
     if (muted === true) testCase.muted = true;
     if (muted === false) delete testCase.muted;
+    if (reference) testCase.reference = reference;
+    else if (reference !== undefined) delete testCase.reference;
     await saveEdited(state, testCase, false);
     return caseDetail(state, caseId);
   });
@@ -314,6 +317,7 @@ export function registerCaseRoutes(app: FastifyInstance, state: ServerState): vo
         evidenceFloor: floor,
         editedAt: nowIso(),
         ...(testCase.muted ? { muted: true } : {}),
+        ...(testCase.reference ? { reference: testCase.reference } : {}),
       });
       state.recorder = recorder;
       state.editing = {

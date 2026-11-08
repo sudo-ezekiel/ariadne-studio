@@ -154,6 +154,8 @@ export type ProjectInfo = {
   suiteRunning: boolean;
   /** Keep a video of each run. */
   runVideo: boolean;
+  /** Offer an evidence pack after Run all. */
+  evidencePack: boolean;
   /** False when this machine has no ffmpeg, so run videos show the phone without the steps. */
   videoHasSteps: boolean;
 };
@@ -274,7 +276,8 @@ export type CaseDetailResponse = {
   dependents: CaseRef[];
 };
 
-export type CasePatch = { name?: string; muted?: boolean };
+/** An empty `reference` removes it. */
+export type CasePatch = { name?: string; muted?: boolean; reference?: string };
 /** `review: null` says someone has looked at a flagged step. */
 export type StepPatch = { title?: string; note?: string; review?: null };
 

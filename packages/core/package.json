@@ -24,6 +24,7 @@
     "./describe": "./src/recorder/describe.ts",
     "./block-values": "./src/recorder/block-values.ts",
     "./suite": "./src/replay/suite.ts",
+    "./tested-on": "./src/device/tested-on.ts",
     "./similarity": "./src/image/similarity.ts"
   },
   "scripts": {

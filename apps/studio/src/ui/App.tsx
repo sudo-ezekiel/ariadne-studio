@@ -254,6 +254,13 @@ export function App() {
       .catch((error: unknown) => toast(error instanceof Error ? error.message : String(error)));
   };
 
+  const setEvidencePack = (on: boolean) => {
+    api
+      .setEvidencePack(on)
+      .then(setProject)
+      .catch((error: unknown) => toast(error instanceof Error ? error.message : String(error)));
+  };
+
   // A save or a run can rewrite or remove the open file, and project changes after both.
   const openedFilePath = useRef<string | undefined>(undefined);
   openedFilePath.current = openedFile?.path;
@@ -599,6 +606,8 @@ export function App() {
         runVideo={project?.runVideo ?? false}
         videoHasSteps={project?.videoHasSteps ?? true}
         onRunVideo={setRunVideo}
+        evidencePack={project?.evidencePack ?? false}
+        onEvidencePack={setEvidencePack}
       />
       <main className="workspace">
         <Mirror
@@ -690,6 +699,7 @@ export function App() {
               onOpenCase: (caseId) => void openCase(caseId),
               onRename: (caseId, name) => changeCase('Renaming', () => api.patchCase(caseId, { name })),
               onMute: (caseId, muted) => changeCase(muted ? 'Muting' : 'Unmuting', () => api.patchCase(caseId, { muted })),
+              onReference: (caseId, reference) => changeCase('Saving the reference', () => api.patchCase(caseId, { reference })),
               onDuplicate: (caseId) => changeCase('Duplicating', () => api.duplicateCase(caseId)),
               onSaveAsBlock: saveCaseAsBlock,
               onDelete: deleteCase,

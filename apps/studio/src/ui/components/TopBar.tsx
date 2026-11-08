@@ -16,6 +16,8 @@ type Props = {
   runVideo: boolean;
   videoHasSteps: boolean;
   onRunVideo: (on: boolean) => void;
+  evidencePack: boolean;
+  onEvidencePack: (on: boolean) => void;
 };
 
 const THEME_CHOICES: { value: ThemeChoice; label: string }[] = [
@@ -32,7 +34,9 @@ function SettingsMenu({
   runVideo,
   videoHasSteps,
   onRunVideo,
-}: Pick<Props, 'themeChoice' | 'onThemeChoice' | 'onOpenSetup' | 'runVideo' | 'videoHasSteps' | 'onRunVideo'>) {
+  evidencePack,
+  onEvidencePack,
+}: Pick<Props, 'themeChoice' | 'onThemeChoice' | 'onOpenSetup' | 'runVideo' | 'videoHasSteps' | 'onRunVideo' | 'evidencePack' | 'onEvidencePack'>) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -85,6 +89,13 @@ function SettingsMenu({
               Keep a video of each run
               <span className="menu-item-hint">The steps beside the phone. It stays on this computer and shows whatever is on the screen.</span>
               {!videoHasSteps && <span className="menu-item-hint">Install ffmpeg to see the steps; without it the video shows only the phone.</span>}
+            </span>
+          </label>
+          <label className="menu-check">
+            <input type="checkbox" checked={evidencePack} onChange={(event) => onEvidencePack(event.target.checked)} />
+            <span>
+              Offer an evidence pack after Run all
+              <span className="menu-item-hint">A test results report to print or save as PDF, for whoever accepts the release.</span>
             </span>
           </label>
           <div className="menu-section" role="group" aria-label="Appearance">
@@ -155,6 +166,8 @@ export function TopBar(props: Props) {
         runVideo={props.runVideo}
         videoHasSteps={props.videoHasSteps}
         onRunVideo={props.onRunVideo}
+        evidencePack={props.evidencePack}
+        onEvidencePack={props.onEvidencePack}
       />
     </header>
   );

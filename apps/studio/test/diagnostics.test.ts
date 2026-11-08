@@ -204,6 +204,7 @@ async function rig(options: RigOptions = {}): Promise<Rig> {
     installDriver: refuse('installDriver'),
     stopDriver: refuse('stopDriver'),
     report,
+    testedOn: refuse('testedOn'),
   };
   const logLines: string[] = [];
   const log: LogBuffer = { lines: () => [...logLines], stop: () => undefined };

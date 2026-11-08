@@ -119,6 +119,12 @@ export type TestCase = {
   /** Skipped by Run all. */
   muted?: boolean;
   /**
+   * What the case proves, in the words of the project's own documents: a
+   * requirement, user story or test scenario code such as "REQ-4.2". Shown in
+   * test case documents and evidence packs so a reviewer can trace each case.
+   */
+  reference?: string;
+  /**
    * Highest screenshot number ever used by this case, including steps since
    * deleted or replaced, so an edit never reuses one (absent in older cases).
    */

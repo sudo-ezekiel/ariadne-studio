@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { makeCaseId, makeRunId, makeSuiteId, parseDotEnv, PROJECT_GITIGNORE, ProjectStore, resolveProjectPaths } from '../src/project/store.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeCaseId, makeRunId, makeSuiteId, parseDotEnv, PROJECT_GITIGNORE, ProjectStore, renameWhenFree, resolveProjectPaths, writeFileAtomic } from '../src/project/store.ts';
 import type { MaestroFlow, MaestroStep } from '../src/maestro/model.ts';
 import type { TestCase } from '../src/recorder/case-types.ts';
 import { caseToFlow, Recorder } from '../src/recorder/recorder.ts';
@@ -857,5 +857,248 @@ describe('helpers', () => {
 
   it('parses KEY=VALUE without interpolation', () => {
     expect(parseDotEnv("A=1\nB='${A}'\nC=x=y\n")).toEqual({ A: '1', B: '${A}', C: 'x=y' });
+  });
+});
+
+describe('renameWhenFree', () => {
+  type Move = NonNullable<Parameters<typeof renameWhenFree>[3]>;
+
+  function failure(code?: string): Error {
+    return Object.assign(new Error(`${code ?? 'no code'}: rename failed`), code ? { code } : {});
+  }
+
+  /** Runs renameWhenFree on fake timers and settles it, returning the outcome. */
+  async function settle(platform: NodeJS.Platform, move: Move): Promise<{ error?: unknown; ok: boolean }> {
+    vi.useFakeTimers();
+    try {
+      const outcome = renameWhenFree('a.tmp', 'a', platform, move).then(
+        () => ({ ok: true }),
+        (error: unknown) => ({ ok: false, error }),
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      return await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it.each(['EPERM', 'EACCES', 'EBUSY'])('on win32 retries %s and succeeds on the third try', async (code) => {
+    const move = vi.fn<Move>().mockRejectedValueOnce(failure(code)).mockRejectedValueOnce(failure(code)).mockResolvedValue(undefined);
+    expect(await settle('win32', move)).toEqual({ ok: true });
+    expect(move).toHaveBeenCalledTimes(3);
+    expect(move).toHaveBeenCalledWith('a.tmp', 'a');
+  });
+
+  it('on win32 gives up after 10 tries and throws the last error', async () => {
+    const errors = Array.from({ length: 10 }, () => failure('EPERM'));
+    const move = vi.fn<Move>();
+    for (const error of errors) move.mockRejectedValueOnce(error);
+    const outcome = await settle('win32', move);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe(errors[9]);
+    expect(move).toHaveBeenCalledTimes(10);
+  });
+
+  it('on win32 waits 20, 40, 80, 160, 320 then 400 ms between tries', async () => {
+    vi.useFakeTimers();
+    try {
+      const move = vi.fn<Move>().mockRejectedValue(failure('EBUSY'));
+      const outcome = renameWhenFree('a.tmp', 'a', 'win32', move).catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(move).toHaveBeenCalledTimes(1);
+      let elapsed = 0;
+      for (const [index, wait] of [20, 40, 80, 160, 320, 400, 400, 400, 400].entries()) {
+        await vi.advanceTimersByTimeAsync(wait - 1);
+        expect(move).toHaveBeenCalledTimes(index + 1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(move).toHaveBeenCalledTimes(index + 2);
+        elapsed += wait;
+      }
+      expect(elapsed).toBe(2220);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each<NodeJS.Platform>(['linux', 'darwin'])('on %s throws EPERM at once without retrying', async (platform) => {
+    const error = failure('EPERM');
+    const move = vi.fn<Move>().mockRejectedValue(error);
+    const outcome = await settle(platform, move);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe(error);
+    expect(move).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['ENOENT', 'EXDEV', undefined])('on win32 throws code %s at once without retrying', async (code) => {
+    const error = failure(code);
+    const move = vi.fn<Move>().mockRejectedValue(error);
+    const outcome = await settle('win32', move);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toBe(error);
+    expect(move).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves once and needs no timers when the first try works', async () => {
+    const move = vi.fn<Move>().mockResolvedValue(undefined);
+    expect(await settle('win32', move)).toEqual({ ok: true });
+    expect(move).toHaveBeenCalledTimes(1);
+  });
+
+  it('really moves a file with the default move', async () => {
+    const from = join(dir, 'from.tmp');
+    const to = join(dir, 'to.json');
+    await writeFile(from, 'payload', 'utf8');
+    await writeFile(to, 'old', 'utf8');
+    await renameWhenFree(from, to);
+    expect(await readFile(to, 'utf8')).toBe('payload');
+    expect(await readdir(dir)).toEqual(['to.json']);
+  });
+});
+
+describe('writeFileAtomic', () => {
+  type Move = NonNullable<Parameters<typeof writeFileAtomic>[2]>;
+
+  function deferred() {
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  /** Lets queued work run: a few ms is far longer than the file writes need to reach the move. */
+  const pause = () => new Promise((resolve) => setTimeout(resolve, 15));
+
+  /** A move that logs its call, signals that it was reached, waits for the gate, then really renames. */
+  function gatedMove(log: string[], label: string, gate: Promise<void>, reached = deferred()) {
+    const move: Move = async (from, to) => {
+      log.push(label);
+      reached.release();
+      await gate;
+      await rename(from, to);
+    };
+    return { move, reached: reached.promise };
+  }
+
+  it('writes the content and leaves no .tmp file behind', async () => {
+    const file = join(dir, 'a.json');
+    await writeFileAtomic(file, 'hello');
+    expect(await readFile(file, 'utf8')).toBe('hello');
+    expect(await readdir(dir)).toEqual(['a.json']);
+  });
+
+  it('replaces existing content', async () => {
+    const file = join(dir, 'a.json');
+    await writeFile(file, 'old');
+    await writeFileAtomic(file, 'new');
+    expect(await readFile(file, 'utf8')).toBe('new');
+  });
+
+  it('does not start the second write of a path until the first has finished, and the second content wins', async () => {
+    const file = join(dir, 'a.json');
+    const log: string[] = [];
+    const gate = deferred();
+    const first = gatedMove(log, 'first', gate.promise);
+    const second = gatedMove(log, 'second', Promise.resolve());
+    const one = writeFileAtomic(file, 'one', first.move);
+    const two = writeFileAtomic(file, 'two', second.move);
+    await first.reached;
+    await pause();
+    expect(log).toEqual(['first']);
+    // The second write has not even written its temp file: only the first one's temp is there.
+    expect((await readdir(dir)).sort()).toEqual([`a.json.${process.pid}.tmp`]);
+    expect(await readFile(join(dir, `a.json.${process.pid}.tmp`), 'utf8')).toBe('one');
+    gate.release();
+    await Promise.all([one, two]);
+    expect(log).toEqual(['first', 'second']);
+    expect(await readFile(file, 'utf8')).toBe('two');
+    expect(await readdir(dir)).toEqual(['a.json']);
+  });
+
+  it('keeps the order of three writes started back to back', async () => {
+    const file = join(dir, 'a.json');
+    const log: string[] = [];
+    const gate = deferred();
+    const moves = ['one', 'two', 'three'].map((label, index) => gatedMove(log, label, index === 0 ? gate.promise : Promise.resolve()));
+    const writes = moves.map((entry, index) => writeFileAtomic(file, ['one', 'two', 'three'][index]!, entry.move));
+    await moves[0]!.reached;
+    await pause();
+    expect(log).toEqual(['one']);
+    gate.release();
+    await Promise.all(writes);
+    expect(log).toEqual(['one', 'two', 'three']);
+    expect(await readFile(file, 'utf8')).toBe('three');
+    expect(await readdir(dir)).toEqual(['a.json']);
+  });
+
+  it('rejects with the move error, removes the temp file, and still lets a second write of the path succeed', async () => {
+    const file = join(dir, 'a.json');
+    const error = Object.assign(new Error('EXDEV: cross-device link'), { code: 'EXDEV' });
+    const gate = deferred();
+    const reached = deferred();
+    const failing: Move = async () => {
+      reached.release();
+      await gate.promise;
+      throw error;
+    };
+    const first = writeFileAtomic(file, 'one', failing).then(
+      () => ({ ok: true as const }),
+      (caught: unknown) => ({ ok: false as const, caught }),
+    );
+    await reached.promise;
+    const second = writeFileAtomic(file, 'two');
+    await pause();
+    gate.release();
+    const outcome = await first;
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok ? undefined : outcome.caught).toBe(error);
+    await second;
+    expect(await readFile(file, 'utf8')).toBe('two');
+    expect(await readdir(dir)).toEqual(['a.json']);
+  });
+
+  it('removes the temp file of a failed write when nothing else is waiting', async () => {
+    const file = join(dir, 'a.json');
+    const error = Object.assign(new Error('EXDEV'), { code: 'EXDEV' });
+    await expect(writeFileAtomic(file, 'one', async () => Promise.reject(error))).rejects.toBe(error);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('accepts a later write of a path after an earlier one failed, once the failure is over', async () => {
+    const file = join(dir, 'a.json');
+    await expect(writeFileAtomic(file, 'one', async () => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+    await writeFileAtomic(file, 'two');
+    expect(await readFile(file, 'utf8')).toBe('two');
+  });
+
+  it('does not make writes of different paths wait for each other', async () => {
+    const slow = join(dir, 'slow.json');
+    const fast = join(dir, 'fast.json');
+    const log: string[] = [];
+    const gate = deferred();
+    const held = gatedMove(log, 'slow', gate.promise);
+    const slowWrite = writeFileAtomic(slow, 'slow', held.move);
+    await held.reached;
+    await writeFileAtomic(fast, 'fast');
+    expect(await readFile(fast, 'utf8')).toBe('fast');
+    expect(log).toEqual(['slow']);
+    gate.release();
+    await slowWrite;
+    expect(await readFile(slow, 'utf8')).toBe('slow');
+  });
+
+  it('throws the original move error when the temp file cannot be removed', async () => {
+    const file = join(dir, 'a.json');
+    const error = Object.assign(new Error('EXDEV: cross-device link'), { code: 'EXDEV' });
+    const temp = `${file}.${process.pid}.tmp`;
+    // rm with force still refuses a directory unless it is recursive, so the clean-up fails.
+    const move: Move = async () => {
+      await rm(temp);
+      await mkdir(temp);
+      throw error;
+    };
+    await expect(writeFileAtomic(file, 'one', move)).rejects.toBe(error);
+    expect((await readdir(dir)).sort()).toEqual([`a.json.${process.pid}.tmp`]);
   });
 });

@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { suiteOrder } from '@ariadne/core/suite';
+import { appVersionText } from '@ariadne/core/tested-on';
 import type { CaseListItem, SuiteView } from '../../shared/api-types.ts';
-import { api } from '../api.ts';
+import { api, type EvidenceDetails } from '../api.ts';
 import { count, formatDate } from './format.ts';
 
 type Props = {
   cases: CaseListItem[];
   suite: SuiteView | null;
   busy: boolean;
+  /** Offer an evidence pack under the last Run all; a setting, off unless turned on. */
+  evidencePack: boolean;
   onOpen: (caseId: string) => void;
   onReplay: (caseId: string) => void;
   onRunAll: (retryFailed: boolean) => void;
@@ -48,8 +51,92 @@ function History({ item }: { item: CaseListItem }) {
   );
 }
 
-function SuiteBar({ suite, busy, cases, onRunAll, onStopSuite }: Pick<Props, 'suite' | 'busy' | 'cases' | 'onRunAll' | 'onStopSuite'>) {
+// What stays the same from one pack to the next is remembered: who tests, and how the second signature reads.
+const REMEMBERED = { testedBy: 'ariadne-tested-by', signoffRole: 'ariadne-signoff-role', screens: 'ariadne-evidence-screens' } as const;
+
+function remembered(key: keyof typeof REMEMBERED): string {
+  try {
+    return localStorage.getItem(REMEMBERED[key]) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function remember(key: keyof typeof REMEMBERED, value: string): void {
+  try {
+    if (value.trim()) localStorage.setItem(REMEMBERED[key], value.trim());
+    else localStorage.removeItem(REMEMBERED[key]);
+  } catch {
+    // Storage can be off (private windows); the value is then asked for again.
+  }
+}
+
+/** The texts of the evidence pack of a finished Run all. The release starts as the app version Run all read. */
+function EvidenceForm({ suite }: { suite: SuiteView }) {
+  const firstApp = suite.testedOn?.apps[0];
+  const [details, setDetails] = useState<EvidenceDetails>(() => ({
+    release: firstApp ? (appVersionText(firstApp) ?? '') : '',
+    testedBy: remembered('testedBy'),
+    signoffRole: remembered('signoffRole') || 'Accepted by',
+    knownIssues: '',
+    conclusion: '',
+    screens: remembered('screens') === 'checks' ? 'checks' : 'all',
+  }));
+  const set = (key: keyof EvidenceDetails) => (event: { target: { value: string } }) => setDetails({ ...details, [key]: event.target.value });
+  const make = () => {
+    remember('testedBy', details.testedBy);
+    remember('signoffRole', details.signoffRole === 'Accepted by' ? '' : details.signoffRole);
+    remember('screens', details.screens === 'checks' ? 'checks' : '');
+    window.open(api.evidenceUrl(suite.suiteId, details), '_blank', 'noopener');
+  };
+  return (
+    <form
+      className="evidence-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        make();
+      }}
+    >
+      <label className="field">
+        <span className="field-title">Release</span>
+        <input value={details.release} maxLength={200} placeholder="2.4.1" onChange={set('release')} />
+      </label>
+      <label className="field">
+        <span className="field-title">Tested by</span>
+        <input value={details.testedBy} maxLength={200} placeholder="Your name" onChange={set('testedBy')} />
+      </label>
+      <label className="field">
+        <span className="field-title">Second signature</span>
+        <input value={details.signoffRole} maxLength={40} placeholder="Accepted by" onChange={set('signoffRole')} title="Reviewed by, if the client accepts in a document of its own" />
+      </label>
+      <label className="field">
+        <span className="field-title">Screens</span>
+        <select value={details.screens} onChange={set('screens')}>
+          <option value="all">After every step</option>
+          <option value="checks">Only checks and failures</option>
+        </select>
+      </label>
+      <label className="field wide">
+        <span className="field-title">Known issues</span>
+        <textarea value={details.knownIssues} maxLength={1000} rows={2} placeholder="What you know is still wrong in this release" onChange={set('knownIssues')} />
+      </label>
+      <label className="field wide">
+        <span className="field-title">Conclusion</span>
+        <input value={details.conclusion} maxLength={200} placeholder="Ready for release" onChange={set('conclusion')} />
+      </label>
+      <div className="evidence-actions">
+        <button type="submit" className="primary">
+          Make the pack
+        </button>
+        <span className="hint">A first page to sign, then every case with its steps and screens. Print it or save it as PDF. A copy goes in exports/.</span>
+      </div>
+    </form>
+  );
+}
+
+function SuiteBar({ suite, busy, cases, evidencePack, onRunAll, onStopSuite }: Pick<Props, 'suite' | 'busy' | 'cases' | 'evidencePack' | 'onRunAll' | 'onStopSuite'>) {
   const [retry, setRetry] = useState(true);
+  const [evidenceFor, setEvidenceFor] = useState<string | undefined>();
   const running = suite?.status === 'running';
   const current = running ? suite.cases.find((item) => item.outcome === 'running') : undefined;
   const done = suite ? suite.cases.filter((item) => !['pending', 'running'].includes(item.outcome)).length : 0;
@@ -88,9 +175,23 @@ function SuiteBar({ suite, busy, cases, onRunAll, onStopSuite }: Pick<Props, 'su
           <a href={suite.reportUrl} target="_blank" rel="noreferrer">
             Report
           </a>{' '}
+          {evidencePack && (
+            <>
+              <button
+                type="button"
+                className="link"
+                aria-expanded={evidenceFor === suite.suiteId}
+                onClick={() => setEvidenceFor(evidenceFor === suite.suiteId ? undefined : suite.suiteId)}
+                title="A document of this Run all for whoever accepts the release"
+              >
+                Evidence pack
+              </button>{' '}
+            </>
+          )}
           <span className="path">{formatDate(suite.startedAt)}</span>
         </div>
       )}
+      {evidencePack && suite && !running && evidenceFor === suite.suiteId && <EvidenceForm key={suite.suiteId} suite={suite} />}
     </div>
   );
 }
@@ -118,7 +219,7 @@ export function SavedCases(props: Props) {
           </span>
         )}
       </div>
-      <SuiteBar suite={props.suite} busy={busy} cases={cases} onRunAll={props.onRunAll} onStopSuite={props.onStopSuite} />
+      <SuiteBar suite={props.suite} busy={busy} cases={cases} evidencePack={props.evidencePack} onRunAll={props.onRunAll} onStopSuite={props.onStopSuite} />
       {cases.length === 0 ? (
         <div className="empty-state">
           <p className="empty">No cases yet. Record one: name it, choose what runs first, and use the app on the screen.</p>

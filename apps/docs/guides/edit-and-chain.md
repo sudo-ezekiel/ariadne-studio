@@ -67,6 +67,8 @@ The case header has:
 - **Save as block**: opens the steps in the [Blocks tab](/guides/setup-blocks#save-a-case-as-a-block), to reuse them in other cases.
 - **Delete**.
 
+Under the case's name, **Add a reference** gives the case a requirement, user story or scenario code from your project's own documents, such as `REQ-4.2`. [Test case documents](/guides/test-case-documents) and [evidence packs](/guides/run#evidence-pack) show it, so a reviewer can trace each case to what it proves. Like a rename, it leaves the run history as it is.
+
 Setup blocks are edited in the [Blocks tab](/guides/setup-blocks#edit-or-delete-a-block), and a change reaches every case that uses them.
 
 ## What an edit does to history

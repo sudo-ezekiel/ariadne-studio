@@ -1719,6 +1719,99 @@ describe('device problems', () => {
   });
 });
 
+describe('case reference', () => {
+  async function recordReferenced(): Promise<string> {
+    await openSession();
+    return recordCase('Trace me', [tapNetwork, pressBack], { picks: [1] });
+  }
+
+  const patch = (caseId: string, body: object) => call('PATCH', `/api/cases/${caseId}`, body);
+
+  it('sets a reference trimmed, shows it in the detail, and clears it with an empty string', async () => {
+    const caseId = await recordReferenced();
+    const set = await patch(caseId, { reference: '  REQ-4.2  ' });
+    expect(set.status).toBe(200);
+    expect((set.body as CaseDetailResponse).case.reference).toBe('REQ-4.2');
+    expect((await readCaseFile(caseId)).reference).toBe('REQ-4.2');
+    expect(((await call('GET', `/api/cases/${caseId}`)).body as CaseDetailResponse).case.reference).toBe('REQ-4.2');
+
+    const cleared = await patch(caseId, { reference: '' });
+    expect(cleared.status).toBe(200);
+    expect('reference' in (cleared.body as CaseDetailResponse).case).toBe(false);
+    expect('reference' in (await readCaseFile(caseId))).toBe(false);
+  });
+
+  it('clears the reference when it is only spaces', async () => {
+    const caseId = await recordReferenced();
+    await patch(caseId, { reference: 'US-1' });
+    await patch(caseId, { reference: '   ' });
+    expect('reference' in (await readCaseFile(caseId))).toBe(false);
+  });
+
+  it('keeps the reference when the patch does not mention it', async () => {
+    const caseId = await recordReferenced();
+    await patch(caseId, { reference: 'US-1' });
+    await patch(caseId, { name: 'Renamed', muted: true });
+    expect(await readCaseFile(caseId)).toMatchObject({ name: 'Renamed', reference: 'US-1' });
+  });
+
+  it('takes exactly 100 characters and refuses 101', async () => {
+    const caseId = await recordReferenced();
+    expect((await patch(caseId, { reference: 'x'.repeat(100) })).status).toBe(200);
+    const refused = await patch(caseId, { reference: 'y'.repeat(101) });
+    expect(refused).toMatchObject({ status: 400, body: { error: { code: 'BAD_REQUEST' } } });
+    expect((await readCaseFile(caseId)).reference).toBe('x'.repeat(100));
+  });
+
+  it('refuses a reference that is not text', async () => {
+    const caseId = await recordReferenced();
+    for (const reference of [5, true, null, ['REQ-1'], { a: 1 }]) {
+      expect((await patch(caseId, { reference })).status, JSON.stringify(reference)).toBe(400);
+    }
+    expect('reference' in (await readCaseFile(caseId))).toBe(false);
+  });
+
+  it('does not mark the case edited or earlier runs stale', async () => {
+    const caseId = await recordReferenced();
+    const run = (await call('POST', `/api/cases/${caseId}/replay`)).body as RunView;
+    expect(run.stale).toBe(false);
+    await patch(caseId, { reference: 'REQ-9' });
+    expect((await readCaseFile(caseId)).editedAt).toBeUndefined();
+    expect(((await call('GET', `/api/runs/${run.runId}`)).body as RunView).stale).toBe(false);
+    const detail = (await call('GET', `/api/cases/${caseId}`)).body as CaseDetailResponse;
+    expect(detail.health).toMatchObject({ status: 'passed', stale: false });
+  });
+
+  it('survives a re-record from a step', async () => {
+    const caseId = await recordReferenced();
+    await patch(caseId, { reference: 'REQ-4.2' });
+    expect((await call('POST', `/api/cases/${caseId}/edit`, { mode: 'rerecord', step: 2 })).status).toBe(200);
+    expect((await pressBack()).status).toBe(200);
+    expect((await call('POST', '/api/case/finish', { picks: [1] })).status).toBe(200);
+    expect(await readCaseFile(caseId)).toMatchObject({ reference: 'REQ-4.2', editedAt: expect.any(String) });
+  });
+
+  it('survives inserting steps', async () => {
+    const caseId = await recordReferenced();
+    await patch(caseId, { reference: 'REQ-4.2' });
+    expect((await call('POST', `/api/cases/${caseId}/edit`, { mode: 'insert', after: 1 })).status).toBe(200);
+    expect((await call('POST', '/api/case/finish', { picks: [1] })).status).toBe(200);
+    expect((await readCaseFile(caseId)).reference).toBe('REQ-4.2');
+  });
+
+  it('is copied to a duplicate', async () => {
+    const caseId = await recordReferenced();
+    await patch(caseId, { reference: 'REQ-4.2' });
+    const copy = (await call('POST', `/api/cases/${caseId}/duplicate`)).body as CaseDetailResponse;
+    expect(copy.case.reference).toBe('REQ-4.2');
+    expect((await readCaseFile(copy.case.id)).reference).toBe('REQ-4.2');
+  });
+
+  it('answers 404 for a case that does not exist', async () => {
+    expect((await patch('no-such-case', { reference: 'X' })).status).toBe(404);
+  });
+});
+
 describe('replaying steps agent-device cannot replay', () => {
   const header = ['appId: com.android.settings', '---'];
 
@@ -1846,6 +1939,47 @@ describe('run video', () => {
     }
     expect((await call('PUT', '/api/project/run-video')).status).toBe(400);
     expect(((await call('GET', '/api/project')).body as ProjectInfo).runVideo).toBe(true);
+  });
+
+  it('reports evidencePack false by default', async () => {
+    const project = (await call('GET', '/api/project')).body as ProjectInfo;
+    expect(project.evidencePack).toBe(false);
+  });
+
+  it('turns the evidence pack on and off in project.json and returns the project', async () => {
+    const on = await call('PUT', '/api/project/evidence-pack', { on: true });
+    expect(on.status).toBe(200);
+    expect((on.body as ProjectInfo).evidencePack).toBe(true);
+    expect(JSON.parse(await readFile(join(dir, 'project.json'), 'utf8'))).toMatchObject({ evidencePack: true });
+    expect(((await call('GET', '/api/project')).body as ProjectInfo).evidencePack).toBe(true);
+
+    const off = await call('PUT', '/api/project/evidence-pack', { on: false });
+    expect(off.status).toBe(200);
+    expect((off.body as ProjectInfo).evidencePack).toBe(false);
+    expect(JSON.parse(await readFile(join(dir, 'project.json'), 'utf8'))).toMatchObject({ evidencePack: false });
+    expect(((await call('GET', '/api/project')).body as ProjectInfo).evidencePack).toBe(false);
+  });
+
+  it('rejects an evidence pack setting that is not a boolean, and leaves the setting alone', async () => {
+    expect((await call('PUT', '/api/project/evidence-pack', { on: true })).status).toBe(200);
+    for (const payload of [{ on: 'yes' }, { on: 'true' }, { on: 1 }, { on: null }, { other: true }]) {
+      const response = await call('PUT', '/api/project/evidence-pack', payload);
+      expect(response.status, JSON.stringify(payload)).toBe(400);
+      expect(response.body).toMatchObject({ error: { code: 'BAD_REQUEST', message: 'Say whether to offer the evidence pack.' } });
+    }
+    expect((await call('PUT', '/api/project/evidence-pack')).status).toBe(400);
+    expect(((await call('GET', '/api/project')).body as ProjectInfo).evidencePack).toBe(true);
+    expect(JSON.parse(await readFile(join(dir, 'project.json'), 'utf8'))).toMatchObject({ evidencePack: true });
+  });
+
+  it('keeps the evidence pack and run video settings independent of each other', async () => {
+    await setRunVideo(true);
+    const pack = (await call('PUT', '/api/project/evidence-pack', { on: true })).body as ProjectInfo;
+    expect(pack).toMatchObject({ runVideo: true, evidencePack: true });
+
+    await setRunVideo(false);
+    const project = (await call('GET', '/api/project')).body as ProjectInfo;
+    expect(project).toMatchObject({ runVideo: false, evidencePack: true });
   });
 
   it('runs a flow with startRecording first and stopRecording last when the video is on, and keeps them out of flows/', async () => {

@@ -16,11 +16,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   typed into a password field is not kept: its step becomes a setting.
 - **Save as block** opens a saved case in the form as a new block. A case it starts from is written
   out in full, so the block stands alone.
+- **Evidence pack** after Run all, off until **Offer an evidence pack after Run all** is ticked in
+  Settings: a test results report for whoever accepts the release. The first
+  page names the release, the app version, the device Run all ran on (real phone or emulator), who
+  tested, every case's result, your known issues and conclusion, and the SHA-256 of the run records,
+  with a table to sign whose second role you choose. Then each case has a page with every step, its
+  expected result and the screen after it, or only checks and failures. Print it or save it as PDF;
+  a copy goes in `exports/`.
+- **Add a reference** under a case's name: a requirement, user story or scenario code, shown in test
+  case documents and evidence packs.
 
 ### Changed
 
 - The studio no longer says to ask a developer about a block's missing values. Save them under
   **Settings** in the Blocks tab.
+
+### Fixed
+
+- On Windows, saving a project file failed when something was reading it at that moment, such as a
+  virus scan. The end of a Run all could then stay saved as "running". The studio now tries again
+  for about 2 seconds, and saves of one file wait their turn so a later one is never overwritten
+  by an earlier one.
 
 ## [0.1.1] - 2026-11-06
 

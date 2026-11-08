@@ -1969,6 +1969,40 @@ li.step:hover .step-kind.step-kind-block {
   gap: 10px;
 }
 
+.evidence-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 10px;
+}
+
+.evidence-form .field {
+  margin-top: 4px;
+}
+
+.evidence-form .field input,
+.evidence-form .field select {
+  height: 30px;
+  font-size: 14px;
+}
+
+.evidence-form .field.wide {
+  grid-column: 1 / -1;
+}
+
+.evidence-form textarea {
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.evidence-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 .run-summary.run-passed,
 .suite-bar.run-passed {
   border-color: color-mix(in srgb, var(--pass) 40%, transparent);

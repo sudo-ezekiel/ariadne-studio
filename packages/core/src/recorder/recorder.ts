@@ -50,6 +50,7 @@ export type CaseMeta = {
   evidenceFloor?: number;
   editedAt?: string;
   muted?: boolean;
+  reference?: string;
 };
 
 export type StepKind = CaseStep['kind'];
@@ -401,6 +402,7 @@ export class Recorder {
       expectations: this.expectations.map((expectation) => structuredClone(expectation)),
       ...(meta.editedAt ? { editedAt: meta.editedAt } : {}),
       ...(meta.muted ? { muted: true } : {}),
+      ...(meta.reference ? { reference: meta.reference } : {}),
       ...(this.evidenceCounter > 0 ? { lastEvidenceNumber: this.evidenceCounter } : {}),
     };
   }
