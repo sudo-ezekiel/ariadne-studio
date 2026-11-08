@@ -14,7 +14,17 @@ const here = dirname(fileURLToPath(import.meta.url));
 const site = join(here, '../../site');
 const work = mkdtempSync(join(tmpdir(), 'ariadne-brand-'));
 const page = await Page.open({ width: 1200, height: 630 });
-const PAGE_IMAGES = ['media/record-poster', 'media/run-poster', 'img/run-video-failed', 'img/block-mid-recording', 'img/existing-project'];
+const PAGE_IMAGES = [
+  'media/record-poster',
+  'media/run-poster',
+  'img/run-video-failed',
+  'img/block-mid-recording',
+  'img/existing-project',
+  // The landing page's dark mode: CAPTURE_THEME=dark node scripts/capture/scenes.mjs ...
+  'media/record-poster-dark',
+  'img/block-mid-recording-dark',
+  'img/existing-project-dark',
+];
 
 async function draw(url, width, height, file, background) {
   await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });

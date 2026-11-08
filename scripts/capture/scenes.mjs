@@ -1,5 +1,8 @@
 // Records the site's footage on real apps with the real studio.
 //   node scripts/capture/scenes.mjs calendar|blocks|existing
+// With CAPTURE_THEME=dark it records the studio's dark theme instead, for the
+// landing page's dark mode: only the footage that page shows, under -dark names.
+// The docs and the other stills stay light.
 // Needs an emulator (CAPTURE_DEVICE, default emulator-5560) with Fossify
 // Calendar and the WebdriverIO demo app installed, and a built UI (pnpm build).
 // Everything shown is really happening; only waits on the device are shortened.
@@ -16,6 +19,11 @@ const PORT = 4801;
 const BASE = `http://127.0.0.1:${PORT}`;
 const CALENDAR = 'org.fossify.calendar';
 const WDIO = 'com.wdiodemoapp';
+
+const DARK = process.env.CAPTURE_THEME === 'dark';
+const THEME = DARK ? 'dark' : 'light';
+/** A site path, with -dark before its extension in a dark capture. */
+const themed = (path) => (DARK ? path.replace(/(\.\w+)?$/, '-dark$1') : path);
 
 const adb = (...args) => execFileSync('adb', ['-s', DEVICE, ...args], { encoding: 'utf8' });
 const step = (message) => console.log(`- ${message}`);
@@ -180,7 +188,7 @@ async function calendar() {
   try {
     step('preparing the app');
     await prepareCalendar(studio);
-    await openStudio(page);
+    await openStudio(page, { theme: THEME });
 
     step('the hero: recording Create an event');
     await page.startVideo();
@@ -198,8 +206,10 @@ async function calendar() {
     await finishRecording(page);
     await page.click('.yaml-box summary');
     await delay(3200);
-    await page.stopVideo(join(SITE, 'media/record'));
-    await page.shot(join(SITE, 'media/record-poster.png'));
+    await page.stopVideo(join(SITE, themed('media/record')));
+    await page.shot(join(SITE, themed('media/record-poster.png')));
+    // The run video and the stills below look the same in either theme, or are only in the docs.
+    if (DARK) return;
 
     step('a run with its video');
     // From a clean list, so the run ends on the one event it made.
@@ -353,7 +363,7 @@ async function blocks() {
   try {
     adb('shell', 'pm', 'clear', WDIO);
     await startCase(studio, WDIO);
-    await openStudio(page);
+    await openStudio(page, { theme: THEME });
 
     step('block under Before recording, with a test user');
     await page.fill('.composer input', 'Submit the form');
@@ -367,7 +377,7 @@ async function blocks() {
     })()`);
     await delay(500);
     await page.moveTo(1000, 960, 150);
-    await page.shot(join(SITE, 'img/blocks-before-recording.png'));
+    if (!DARK) await page.shot(join(SITE, 'img/blocks-before-recording.png'));
 
     step('recording from the block');
     await page.click('.record-button');
@@ -387,7 +397,7 @@ async function blocks() {
     await page.evaluate(`document.querySelector('details.run-blocks').open = false`);
     await delay(300);
     await page.moveTo(1000, 960, 150);
-    await page.shot(join(SITE, 'img/block-mid-recording.png'));
+    await page.shot(join(SITE, themed('img/block-mid-recording.png')));
     await finishRecording(page);
     console.log(`console errors: ${JSON.stringify(page.errors)}`);
     console.log(readdirSync(join(project, 'flows')).map((name) => readFileSync(join(project, 'flows', name), 'utf8')).join('\n'));
@@ -419,7 +429,7 @@ async function existing() {
   try {
     adb('shell', 'pm', 'clear', WDIO);
     await startCase(studio, WDIO);
-    await openStudio(page, { files: true });
+    await openStudio(page, { files: true, theme: THEME });
 
     step('record from a team subflow');
     await page.fill('.composer input', 'Open the forms');
@@ -430,7 +440,7 @@ async function existing() {
     await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
     await delay(1500);
     await tapMirror(page, studio, 'Forms', { exact: true });
-    await finishRecording(page, { pickerShot: join(SITE, 'img/end-checks.png') });
+    await finishRecording(page, { pickerShot: DARK ? undefined : join(SITE, 'img/end-checks.png') });
 
     step('run it with Maestro');
     const id = await caseId(studio, 'Open the forms');
@@ -446,7 +456,7 @@ async function existing() {
     await delay(400);
     await clickNow(page, '.files-row', id);
     await delay(500);
-    await page.shot(join(SITE, 'img/existing-project.png'));
+    await page.shot(join(SITE, themed('img/existing-project.png')));
     console.log(`console errors: ${JSON.stringify(page.errors)}`);
   } finally {
     await page.close();

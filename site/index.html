@@ -11,7 +11,23 @@
 <link rel="icon" type="image/png" href="favicon-192.png" sizes="192x192">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="preload" as="image" type="image/webp" href="media/record-poster.webp" fetchpriority="high">
+<script>
+// Set the theme before the first paint. The docs keep their choice under the same key,
+// so light or dark picked on either page holds on both. Without a choice, follow the system.
+// Then fetch the hero's poster for that theme first.
+(() => {
+  let dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  try {
+    const choice = localStorage.getItem('vitepress-theme-appearance');
+    if (choice === 'light' || choice === 'dark') dark = choice === 'dark';
+  } catch {}
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const poster = document.createElement('link');
+  Object.assign(poster, { rel: 'preload', as: 'image', type: 'image/webp', fetchPriority: 'high' });
+  poster.href = dark ? 'media/record-poster-dark.webp' : 'media/record-poster.webp';
+  document.head.append(poster);
+})();
+</script>
 <!-- `pnpm site:url https://...` sets the public address here and everywhere else it is written. -->
 <link rel="canonical" href="https://ariadne.sudo-ezekiel.com/">
 <meta property="og:type" content="website">
@@ -152,9 +168,13 @@
 }
 </script>
 <style>
+/* The tokens copy docs/brand.md section 3, light then dark; change them there first */
 :root {
+  color-scheme: light;
   --navy: #1c2b4a;
   --navy-hover: #142038;
+  --navy-text: #1c2b4a;
+  --band: #1c2b4a;
   --thread: #e8b43a;
   --thread-strong: #c48a0e;
   --thread-soft: #fdf3d0;
@@ -191,6 +211,38 @@
   --radius-card: 10px;
 }
 
+/* Dark lifts navy for buttons and text; the bands keep brand navy, a step above the paper */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --navy: #3d5a96;
+  --navy-hover: #4a69a8;
+  --navy-text: #9db6e8;
+  --band: #1c2b4a;
+  --thread-strong: #f0c45a;
+  --thread-soft: #3a3014;
+  --sea: #6cb4e0;
+  --ink: #e6e9ef;
+  --ink-2: #a9b1bf;
+  --ink-3: #7a8394;
+  --line: #343d4f;
+  --line-2: #2a3141;
+  --paper: #12161f;
+  --panel: #1a202b;
+  --panel-2: #232a37;
+  --stage: #080b12;
+  --pass: #5cc27a;
+  --pass-soft: #15301f;
+  --fail: #f2766b;
+  --fail-soft: #3a1a18;
+  --warn: #f0a640;
+  --warn-soft: #3a2a12;
+  --info: #6cb4e0;
+  --info-soft: #16293a;
+  --block: #a796e6;
+  --block-soft: #252040;
+  --block-line: #3e3566;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -214,7 +266,7 @@ h3 { font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -0.008
 p { margin: 0 0 12px; text-wrap: pretty; }
 
 a { color: var(--sea); text-underline-offset: 0.15em; }
-a:hover { color: var(--navy); }
+a:hover { color: var(--navy-text); }
 
 :focus-visible { outline: 3px solid var(--thread); outline-offset: 3px; }
 
@@ -288,14 +340,14 @@ pre code {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: var(--navy);
+  color: var(--navy-text);
   font-weight: 650;
   font-size: 18px;
   letter-spacing: -0.01em;
   min-height: 40px;
   text-decoration: none;
 }
-.brand:hover { color: var(--navy); }
+.brand:hover { color: var(--navy-text); }
 .brand img { border-radius: 6px; }
 .site-header nav { margin-left: auto; }
 .site-header ul {
@@ -308,6 +360,26 @@ pre code {
 }
 .site-header ul a { color: var(--ink-2); text-decoration: none; font-size: 15px; font-weight: 500; }
 .site-header ul a:hover { color: var(--ink); text-decoration: underline; }
+.header-tools { display: flex; align-items: center; gap: 12px; }
+
+/* Light or dark: the button shows the theme it switches to */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.theme-toggle:hover { border-color: var(--ink-3); color: var(--ink); }
+.theme-toggle[hidden], .theme-toggle .icon-sun, [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
 
 /* Section rhythm */
 main > section { scroll-margin-top: 72px; }
@@ -342,7 +414,7 @@ main > section { scroll-margin-top: 72px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .hero-band { position: relative; isolation: isolate; margin-top: 48px; padding-bottom: 56px; }
-.hero-band::before { content: ""; position: absolute; left: 0; right: 0; top: 46%; bottom: 0; background: var(--navy); z-index: -1; }
+.hero-band::before { content: ""; position: absolute; left: 0; right: 0; top: 46%; bottom: 0; background: var(--band); z-index: -1; }
 
 .stage-media {
   position: relative;
@@ -361,6 +433,9 @@ main > section { scroll-margin-top: 72px; }
 }
 .stage-media figcaption { padding: 10px 4px 2px; color: var(--on-dark-2); font-size: 13.5px; }
 .hero-media { --wide: 1296px; }
+/* The poster follows the theme, so it is a background: the poster attribute cannot change with the theme button */
+.hero-media video { background: var(--stage) url("media/record-poster.webp") center / cover no-repeat; }
+[data-theme="dark"] .hero-media video { background-image: url("media/record-poster-dark.webp"); }
 
 .has-toggle { position: relative; }
 /* Sits on the caption's line, clear of the footage */
@@ -430,16 +505,19 @@ main > section { scroll-margin-top: 72px; }
   background: var(--panel-2);
 }
 .shot figcaption { padding: 12px 4px 0; font-size: 13.5px; color: var(--ink-2); }
+/* A still in each theme. The hidden one is lazy and never in view, so it is never fetched */
+.only-dark, [data-theme="dark"] .only-light { display: none; }
+[data-theme="dark"] .only-dark { display: block; }
 
 /* Run: the band ends where the video does; the facts sit on paper */
-.band { background: var(--navy); color: var(--on-dark); padding: var(--section) 0 40px; }
+.band { background: var(--band); color: var(--on-dark); padding: var(--section) 0 40px; }
 .band .section-head { margin-bottom: 0; }
 .run-stage { position: relative; isolation: isolate; }
-.run-stage::before { content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 60%; background: var(--navy); z-index: -1; }
+.run-stage::before { content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 60%; background: var(--band); z-index: -1; }
 .run-media { --wide: 1400px; padding: 0; background: none; border: 0; }
 .run-media video { border-radius: var(--radius-card); border: 1px solid var(--dark-line); }
 .run-media figcaption { padding: 12px 84px 0 8px; color: var(--ink-2); }
-.run-media .video-toggle { bottom: -2px; border-color: var(--line); background: var(--panel); color: var(--navy); }
+.run-media .video-toggle { bottom: -2px; border-color: var(--line); background: var(--panel); color: var(--navy-text); }
 .run-media .video-toggle:hover { border-color: var(--ink-3); background: var(--panel); }
 .run-below { padding-top: 56px; }
 
@@ -473,7 +551,7 @@ main > section { scroll-margin-top: 72px; }
   list-style: none;
 }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary:hover { color: var(--navy); }
+.faq summary:hover { color: var(--navy-text); }
 .faq summary::after {
   content: "";
   flex: none;
@@ -492,7 +570,7 @@ main > section { scroll-margin-top: 72px; }
 
 /* Get started: the two ways to run it, then what either one needs */
 .paths { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; }
-.path { min-width: 0; padding-top: 18px; border-top: 2px solid var(--navy); }
+.path { min-width: 0; padding-top: 18px; border-top: 2px solid var(--navy-text); }
 .path h3 { margin-bottom: 8px; }
 .path p { margin: 0; color: var(--ink-2); font-size: 16px; }
 .path p + p { margin-top: 10px; }
@@ -503,7 +581,7 @@ main > section { scroll-margin-top: 72px; }
 .needs-list li { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
 
 /* Footer */
-.site-footer { margin-top: var(--section); background: var(--navy); color: var(--on-dark-2); padding: 44px 0 52px; font-size: 14.5px; }
+.site-footer { margin-top: var(--section); background: var(--band); color: var(--on-dark-2); padding: 44px 0 52px; font-size: 14.5px; }
 .site-footer .brand { color: var(--on-dark); font-size: 17px; }
 .site-footer .brand:hover { color: var(--on-dark); }
 .footer-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
@@ -537,7 +615,7 @@ main > section { scroll-margin-top: 72px; }
   .header-inner { flex-wrap: wrap; gap: 8px 16px; padding-top: 12px; padding-bottom: 12px; }
   .site-header nav { order: 3; width: 100%; margin-left: 0; }
   .site-header ul { gap: 4px 18px; }
-  .nav-cta { margin-left: auto; }
+  .header-tools { margin-left: auto; }
   main > section { scroll-margin-top: 16px; }
 
   .hero { padding-top: 40px; }
@@ -559,7 +637,7 @@ main > section { scroll-margin-top: 72px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .faq summary::after, .btn { transition: none; }
+  .faq summary::after, .btn, .theme-toggle { transition: none; }
 }
 </style>
 </head>
@@ -577,7 +655,13 @@ main > section { scroll-margin-top: 72px; }
         <li><a href="docs/">Docs</a></li>
       </ul>
     </nav>
-    <a class="btn btn-primary btn-small nav-cta" href="#get-started">Get started</a>
+    <div class="header-tools">
+      <button type="button" class="theme-toggle" hidden>
+        <svg class="icon-moon" viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.4M8 13.1v1.4M14.5 8h-1.4M2.9 8H1.5M12.6 3.4l-1 1M4.4 11.6l-1 1M12.6 12.6l-1-1M4.4 4.4l-1-1"/></svg>
+      </button>
+      <a class="btn btn-primary btn-small" href="#get-started">Get started</a>
+    </div>
   </div>
 </header>
 
@@ -596,10 +680,13 @@ main > section { scroll-margin-top: 72px; }
     </div>
     <div class="hero-band">
       <figure class="wide stage-media hero-media has-toggle">
-        <!-- With reduced motion neither source matches, so only the poster shows and no video is fetched. -->
-        <video autoplay muted loop playsinline poster="media/record-poster.webp" width="1280" height="864" aria-label="Ariadne Studio with a calendar app mirrored on an Android emulator. A new event is typed and saved, each action appears as a step with its selector, a check is added, and the finished case opens its Maestro YAML.">
-          <source src="media/record.webm" type="video/webm" media="(prefers-reduced-motion: no-preference)">
-          <source src="media/record.mp4" type="video/mp4" media="(prefers-reduced-motion: no-preference)">
+        <!-- With reduced motion no source matches, so only the poster shows and no video is fetched.
+             The sources follow the system theme; the theme button's script swaps them when the page's theme differs. -->
+        <video class="hero-video" autoplay muted loop playsinline width="1280" height="864" aria-label="Ariadne Studio with a calendar app mirrored on an Android emulator. A new event is typed and saved, each action appears as a step with its selector, a check is added, and the finished case opens its Maestro YAML.">
+          <source src="media/record-dark.webm" type="video/webm" data-for="dark" media="(prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark)">
+          <source src="media/record-dark.mp4" type="video/mp4" data-for="dark" media="(prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark)">
+          <source src="media/record.webm" type="video/webm" data-for="light" media="(prefers-reduced-motion: no-preference)">
+          <source src="media/record.mp4" type="video/mp4" data-for="light" media="(prefers-reduced-motion: no-preference)">
         </video>
         <button type="button" class="video-toggle" hidden>Pause</button>
         <figcaption>Ariadne Studio recording a case in Fossify Calendar on an Android emulator. Device waits are shortened.</figcaption>
@@ -708,14 +795,16 @@ name: Create an event
           <h3>Start past the login screen</h3>
           <p>A setup block is a Maestro flow that gets the app ready, such as logging in. Make it once in the Blocks tab, by using the app or filling in a form, and anyone can drag it into a recording. Test users stay in <code>.env</code>, out of the case files.</p>
           <figure class="shot">
-            <img src="img/block-mid-recording.webp" width="1480" height="1000" loading="lazy" alt="A setup block run in the middle of a recording on a real app, shown as a violet row among the recorded steps">
+            <img class="only-light" src="img/block-mid-recording.webp" width="1480" height="1000" loading="lazy" alt="A setup block run in the middle of a recording on a real app, shown as a violet row among the recorded steps">
+            <img class="only-dark" src="img/block-mid-recording-dark.webp" width="1480" height="1000" loading="lazy" alt="A setup block run in the middle of a recording on a real app, shown as a violet row among the recorded steps">
           </figure>
         </article>
         <article class="feature">
           <h3>Add Ariadne to a Maestro project</h3>
           <p>Run <code>npx ariadne-studio init</code> in your repository. Your subflows become setup blocks and recorded cases land in <code>.maestro/recorded</code> as plain flows. Add <code>recorded/*</code> to <code>flows:</code> in <code>config.yaml</code> and workspace runs include them.</p>
           <figure class="shot">
-            <img src="img/existing-project.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
+            <img class="only-light" src="img/existing-project.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
+            <img class="only-dark" src="img/existing-project-dark.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
           </figure>
         </article>
       </div>
@@ -835,18 +924,60 @@ name: Create an event
 </footer>
 
 <script>
+// The theme button. The choice is stored the way VitePress stores it, so the docs agree:
+// picking the theme the system already has stores 'auto', and the page follows the system again.
+(() => {
+  const KEY = 'vitepress-theme-appearance';
+  const root = document.documentElement;
+  const system = matchMedia('(prefers-color-scheme: dark)');
+  const toggle = document.querySelector('.theme-toggle');
+  const hero = document.querySelector('.hero-video');
+  let choice = 'auto';
+  try { choice = localStorage.getItem(KEY) || 'auto'; } catch {}
+  const apply = () => {
+    const theme = choice === 'light' || choice === 'dark' ? choice : system.matches ? 'dark' : 'light';
+    root.dataset.theme = theme;
+    toggle.title = `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`;
+    toggle.setAttribute('aria-label', toggle.title);
+    // Only this theme's sources may match. A video already loading the other theme starts again.
+    const sources = [...hero.querySelectorAll('source')];
+    for (const source of sources) source.media = source.dataset.for === theme ? '(prefers-reduced-motion: no-preference)' : 'not all';
+    const playing = sources.find((source) => source.src === hero.currentSrc);
+    if (playing && playing.dataset.for !== theme) hero.load();
+  };
+  toggle.addEventListener('click', () => {
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    choice = next === (system.matches ? 'dark' : 'light') ? 'auto' : next;
+    // With storage off (some private windows) the choice lasts until reload.
+    try { localStorage.setItem(KEY, choice); } catch {}
+    apply();
+  });
+  system.addEventListener('change', apply);
+  // The docs open in the same browser, often in another tab.
+  addEventListener('storage', (event) => {
+    if (event.key !== KEY) return;
+    choice = event.newValue || 'auto';
+    apply();
+  });
+  apply();
+  toggle.hidden = false;
+})();
+
 // A looping video needs a way to stop it. With reduced motion no source matches, so there is nothing to play.
 (() => {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   for (const frame of document.querySelectorAll('.has-toggle')) {
     const video = frame.querySelector('video');
     const toggle = frame.querySelector('.video-toggle');
+    const autoplay = video.autoplay;
     let paused = false;
     toggle.hidden = false;
     toggle.addEventListener('click', () => {
       paused = !video.paused;
       if (paused) video.pause();
       else video.play();
+      // The theme button reloads the hero in the other theme; this keeps it paused or playing.
+      if (autoplay) video.autoplay = !paused;
       toggle.textContent = paused ? 'Play' : 'Pause';
     });
     // The clip further down only loads and plays once it is in view.
