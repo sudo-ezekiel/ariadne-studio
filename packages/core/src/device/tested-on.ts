@@ -40,8 +40,11 @@ export function parseAppVersion(dumpsys: string): { versionName?: string; versio
   return { ...(versionName ? { versionName } : {}), ...(versionCode ? { versionCode } : {}) };
 }
 
-// The kernel and board names Google's emulators report; a real phone reports its own board.
-const EMULATOR_HARDWARE = new Set(['ranchu', 'goldfish']);
+// Boards emulators report: Google's (ranchu, goldfish) and Genymotion's VirtualBox one (vbox86).
+// A real phone reports its own board, so any other board counts as a real phone.
+const EMULATOR_HARDWARE = new Set(['ranchu', 'goldfish', 'vbox86']);
+// Genymotion's maker names, for its images that report a board of their own.
+const EMULATOR_MAKERS = new Set(['genymotion', 'genymobile']);
 
 /** "2.4.1 (241)", or whichever half the phone gave; undefined when it gave neither. */
 export function appVersionText(app: AppVersion): string | undefined {
@@ -52,13 +55,19 @@ export function appVersionText(app: AppVersion): string | undefined {
 /** Reads what it can: a phone that refuses one command still reports the rest. */
 export async function readTestedOn(shell: PhoneShell, appIds: readonly string[]): Promise<TestedOn> {
   const read = (...args: string[]) => shell(args).then((output) => output, () => '');
-  const [maker, model, android, kernelQemu, bootQemu, hardware] = await Promise.all(
-    ['ro.product.manufacturer', 'ro.product.model', 'ro.build.version.release', 'ro.kernel.qemu', 'ro.boot.qemu', 'ro.hardware'].map(async (name) =>
-      defined(await read('getprop', name)),
+  const [maker, model, android, kernelQemu, bootQemu, hardware, characteristics] = await Promise.all(
+    ['ro.product.manufacturer', 'ro.product.model', 'ro.build.version.release', 'ro.kernel.qemu', 'ro.boot.qemu', 'ro.hardware', 'ro.build.characteristics'].map(
+      async (name) => defined(await read('getprop', name)),
     ),
   );
-  const emulator =
-    kernelQemu === '1' || bootQemu === '1' || (hardware !== undefined && EMULATOR_HARDWARE.has(hardware)) ? true : hardware !== undefined ? false : undefined;
+  const emulatorSign =
+    kernelQemu === '1' ||
+    bootQemu === '1' ||
+    (hardware !== undefined && EMULATOR_HARDWARE.has(hardware)) ||
+    (maker !== undefined && EMULATOR_MAKERS.has(maker.toLowerCase())) ||
+    // A comma-separated list; emulator images built from Android's own sources say "emulator" in it.
+    (characteristics?.split(',').some((part) => part.trim() === 'emulator') ?? false);
+  const emulator = emulatorSign ? true : hardware !== undefined ? false : undefined;
   const apps: AppVersion[] = [];
   for (const appId of new Set(appIds)) {
     const version = PACKAGE_NAME.test(appId) ? parseAppVersion(await read('dumpsys', 'package', appId)) : {};

@@ -94,10 +94,12 @@ Times are in this computer's time zone, with its offset from UTC.
 A SHA-256 is a fingerprint of a file: change one character and it changes. Anyone with the project folder can check that a pack matches the runs it describes:
 
 ```sh
-sha256sum runs/_suites/<suiteId>.json          # Linux
-shasum -a 256 runs/_suites/<suiteId>.json      # macOS
-Get-FileHash runs\_suites\<suiteId>.json     # Windows PowerShell
+sha256sum runs/_suites/<suiteId>.json                        # Linux
+shasum -a 256 runs/_suites/<suiteId>.json                    # macOS
+(Get-FileHash runs\_suites\<suiteId>.json).Hash.ToLower()    # Windows PowerShell
 ```
+
+Windows prints a fingerprint in capital letters, so the last line turns it to small letters, as the pack shows it. Capitals or not, it is the same fingerprint.
 
 ### What a pack is and is not
 

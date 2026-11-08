@@ -183,5 +183,45 @@ describe('readTestedOn', () => {
     it('is not decided by a qemu value other than 1', async () => {
       expect(await detect({ 'getprop ro.kernel.qemu': '0\n' })).toBeUndefined();
     });
+
+    it('is true for ro.hardware vbox86, the Genymotion VirtualBox board', async () => {
+      expect(await detect({ 'getprop ro.hardware': 'vbox86\n' })).toBe(true);
+    });
+
+    it('is true for a Genymotion or Genymobile maker in any case, even on a real-looking board', async () => {
+      for (const maker of ['Genymotion', 'genymotion', 'GENYMOTION', 'Genymobile', 'genymobile']) {
+        expect(await detect({ 'getprop ro.product.manufacturer': `${maker}\n`, 'getprop ro.hardware': 'qcom\n' })).toBe(true);
+      }
+    });
+
+    it('is still true for a Genymotion maker when ro.hardware is refused', async () => {
+      expect(await detect({ 'getprop ro.product.manufacturer': 'Genymotion\n', 'getprop ro.hardware': new Error('x') })).toBe(true);
+    });
+
+    it('is true when ro.build.characteristics lists emulator, over a real-looking board', async () => {
+      for (const characteristics of ['emulator\n', 'nosdcard,emulator\n', 'nosdcard, emulator\n', 'emulator,tablet\n']) {
+        expect(await detect({ 'getprop ro.build.characteristics': characteristics, 'getprop ro.hardware': 'qcom\n' })).toBe(true);
+      }
+    });
+
+    it('is still true for an emulator characteristic when ro.hardware is refused', async () => {
+      expect(await detect({ 'getprop ro.build.characteristics': 'nosdcard,emulator\n', 'getprop ro.hardware': new Error('x') })).toBe(true);
+    });
+
+    it('is not made true by characteristics that only resemble emulator', async () => {
+      for (const characteristics of ['default\n', 'nosdcard\n', 'emulator2\n', 'notemulator\n', 'nosdcard,emulator2\n']) {
+        expect(await detect({ 'getprop ro.build.characteristics': characteristics, 'getprop ro.hardware': 'qcom\n' })).toBe(false);
+      }
+    });
+
+    it('stays absent for characteristics without the emulator word when ro.hardware is refused', async () => {
+      expect(await detect({ 'getprop ro.build.characteristics': 'default\n', 'getprop ro.hardware': new Error('x') })).toBeUndefined();
+    });
+
+    it('is false for a real phone with a Xiaomi maker, qcom board and default characteristics', async () => {
+      expect(
+        await detect({ 'getprop ro.hardware': 'qcom\n', 'getprop ro.build.characteristics': 'default\n', 'getprop ro.kernel.qemu': '0\n' }),
+      ).toBe(false);
+    });
   });
 });

@@ -841,7 +841,9 @@ BAs yet, so the pack stays modest until someone asks for more, and it is off by 
   Run all reads `testedOn` either way, so a pack made after turning it on still names the device.
 
 - When Run all starts, `PhoneInputTools.testedOn` reads the phone's maker, model and Android version,
-  whether it is an emulator (`ro.kernel.qemu`, `ro.boot.qemu`, `ro.hardware` ranchu or goldfish),
+  whether it is an emulator (`ro.kernel.qemu` or `ro.boot.qemu` 1, `ro.hardware` ranchu, goldfish
+  or Genymotion's vbox86, maker Genymotion or Genymobile, or "emulator" in
+  `ro.build.characteristics`; any other board is a real phone),
   and each app's `versionName` and `versionCode` (`dumpsys package <appId>`), parsed in
   `device/tested-on.ts`, and stores them on the suite as `testedOn`. Read then, not when the pack is
   made, because by then the phone may hold another build. A failure is logged and Run all goes on.
