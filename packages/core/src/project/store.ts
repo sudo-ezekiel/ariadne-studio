@@ -129,15 +129,32 @@ export async function renameWhenFree(from: string, to: string, platform: NodeJS.
   }
 }
 
-/** Writes via a temp file and rename so a crash never leaves half a JSON file. */
-async function writeFileAtomic(path: string, content: string): Promise<void> {
-  const temp = `${path}.${process.pid}.tmp`;
-  await writeFile(temp, content, 'utf8');
+// The write of each file under way, so the next one waits for it: a write waiting
+// out a busy file must not be overtaken by a later one, and two must not share
+// the temp file, where one could rename the other's half-written content.
+const writing = new Map<string, Promise<void>>();
+
+/**
+ * Writes via a temp file and rename so a crash never leaves half a JSON file.
+ * Writes of one file go in the order they were asked for.
+ */
+export async function writeFileAtomic(path: string, content: string, move = rename): Promise<void> {
+  const write = async () => {
+    const temp = `${path}.${process.pid}.tmp`;
+    await writeFile(temp, content, 'utf8');
+    try {
+      await renameWhenFree(temp, path, process.platform, move);
+    } catch (error) {
+      await rm(temp, { force: true }).catch(() => undefined);
+      throw error;
+    }
+  };
+  const current = (writing.get(path) ?? Promise.resolve()).then(write, write);
+  writing.set(path, current);
   try {
-    await renameWhenFree(temp, path);
-  } catch (error) {
-    await rm(temp, { force: true });
-    throw error;
+    await current;
+  } finally {
+    if (writing.get(path) === current) writing.delete(path);
   }
 }
 

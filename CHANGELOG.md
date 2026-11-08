@@ -35,7 +35,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - On Windows, saving a project file failed when something was reading it at that moment, such as a
   virus scan. The end of a Run all could then stay saved as "running". The studio now tries again
-  for about 2 seconds.
+  for about 2 seconds, and saves of one file wait their turn so a later one is never overwritten
+  by an earlier one.
 
 ## [0.1.1] - 2026-11-06
 
