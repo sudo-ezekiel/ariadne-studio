@@ -1,10 +1,12 @@
-// Self-contained HTML pages: test case documents, run reports and suite
-// reports. Screenshots are inlined as data URLs by the caller, so a page can
+// Self-contained HTML pages: test case documents, run reports, suite reports
+// and evidence packs. Screenshots are inlined as data URLs by the caller, so a page can
 // be mailed, opened in Word, or printed to PDF on its own. Pure.
+import { appVersionText } from '../device/tested-on.ts';
 import { formatDuration } from '../recorder/describe.ts';
 import type { SuiteCaseOutcome, SuiteRun } from '../replay/suite.ts';
 import type { RunSummary } from '../replay/run-result.ts';
 import { lastRunText, type CaseDocument } from './document.ts';
+import { evidenceScreen, localTimeText, outcomeText, type EvidenceCase, type RecordFile, type ScreensMode } from './evidence.ts';
 import type { ReportRow } from './report.ts';
 
 /** Turns a project-relative image path into a data URL, or undefined to leave it out. */
@@ -44,14 +46,14 @@ footer { margin-top: 28px; color: #8a93a3; font-size: 12px; }
 /** The Ariadne icon (assets/icon.svg) and name, at the top of every page. */
 const BRAND = `<header class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="20" height="20" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1c2b4a"/><path d="M14 20 V50 H50 V14 H26 V38 H38 V26" fill="none" stroke="#e8b43a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14" cy="14" r="4.5" fill="none" stroke="#e8b43a" stroke-width="3.5"/><circle cx="38" cy="26" r="5" fill="#e8b43a"/></svg><span>Ariadne</span></header>`;
 
-function page(title: string, body: string): string {
+function page(title: string, body: string, style = ''): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
-<style>${STYLE}</style>
+<style>${STYLE}${style}</style>
 </head>
 <body>
 ${BRAND}
@@ -79,7 +81,7 @@ function caseSection(doc: CaseDocument, image: ImageSource): string {
   const status = doc.lastRun ? (doc.lastRun.passed ? 'passed' : 'failed') : 'not-run';
   return `<section class="case">
 <h1>${escapeHtml(doc.name)}</h1>
-<div class="meta">Case <code>${escapeHtml(doc.id)}</code> / app <code>${escapeHtml(doc.appId)}</code> / recorded ${escapeHtml(doc.createdAt.slice(0, 10))}${doc.editedAt ? ` / edited ${escapeHtml(doc.editedAt.slice(0, 10))}` : ''}${doc.muted ? ' / <span class="muted">muted</span>' : ''}</div>
+<div class="meta">Case <code>${escapeHtml(doc.id)}</code>${doc.reference ? ` / reference ${escapeHtml(doc.reference)}` : ''} / app <code>${escapeHtml(doc.appId)}</code> / recorded ${escapeHtml(doc.createdAt.slice(0, 10))}${doc.editedAt ? ` / edited ${escapeHtml(doc.editedAt.slice(0, 10))}` : ''}${doc.muted ? ' / <span class="muted">muted</span>' : ''}</div>
 <div>Last run: <span class="${status}">${escapeHtml(lastRunText(doc))}</span></div>
 <h2>Preconditions</h2>
 <ol>${pre}</ol>
@@ -177,5 +179,187 @@ export function suiteReportHtml(suite: SuiteRun, cases: readonly SuiteReportCase
 <div class="meta">${escapeHtml(suite.suiteId)} / device ${escapeHtml(suite.deviceId)} / started ${escapeHtml(suite.startedAt.slice(0, 19).replace('T', ' '))} UTC${suite.retryFailed ? ' / failures retried once' : ''}</div>
 <p>${escapeHtml(summary || 'No cases.')}${suite.status === 'running' ? ' (still running)' : ''}${suite.status === 'stopped' ? ' (stopped before the end)' : ''}</p>
 <table><thead><tr><th>Case</th><th>Result</th><th>Details</th><th>Screen</th></tr></thead><tbody>${rows}</tbody></table>`,
+  );
+}
+
+export type EvidenceInput = {
+  suite: SuiteRun;
+  /** One per case of the suite, in its order. */
+  cases: readonly EvidenceCase[];
+  /** What the release is called, as the person making the pack wrote it. */
+  release?: string;
+  testedBy?: string;
+  /** The second signature's role; "Accepted by" unless the person making the pack wrote another, such as "Reviewed by". */
+  signoffRole?: string;
+  /** What the tester knows is wrong, in their words. */
+  knownIssues?: string;
+  /** The tester's verdict on the release, in their words. */
+  conclusion?: string;
+  /** Every step's screen, or only checks and the failed step. */
+  screens?: ScreensMode;
+  /** The Run all file the pack summarises. */
+  record?: RecordFile;
+  image: ImageSource;
+  /** Formats a timestamp: local time with its offset unless a test sets it. */
+  time?: (iso: string) => string;
+};
+
+const EVIDENCE_STYLE = `
+.cover { page-break-after: always; }
+table.facts { width: auto; min-width: 60%; }
+table.facts th { width: 130px; }
+table.signoff th:first-child { width: 110px; }
+table.signoff td { height: 44px; }
+.case h2 { margin-top: 0; }
+.written { white-space: pre-wrap; }
+.hash { font-size: 11px; word-break: break-all; }
+.print-button { margin-bottom: 16px; padding: 6px 14px; font: inherit; cursor: pointer; }
+@media print { a { color: inherit; text-decoration: none; } .print-button { display: none; } tr { page-break-inside: avoid; } }
+`;
+
+/** "Emulator: Google sdk_gphone64_x86_64, Android 16" or "Real phone: Xiaomi 23013PC75G, Android 15". */
+function deviceText(testedOn: SuiteRun['testedOn']): string | undefined {
+  if (!testedOn) return undefined;
+  const name = [testedOn.maker, testedOn.model].filter(Boolean).join(' ');
+  const android = testedOn.android ? `Android ${testedOn.android}` : '';
+  const text = [name, android].filter(Boolean).join(', ');
+  const kind = testedOn.emulator === true ? 'Emulator' : testedOn.emulator === false ? 'Real phone' : '';
+  if (!text) return kind || undefined;
+  return kind ? `${kind}: ${text}` : text;
+}
+
+function recordLine(record: RecordFile): string {
+  return `<code>${escapeHtml(record.path)}</code><div class="hash">SHA-256 <code>${escapeHtml(record.sha256)}</code></div>`;
+}
+
+function evidenceCaseSection(item: EvidenceCase, number: number, image: ImageSource, time: (iso: string) => string, screens: ScreensMode): string {
+  const run = item.run;
+  const anyFailedRow = item.steps.some((step) => step.status === 'failed');
+  const rows = item.steps
+    .map((step) => {
+      const status = step.status ?? 'not-run';
+      const shotPath = evidenceScreen(step, screens, run?.failureScreenshot);
+      const shot = shotPath ? image(shotPath) : undefined;
+      return (
+        `<tr><td class="num">${step.number}</td><td>${escapeHtml(step.label)}${step.error ? `<div class="error">${escapeHtml(step.error)}</div>` : ''}</td>` +
+        `<td>${escapeHtml(step.expected)}</td>` +
+        `<td class="${status}">${status === 'not-run' ? 'not run' : status}${step.looksDifferent ? '<div class="warn">looks different from the recording</div>' : ''}</td>` +
+        `<td>${img(shot, `Screen after step ${step.number}`)}</td></tr>`
+      );
+    })
+    .join('');
+  const failure = run?.failureScreenshot && !anyFailedRow ? image(run.failureScreenshot) : undefined;
+  const meta = [
+    `Case <code>${escapeHtml(item.caseId)}</code>`,
+    ...(item.reference ? [`reference ${escapeHtml(item.reference)}`] : []),
+    ...(item.appId ? [`app <code>${escapeHtml(item.appId)}</code>`] : []),
+    ...(run ? [`run <code>${escapeHtml(run.runId)}</code> at ${escapeHtml(time(run.startedAt))}`] : []),
+    ...(item.attempts > 1 ? [`${item.attempts} runs`] : []),
+  ].join(' / ');
+  return `<section class="case" id="case-${number}">
+<h2>${number}. ${escapeHtml(item.name)}</h2>
+<div class="meta">${meta}</div>
+${item.record ? `<div class="meta">Results from ${recordLine(item.record)}</div>` : ''}
+<p>Result: <span class="${item.outcome}">${escapeHtml(outcomeText(item.outcome))}</span></p>
+${item.stale ? '<p class="warn">The case was edited after this run. The steps below are the case as it is now, so they may not line up with what ran.</p>' : ''}
+${item.missing ? '<p class="warn">The case was deleted after Run all, so its steps are not shown.</p>' : ''}
+${item.note ? `<p class="meta">${escapeHtml(item.note)}</p>` : ''}
+${run?.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ''}
+${failure ? `<h3>Screen when it failed</h3>${img(failure, 'Screen when the run failed')}` : ''}
+${rows ? `<table><thead><tr><th>#</th><th>Step</th><th>Expected result</th><th>Result</th><th>Screen after</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+</section>`;
+}
+
+/**
+ * The evidence pack of one Run all, titled as the test results report Greek
+ * tenders ask for: a first page with the release, the app version, the device,
+ * every case's result, the tester's known issues and conclusion and a table to
+ * sign, then one page per case that ran, with each step and the screen it left.
+ */
+export function evidenceHtml(input: EvidenceInput): string {
+  const { suite, cases, image } = input;
+  const time = input.time ?? localTimeText;
+  const screens = input.screens ?? 'all';
+  const release = input.release?.trim() ?? '';
+  const testedBy = input.testedBy?.trim() ?? '';
+  const signoffRole = input.signoffRole?.trim() || 'Accepted by';
+  const caseApps = [...new Set(cases.map((item) => item.appId).filter((appId): appId is string => Boolean(appId)))];
+  const apps = suite.testedOn?.apps.length ? suite.testedOn.apps : caseApps.map((appId) => ({ appId }));
+  const appLines = apps.map((app) => `<code>${escapeHtml(app.appId)}</code> ${escapeHtml(appVersionText(app) ?? 'version not read')}`).join('<br>');
+  const counts = new Map<string, number>();
+  for (const item of cases) {
+    const text = outcomeText(item.outcome).toLowerCase();
+    counts.set(text, (counts.get(text) ?? 0) + 1);
+  }
+  const tally = [...counts].map(([text, count]) => `${count} ${text}`).join(', ');
+  const passed =
+    suite.status === 'finished' &&
+    cases.some((item) => item.outcome === 'passed' || item.outcome === 'flaky') &&
+    cases.every((item) => ['passed', 'flaky', 'muted'].includes(item.outcome));
+  const failedCount = cases.filter((item) => item.outcome === 'failed' || item.outcome === 'error').length;
+  const verdict = passed
+    ? 'Every case that ran passed.'
+    : failedCount > 0
+      ? `${failedCount} of ${cases.length} cases did not pass.`
+      : 'Not every case ran.';
+  const withSection = new Set(cases.filter((item) => item.steps.length > 0 || item.run).map((item) => item.caseId));
+  const withReference = cases.some((item) => item.reference);
+  const summaryRows = cases
+    .map((item, index) => {
+      const number = index + 1;
+      const name = withSection.has(item.caseId) ? `<a href="#case-${number}">${escapeHtml(item.name)}</a>` : escapeHtml(item.name);
+      const problems = [item.failedStep ? `Failed at: ${item.failedStep}` : '', item.error ?? ''].filter(Boolean).join('\n');
+      const notes = [item.note ?? '', item.stale ? 'The case was edited after this run.' : '', item.missing ? 'The case was deleted after Run all.' : '']
+        .filter(Boolean)
+        .join('\n');
+      return (
+        `<tr><td class="num">${number}</td>${withReference ? `<td>${escapeHtml(item.reference ?? '')}</td>` : ''}<td>${name}</td>` +
+        `<td class="${item.outcome}">${escapeHtml(outcomeText(item.outcome))}</td>` +
+        `<td>${problems ? `<div class="error">${escapeHtml(problems)}</div>` : ''}${notes ? `<div class="meta">${escapeHtml(notes)}</div>` : ''}</td></tr>`
+      );
+    })
+    .join('');
+  const runText = `${time(suite.startedAt)} to ${suite.finishedAt ? time(suite.finishedAt) : 'not finished'}`;
+  const facts: Array<[string, string]> = [
+    ['Release', escapeHtml(release)],
+    [apps.length > 1 ? 'Apps' : 'App', appLines || 'none'],
+    ['Device', escapeHtml(deviceText(suite.testedOn) ?? 'not read')],
+    ['Run', `${escapeHtml(runText)}<div class="meta">Run all <code>${escapeHtml(suite.suiteId)}</code></div>`],
+    ['Failures', suite.retryFailed ? 'A case that failed ran once more. If it passed then, it shows as passed when run again.' : 'Each case ran once.'],
+    ['Screens', screens === 'checks' ? 'After checks and after a step that failed.' : 'After every step.'],
+    ['Tested by', escapeHtml(testedBy)],
+    ['Result', `<span class="${passed ? 'passed' : 'failed'}">${escapeHtml(verdict)}</span><div class="meta">${escapeHtml(tally || 'No cases.')}</div>`],
+    ['Known issues', `<div class="written">${escapeHtml(input.knownIssues?.trim() ?? '')}</div>`],
+    ['Conclusion', `<div class="written">${escapeHtml(input.conclusion?.trim() ?? '')}</div>`],
+    ...(input.record ? [['Record', recordLine(input.record)] as [string, string]] : []),
+  ];
+  const factRows = facts.map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`).join('');
+  const stopped =
+    suite.status === 'stopped'
+      ? '<p class="warn">Run all was stopped before the end.</p>'
+      : suite.status === 'running'
+        ? '<p class="warn">Run all was still running when this was made.</p>'
+        : '';
+  const sections = cases
+    .map((item, index) => (withSection.has(item.caseId) ? evidenceCaseSection(item, index + 1, image, time, screens) : ''))
+    .filter(Boolean)
+    .join('\n');
+  return page(
+    `Test results report${release ? `: ${release}` : ''}`,
+    `<button type="button" class="print-button" onclick="window.print()">Print or save as PDF</button>
+<section class="cover">
+<h1>Test results report</h1>
+<table class="facts"><tbody>${factRows}</tbody></table>
+${stopped}
+<h2>Cases</h2>
+${cases.length === 0 ? '<p>No cases.</p>' : `<table><thead><tr><th>#</th>${withReference ? '<th>Reference</th>' : ''}<th>Case</th><th>Result</th><th>Details</th></tr></thead><tbody>${summaryRows}</tbody></table>`}
+<h2>Sign-off</h2>
+<table class="signoff"><thead><tr><th></th><th>Name</th><th>Date</th><th>Signature</th></tr></thead><tbody>
+<tr><th>Tested by</th><td>${escapeHtml(testedBy)}</td><td></td><td></td></tr>
+<tr><th>${escapeHtml(signoffRole)}</th><td></td><td></td><td></td></tr>
+</tbody></table>
+</section>
+${sections}`,
+    EVIDENCE_STYLE,
   );
 }

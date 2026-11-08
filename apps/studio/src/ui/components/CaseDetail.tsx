@@ -15,6 +15,8 @@ export type CaseActions = {
   onOpenCase: (caseId: string) => void;
   onRename: (caseId: string, name: string) => void;
   onMute: (caseId: string, muted: boolean) => void;
+  /** An empty reference removes it. */
+  onReference: (caseId: string, reference: string) => void;
   onDuplicate: (caseId: string) => void;
   onSaveAsBlock: (caseId: string) => void;
   onDelete: (caseId: string) => void;
@@ -100,6 +102,7 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
   const [runIndex, setRunIndex] = useState(0);
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [referencing, setReferencing] = useState<string | null>(null);
   const run = runs[Math.min(runIndex, runs.length - 1)];
   const results = new Map(run?.steps.map((result) => [result.flowIndex, result]));
   const items = caseFlowItems(testCase) as FlowItem<StepView>[];
@@ -149,6 +152,44 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
       <div className="case-meta">
         {testCase.id} / {testCase.appId} / recorded {formatDate(testCase.createdAt)} on {testCase.deviceId}
         {testCase.editedAt && <> / edited {formatDate(testCase.editedAt)}</>}
+      </div>
+      <div className="case-meta">
+        {referencing === null ? (
+          <>
+            {testCase.reference && <>Reference: {testCase.reference} </>}
+            <button
+              type="button"
+              className="link"
+              onClick={() => setReferencing(testCase.reference ?? '')}
+              disabled={locked}
+              title="A requirement, user story or scenario code, shown in test case documents and evidence packs"
+            >
+              {testCase.reference ? 'Change' : 'Add a reference'}
+            </button>
+          </>
+        ) : (
+          <form
+            className="inline-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (referencing.trim() !== (testCase.reference ?? '')) actions.onReference(testCase.id, referencing.trim());
+              setReferencing(null);
+            }}
+          >
+            <input
+              autoFocus
+              maxLength={100}
+              value={referencing}
+              placeholder="A requirement, user story or scenario code"
+              onChange={(event) => setReferencing(event.target.value)}
+              aria-label="Reference"
+            />
+            <button type="submit">Save</button>
+            <button type="button" onClick={() => setReferencing(null)}>
+              Cancel
+            </button>
+          </form>
+        )}
       </div>
       {parent && (
         <div className="case-meta">

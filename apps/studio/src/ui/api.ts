@@ -67,6 +67,16 @@ const caseUrl = (caseId: string) => `/api/cases/${encodeURIComponent(caseId)}`;
 
 export type ExportFormat = 'md' | 'html' | 'xlsx';
 
+/** What the person making an evidence pack writes in; empty texts are left out. */
+export type EvidenceDetails = {
+  release: string;
+  testedBy: string;
+  signoffRole: string;
+  knownIssues: string;
+  conclusion: string;
+  screens: 'all' | 'checks';
+};
+
 export const api = {
   project: () => request<ProjectInfo>('GET', '/api/project'),
   fileRoots: () => request<FileRootsResponse>('GET', '/api/files'),
@@ -74,6 +84,7 @@ export const api = {
   fileContent: (path: string) => request<FileContent>('GET', `/api/files/content?path=${encodeURIComponent(path)}`),
   setAppId: (appId: string) => request<ProjectInfo>('PUT', '/api/project', { appId }),
   setRunVideo: (on: boolean) => request<ProjectInfo>('PUT', '/api/project/run-video', { on }),
+  setEvidencePack: (on: boolean) => request<ProjectInfo>('PUT', '/api/project/evidence-pack', { on }),
   devices: () => request<DeviceInfo[]>('GET', '/api/devices'),
   session: () => request<SessionInfo>('GET', '/api/session'),
   open: (deviceId: string, appId: string) => request<ScreenState>('POST', '/api/session/open', { deviceId, appId }),
@@ -140,4 +151,14 @@ export const api = {
   startEmulator: (name: string) => request<{ ok: true; name: string }>('POST', '/api/setup/emulator', { name }),
   caseExportUrl: (caseId: string, format: ExportFormat) => `${caseUrl(caseId)}/export?format=${format}`,
   projectExportUrl: (format: ExportFormat) => `/api/export?format=${format}`,
+  evidenceUrl: (suiteId: string, details: EvidenceDetails) => {
+    const query = new URLSearchParams();
+    for (const key of ['release', 'testedBy', 'signoffRole', 'knownIssues', 'conclusion'] as const) {
+      const value = details[key].trim();
+      if (value) query.set(key, value);
+    }
+    if (details.screens !== 'all') query.set('screens', details.screens);
+    const search = query.toString();
+    return `/api/suites/${encodeURIComponent(suiteId)}/evidence${search ? `?${search}` : ''}`;
+  },
 };

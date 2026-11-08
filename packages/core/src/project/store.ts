@@ -28,6 +28,8 @@ export type ProjectSettings = {
   paths?: ProjectPaths;
   /** Keep a video of each run. Off unless set. */
   runVideo?: boolean;
+  /** Offer an evidence pack after Run all. Off unless set. */
+  evidencePack?: boolean;
 };
 
 /** The folders of ProjectPaths, absolute. */

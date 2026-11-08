@@ -9,12 +9,15 @@ import { installMaestroDriver } from '../replay/maestro-driver.ts';
 import { parseKeyguardShowing } from './hidden-screen.ts';
 import { readPhoneReport, type PhoneReport } from './phone-report.ts';
 import { adbPath } from './session.ts';
+import { readTestedOn, type TestedOn } from './tested-on.ts';
 import { findTouchScreen, parseDensity, parseHomeApp, parseRotation, type Rotation, type TouchScreen } from './touch.ts';
 import { allowDriverToOpenApps, readXiaomiPhone, stopDriver, type XiaomiPhone } from './xiaomi.ts';
 
 const execFileAsync = promisify(execFile);
 
 const ADB_TIMEOUT_MS = 10_000;
+// `dumpsys package <app>` can pass Node's 1 MB default for an app with many components.
+const ADB_MAX_OUTPUT = 16 * 1024 * 1024;
 /** Android's default before a press counts as long; phones may set their own. */
 const DEFAULT_LONG_PRESS_MS = 400;
 /** Android's touch slop: a finger may wander this far, in dp, and still be a tap. */
@@ -41,6 +44,8 @@ export type PhoneInputTools = {
   allowDriver: (deviceId: string) => Promise<void>;
   /** Facts about the phone for a diagnostics report. */
   report: (deviceId: string) => Promise<PhoneReport>;
+  /** The phone's model and Android version, and each app's version, for an evidence pack. */
+  testedOn: (deviceId: string, appIds: readonly string[]) => Promise<TestedOn>;
   /** Whether the lock screen is up; undefined when Android does not say. */
   locked: (deviceId: string) => Promise<boolean | undefined>;
   /** Ends Maestro's driver when a run leaves it on the phone. */
@@ -50,7 +55,7 @@ export type PhoneInputTools = {
 };
 
 async function shell(deviceId: string, ...args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync(adbPath(), ['-s', deviceId, 'shell', ...args], { timeout: ADB_TIMEOUT_MS, windowsHide: true });
+  const { stdout } = await execFileAsync(adbPath(), ['-s', deviceId, 'shell', ...args], { timeout: ADB_TIMEOUT_MS, maxBuffer: ADB_MAX_OUTPUT, windowsHide: true });
   return stdout;
 }
 
@@ -98,6 +103,7 @@ export const phoneInputTools: PhoneInputTools = {
   xiaomi: (deviceId) => readXiaomiPhone((args) => shell(deviceId, ...args)),
   allowDriver: (deviceId) => allowDriverToOpenApps((args) => shell(deviceId, ...args)),
   report: (deviceId) => readPhoneReport((args) => shell(deviceId, ...args)),
+  testedOn: (deviceId, appIds) => readTestedOn((args) => shell(deviceId, ...args), appIds),
   // Filtered on the phone: the rest of the dump names what is on screen, notifications too.
   locked: async (deviceId) => parseKeyguardShowing(await shell(deviceId, 'dumpsys window | grep isKeyguardShowing=')),
   stopDriver: (deviceId) => stopDriver((args) => shell(deviceId, ...args)),

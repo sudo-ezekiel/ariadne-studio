@@ -25,6 +25,7 @@ runs/<runId>/         flow.yaml (the copy Maestro ran), Maestro's debug output w
 runs/_suites/         one JSON file per Run all
 runs/_partial/        the start of a case being replayed to record from it; deleted afterwards
 exports/              test case documents: <caseId>.xlsx/.html/.md, test-cases.xlsx/.html/.md
+                      and evidence-<suiteId>.html, the evidence pack of a Run all
 ```
 
 `caseId` is the case name as a slug plus a timestamp, for example `open-network-settings-20261030-1712`.

@@ -139,6 +139,8 @@ the code and the Maestro files still call things; the right column is what a per
 | Recording that something is visible | check; Check mode (the toggle is "Check"); end checks | Expect, expectation, assert |
 | Making a run pause at a point in a case | Wait | Sleep, delay, pause step |
 | Running a saved case with Maestro | Run; Run all; "Last run passed"; "Not run yet" | Replay |
+| The document of one Run all for whoever accepts a release | Evidence pack; its title is "Test results report" | acceptance certificate, audit trail |
+| A case's requirement, user story or scenario code | reference; "Add a reference" | requirement id, ticket, tag |
 | A Maestro file that brings the app to a state | setup block (the Record tab lists them under "Setup blocks" and stacks the chosen ones under "Before recording"; the Blocks tab writes them); "block" in developer docs | precondition, fixture, subflow |
 | Choosing a step's target by clicking the screen | Pick on the screen | inspect, select element, locate |
 | Turning recorded steps into a block | Record steps, then Add to block; Save as block for a saved case | capture, import, convert |

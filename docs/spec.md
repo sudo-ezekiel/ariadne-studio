@@ -825,7 +825,59 @@ the same thing by the time the form sees them:
   cannot follow a path with a `${VAR}` in it, which Maestro resolves at run time, or a `runFlow`
   inside a command Ariadne does not read. Only a hand-written block can hold either.
 
-## 17. Later
+## 17. Milestone 9: the evidence pack
+
+Built 2026-11-08. A company with no QA team accepts a release on paper: a BA tests by hand and
+writes the evidence up in Word or Excel for a client, an acceptance committee or a change approver.
+The evidence pack is that document, made from one finished Run all and titled "Test results report",
+the name Greek tenders give the deliverable ("Έκθεση αποτελεσμάτων διενέργειας ελέγχων"). Desk
+research on 2026-11-08 found no rule that asks for this exact document, contents that match what
+Greek IT tenders (2024 to 2026) and DORA change audits do ask for, and no first-hand demand from
+BAs yet, so the pack stays modest until someone asks for more, and it is off by default.
+
+- A project setting, `evidencePack` in `project.json` (`PUT /api/project/evidence-pack`), shows
+  **Evidence pack** under the last Run all; the gear menu's "Offer an evidence pack after Run all"
+  turns it on. Off unless set. It only hides the button: the route below answers either way, and
+  Run all reads `testedOn` either way, so a pack made after turning it on still names the device.
+
+- When Run all starts, `PhoneInputTools.testedOn` reads the phone's maker, model and Android version,
+  whether it is an emulator (`ro.kernel.qemu`, `ro.boot.qemu`, `ro.hardware` ranchu or goldfish),
+  and each app's `versionName` and `versionCode` (`dumpsys package <appId>`), parsed in
+  `device/tested-on.ts`, and stores them on the suite as `testedOn`. Read then, not when the pack is
+  made, because by then the phone may hold another build. A failure is logged and Run all goes on.
+  No serial number: the pack leaves the team.
+- `GET /api/suites/:suiteId/evidence` builds the page (`server/evidence.ts`; `export/evidence.ts` for
+  the rows and which screen each row shows; `evidenceHtml` in `export/html.ts`), writes
+  `exports/evidence-<suiteId>.html` and shows it. Query: `release`, `testedBy`, `conclusion` (200
+  characters each), `signoffRole` (40, default "Accepted by"), `knownIssues` (1,000, keeps line
+  breaks; the texts travel in the URL and Node refuses a request line over 16 KB), `screens`
+  (`all` or `checks`). None is stored on the suite: the file in `exports/` is the record. A suite
+  still running is refused with 409.
+- The first page is the one to sign: release, app and version, device (real phone or emulator), run
+  times, retries, which screens are shown, tester, verdict, known issues, conclusion, every case with
+  its result and reference, the two signature rows, and the SHA-256 of `runs/_suites/<id>.json`, read
+  once so the hash is of the bytes the pack shows. Then one page per case that ran, built from its
+  last attempt: every flow item with its expected result (the step's note or check, as in test case
+  documents), its result and the replayed screen, 300 px wide, and the SHA-256 of that run's
+  `summary.json`. The step that failed shows Maestro's failure screenshot, because no picture is
+  taken after it. With `screens=checks` only checks, end checks and the failed step keep a screen,
+  and only those are read from disk.
+- The second signature is a role the BA writes, because acceptance is not the BA's to claim: in a
+  Greek public contract it is the committee's protocol (Law 4412/2016 art. 219), and under DORA it is
+  an approver independent of whoever built the change (RTS 2024/1774 art. 17). A contractor writes
+  "Reviewed by".
+- A case's `reference` (a requirement, user story or scenario code, at most 100 characters) is set
+  from the case header, kept through re-recording and duplicating, and shown in the pack and in test
+  case documents. Like rename and mute it does not make runs stale.
+- Times are local with their offset, unlike the run reports' UTC, because the pack is signed where it
+  is made.
+- A case keeps the name it had in Run all. A case edited since says so; one deleted since stays in
+  the list with no steps.
+- Left for when someone asks: Greek labels, a Word export to paste into a contractor's own template,
+  digital signing of the PDF, and a test scenarios document generated from a recording before the
+  run (the IKY 2026 template wants a screen with an arrow at the point the user touches).
+
+## 18. Later
 
 AI cleanup pass (step titles, selector hardening) with an explicit opt-in and key; voice
 narration aligned to steps; iOS simulator through the same agent-device API on macOS;
@@ -833,7 +885,7 @@ signed macOS and Windows desktop builds (the Electron app and the npm package ex
 2026-11-03, Linux tested end to end, Windows built and run under Wine); CI recipe with Maestro's `--format junit`; Maestro
 `assertScreenshot` as an opt-in hard check for screens that must not change.
 
-## 18. Conventions
+## 19. Conventions
 
 - No em dash character anywhere in code, comments, docs or commit messages. Use a comma,
   colon, or parentheses.

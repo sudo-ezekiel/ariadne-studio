@@ -214,16 +214,17 @@ describe('caseMarkdown', () => {
 
 describe('casesSheets', () => {
   it('lays out an overview row per case and a row per precondition, step and end check', () => {
-    const first = caseDocument(fresh({ muted: true }), names, summary({ steps: [] }));
+    const first = caseDocument(fresh({ muted: true, reference: 'REQ-4.2' }), names, summary({ steps: [] }));
     const second = caseDocument(
       fresh({ id: 'b', name: 'Second', preconditionBlocks: [], steps: [{ index: 1, kind: 'back', at }], expectations: [] }),
     );
     const [cases, steps] = casesSheets([first, second]);
     expect(cases!.name).toBe('Cases');
-    expect(cases!.rows[0]).toEqual(['Case', 'Case id', 'App', 'Preconditions', 'Steps', 'Expected at the end', 'Last run', 'Muted']);
+    expect(cases!.rows[0]).toEqual(['Case', 'Case id', 'Reference', 'App', 'Preconditions', 'Steps', 'Expected at the end', 'Last run', 'Muted']);
     expect(cases!.rows[1]).toEqual([
       'Open network',
       caseId,
+      'REQ-4.2',
       'com.android.settings',
       'Start com.android.settings\nRun the block "Log in as BA" (blocks/login.yaml)\nRun the block blocks/onboarding.yaml',
       '4',
@@ -231,7 +232,7 @@ describe('casesSheets', () => {
       'Passed 2026-10-31 10:15',
       'yes',
     ]);
-    expect(cases!.rows[2]).toEqual(['Second', 'b', 'com.android.settings', 'Start com.android.settings', '1', '', 'Not run yet', '']);
+    expect(cases!.rows[2]).toEqual(['Second', 'b', '', 'com.android.settings', 'Start com.android.settings', '1', '', 'Not run yet', '']);
     expect(cases!.widths).toHaveLength(cases!.rows[0]!.length);
 
     expect(steps!.name).toBe('Steps');
@@ -249,6 +250,49 @@ describe('casesSheets', () => {
       ['Second', '1', 'Press Back', '', ''],
     ]);
     expect(steps!.widths).toHaveLength(steps!.rows[0]!.length);
+  });
+});
+
+describe('case reference', () => {
+  it('is carried into the document only when the case has one', () => {
+    expect(caseDocument(fresh({ reference: 'US-12' })).reference).toBe('US-12');
+    expect(caseDocument(fresh())).not.toHaveProperty('reference');
+    expect(caseDocument(fresh({ reference: '' }))).not.toHaveProperty('reference');
+  });
+
+  it('shows as a Reference row in Markdown, after the case id', () => {
+    const md = caseMarkdown(caseDocument(fresh({ reference: 'REQ-4.2' })));
+    expect(md).toContain('| Reference | REQ-4.2 |');
+    expect(md.indexOf('| Case id |')).toBeLessThan(md.indexOf('| Reference |'));
+    expect(md.indexOf('| Reference |')).toBeLessThan(md.indexOf('| App |'));
+  });
+
+  it('has no Reference row in Markdown when not set', () => {
+    expect(caseMarkdown(caseDocument(fresh()))).not.toContain('Reference');
+  });
+
+  it('keeps a pipe in the reference from breaking the Markdown table', () => {
+    const md = caseMarkdown(caseDocument(fresh({ reference: 'REQ-1 | REQ-2' })));
+    expect(md).not.toContain('| Reference | REQ-1 | REQ-2 |');
+    expect(md).toContain('REQ-1 \\| REQ-2');
+  });
+
+  it('shows in the HTML meta line, escaped', () => {
+    const html = casesHtml([caseDocument(fresh({ reference: '<b>REQ</b> & 4' }))], () => undefined, 'All');
+    expect(html).toContain(' / reference &lt;b&gt;REQ&lt;/b&gt; &amp; 4 / app ');
+    expect(html).not.toContain('<b>REQ</b>');
+  });
+
+  it('is absent from the HTML meta line when not set', () => {
+    expect(casesHtml([caseDocument(fresh())], () => undefined, 'All')).not.toContain('reference');
+  });
+
+  it('puts an empty cell in the Excel Reference column for a case without one', () => {
+    const [cases] = casesSheets([caseDocument(fresh({ reference: 'REQ-4.2' })), caseDocument(fresh({ id: 'b' }))]);
+    const column = cases!.rows[0]!.indexOf('Reference');
+    expect(column).toBe(2);
+    expect(cases!.rows[1]![column]).toBe('REQ-4.2');
+    expect(cases!.rows[2]![column]).toBe('');
   });
 });
 

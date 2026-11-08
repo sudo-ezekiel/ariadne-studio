@@ -23,6 +23,7 @@ export type CaseDocument = {
   createdAt: string;
   editedAt?: string;
   muted?: boolean;
+  reference?: string;
   preconditions: string[];
   steps: DocStep[];
   endChecks: string[];
@@ -48,6 +49,7 @@ export function caseDocument(testCase: TestCase, names: DescribeNames = {}, last
     createdAt: testCase.createdAt,
     ...(testCase.editedAt ? { editedAt: testCase.editedAt } : {}),
     ...(testCase.muted ? { muted: true } : {}),
+    ...(testCase.reference ? { reference: testCase.reference } : {}),
     preconditions,
     steps,
     endChecks: testCase.expectations.map(describeExpectation),
@@ -89,6 +91,7 @@ export function caseMarkdown(doc: CaseDocument, imagePath?: (projectRelative: st
   lines.push(`# ${doc.name}`, '');
   lines.push('| | |', '|---|---|');
   lines.push(`| Case id | \`${doc.id}\` |`);
+  if (doc.reference) lines.push(`| Reference | ${mdCell(doc.reference)} |`);
   lines.push(`| App | \`${doc.appId}\` |`);
   lines.push(`| Recorded | ${doc.createdAt.slice(0, 10)} |`);
   if (doc.editedAt) lines.push(`| Last edited | ${doc.editedAt.slice(0, 10)} |`);
@@ -121,12 +124,13 @@ export function caseMarkdown(doc: CaseDocument, imagePath?: (projectRelative: st
 
 /** Workbook sheets for a set of cases: an overview and every step. */
 export function casesSheets(docs: readonly CaseDocument[]): Sheet[] {
-  const overview: string[][] = [['Case', 'Case id', 'App', 'Preconditions', 'Steps', 'Expected at the end', 'Last run', 'Muted']];
+  const overview: string[][] = [['Case', 'Case id', 'Reference', 'App', 'Preconditions', 'Steps', 'Expected at the end', 'Last run', 'Muted']];
   const steps: string[][] = [['Case', 'Step', 'Action', 'Expected result', 'Screenshot']];
   for (const doc of docs) {
     overview.push([
       doc.name,
       doc.id,
+      doc.reference ?? '',
       doc.appId,
       doc.preconditions.join('\n'),
       String(doc.steps.length),
@@ -139,7 +143,7 @@ export function casesSheets(docs: readonly CaseDocument[]): Sheet[] {
     if (doc.endChecks.length > 0) steps.push([doc.name, 'End', 'Check the final screen', doc.endChecks.join('\n'), '']);
   }
   return [
-    { name: 'Cases', rows: overview, widths: [36, 34, 26, 44, 8, 40, 40, 8] },
+    { name: 'Cases', rows: overview, widths: [36, 34, 16, 26, 44, 8, 40, 40, 8] },
     { name: 'Steps', rows: steps, widths: [36, 6, 54, 44, 44] },
   ];
 }

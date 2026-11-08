@@ -60,7 +60,52 @@ It runs in the background. The panel shows progress, **Stop after this case** en
 
 **Report** gives one HTML page with every case and the screenshot of each failure.
 
-![The Cases tab with Run all, a dot per recent run, and flaky and failing tags](/shots/cases-list.png)
+## Evidence pack
+
+After Run all, **Evidence pack** makes the test results report for whoever accepts the release, such as a client, an acceptance committee or the person who approves releases.
+
+It is off until you turn it on: open Settings (the gear at the top right) and tick **Offer an evidence pack after Run all**. The choice is saved as `evidencePack` in [`project.json`](/reference/project-json), so everyone who opens the project sees it. **Evidence pack** then appears after **Report** under the last Run all. Fill in:
+
+- **Release**: what the release is called. It starts as the app version Run all read from the phone, such as `2.4.1 (241)`.
+- **Tested by**: your name.
+- **Second signature**: "Accepted by" unless you change it. When the client accepts in a document of its own, as a public acceptance committee does, write "Reviewed by" instead.
+- **Screens**: after every step, or only after checks and after a step that failed. The second is shorter and shows less of what was on the screen.
+- **Known issues** and **Conclusion**, in your own words. Left empty, they stay blank to write on paper.
+
+The studio remembers your name, the second signature and the choice of screens.
+
+**Make the pack** opens it in a new window. The first page is the one to sign:
+
+- the release, the app and its version, and the device: a real phone or an emulator, its model and its Android version
+- when Run all started and ended, whether failures were run again, and which screens are shown
+- who tested, the result, your known issues and conclusion
+- every case with its result, and its [reference](/guides/edit-and-chain#edit-a-case) when it has one
+- a table for the two signatures
+- the Run all file it summarises, with its SHA-256
+
+After that, each case that ran has a page with every step, what it was expected to do, its result and the screen after it on this run. A step that failed shows the screen when it failed. Each page names the run's `summary.json` and its SHA-256.
+
+**Print or save as PDF** at the top prints it, and the button itself stays off the paper. A copy is saved as `exports/evidence-<suiteId>.html`.
+
+Times are in this computer's time zone, with its offset from UTC.
+
+### Check a pack against the project
+
+A SHA-256 is a fingerprint of a file: change one character and it changes. Anyone with the project folder can check that a pack matches the runs it describes:
+
+```sh
+sha256sum runs/_suites/<suiteId>.json          # Linux
+shasum -a 256 runs/_suites/<suiteId>.json      # macOS
+Get-FileHash runs\_suites\<suiteId>.json     # Windows PowerShell
+```
+
+### What a pack is and is not
+
+A pack covers one Run all, and the versions in it are read when Run all starts. So install the build you mean to accept, run all, then make the pack. If a new build fixes a failure, run all again on it.
+
+It is a record of what ran and what each step showed. In a public contract the acceptance itself is the committee's own protocol, and at a regulated company it is the approval in the change record, so attach the pack to those rather than send it in their place.
+
+Like the reports, the pack shows whatever was on the screen. Use test accounts and test data, and look through it before you send it outside the company.
 
 ## History and flaky cases
 

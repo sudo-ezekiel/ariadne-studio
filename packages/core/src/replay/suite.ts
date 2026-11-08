@@ -1,6 +1,7 @@
 // Run all and run history, Waldo-style: retry a failure once and call
 // "failed then passed" flaky; show each case's recent runs; skip muted cases.
 // Pure, so the UI shares the types and the rules are unit tested.
+import type { TestedOn } from '../device/tested-on.ts';
 import type { RunSummary } from './run-result.ts';
 
 export type SuiteCaseOutcome = 'pending' | 'running' | 'passed' | 'failed' | 'flaky' | 'muted' | 'error';
@@ -26,6 +27,8 @@ export type SuiteRun = {
   status: 'running' | 'finished' | 'stopped';
   retryFailed: boolean;
   deviceId: string;
+  /** The phone and app versions when Run all started; absent when the phone could not be asked. */
+  testedOn?: TestedOn;
   cases: SuiteCaseResult[];
 };
 

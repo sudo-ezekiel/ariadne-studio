@@ -1,6 +1,6 @@
 ---
 title: project.json reference
-description: Every field of an Ariadne project's project.json, including paths and runVideo.
+description: Every field of an Ariadne project's project.json, including paths, runVideo and evidencePack.
 ---
 
 # project.json
@@ -19,7 +19,8 @@ description: Every field of an Ariadne project's project.json, including paths a
     "blocks": ["../.maestro/subflows"],
     "flows": "../.maestro/recorded"
   },
-  "runVideo": true
+  "runVideo": true,
+  "evidencePack": true
 }
 ```
 
@@ -33,6 +34,7 @@ description: Every field of an Ariadne project's project.json, including paths a
 | `env` | object of strings | no | Saved values that are not secret. `.env` wins on conflicts. |
 | `paths` | object | no | Where blocks and flows live, see below. |
 | `runVideo` | boolean | no | [Keep a video of each run](/guides/run-video). Off unless set. |
+| `evidencePack` | boolean | no | [Offer an evidence pack after Run all](/guides/run#evidence-pack). Off unless set. |
 
 ## paths
 

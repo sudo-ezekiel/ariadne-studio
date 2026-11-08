@@ -15,13 +15,15 @@ On an opened case, use **Test case document: Excel, HTML, Markdown**. For the wh
 
 ## The formats
 
-- **Excel** (`.xlsx`): a "Cases" sheet (name, case id, app, preconditions, step count, end checks, last run, muted) and a "Steps" sheet with one row per step: case, step, action, expected result, screenshot path. Preconditions and the end checks get rows of their own there. It opens in Excel, LibreOffice and Google Sheets.
+- **Excel** (`.xlsx`): a "Cases" sheet (name, case id, reference, app, preconditions, step count, end checks, last run, muted) and a "Steps" sheet with one row per step: case, step, action, expected result, screenshot path. Preconditions and the end checks get rows of their own there. It opens in Excel, LibreOffice and Google Sheets.
 - **HTML**: one page per case with the preconditions, numbered steps, expected results, end checks and the screenshot after each step, all in one file. It prints to PDF and opens in Word.
 - **Markdown**: the same content, with screenshots linked from `exports/` to `evidence/`.
 
 ## What the words come from
 
 Actions use the step's title when it has one. The expected result is the step's note, or for a check step what it checks.
+
+A case's reference, a requirement or scenario code you add under its name, goes beside its id.
 
 So the way to better documents is **Title and note** on each step, see [Edit and chain cases](/guides/edit-and-chain#title-and-note).
 

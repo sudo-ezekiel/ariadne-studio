@@ -76,6 +76,7 @@ import {
   sendPng,
   writeChainFlows,
 } from './common.ts';
+import { registerEvidenceRoutes } from './evidence.ts';
 import { registerExportRoutes } from './exports.ts';
 import { registerFileRoutes } from './files.ts';
 import { registerPhoneRoutes, stopPhoneCapture } from './phone-capture.ts';
@@ -292,6 +293,7 @@ async function projectInfo(state: ServerState): Promise<ProjectInfo> {
     appId: settings.appId,
     platform: settings.platform,
     runVideo: settings.runVideo === true,
+    evidencePack: settings.evidencePack === true,
     videoHasSteps: state.maestro.findFfmpeg() !== undefined,
     ...(settings.lastDeviceId ? { lastDeviceId: settings.lastDeviceId } : {}),
     blocks: blocks.map((block) => {
@@ -439,6 +441,13 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const on = (request.body as { on?: unknown } | undefined)?.on;
     if (typeof on !== 'boolean') throw new HttpError(400, 'BAD_REQUEST', 'Say whether to keep run videos.');
     await state.project.updateSettings({ runVideo: on });
+    return projectInfo(state);
+  });
+
+  app.put('/api/project/evidence-pack', async (request) => {
+    const on = (request.body as { on?: unknown } | undefined)?.on;
+    if (typeof on !== 'boolean') throw new HttpError(400, 'BAD_REQUEST', 'Say whether to offer the evidence pack.');
+    await state.project.updateSettings({ evidencePack: on });
     return projectInfo(state);
   });
 
@@ -1013,6 +1022,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
   registerBlockRoutes(app, state);
   registerReplayRoutes(app, state);
   registerExportRoutes(app, state);
+  registerEvidenceRoutes(app, state);
   registerFileRoutes(app, state);
   registerPhoneRoutes(app, state);
 }
