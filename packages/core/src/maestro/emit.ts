@@ -66,6 +66,8 @@ function stepToYaml(step: MaestroStep): unknown {
       return {
         extendedWaitUntil: { visible: quoted(NEVER_ON_SCREEN), timeout: step.seconds * 1000, optional: true, label: quoted(waitName(step.seconds)) },
       };
+    case 'waitUntilVisible':
+      return { extendedWaitUntil: { visible: selectorToYaml(step.selector), timeout: step.seconds * 1000, optional: true } };
     case 'takeScreenshot':
       return step.optional === undefined
         ? { takeScreenshot: { path: step.path } }

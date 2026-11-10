@@ -479,3 +479,41 @@ describe('wait', () => {
     expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
   });
 });
+
+describe('wait until', () => {
+  const parseBody = (body: string) => () => parseMaestroFlow(`appId: a\n---\n${body}`);
+
+  it('emits an optional extendedWaitUntil on the selector, the way assertVisible writes it', () => {
+    const flow: MaestroFlow = { appId: 'a.b', steps: [{ kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Welcome' }, seconds: 20 }] };
+    expect(toMaestroYaml(flow)).toBe(
+      ['appId: a.b', '---', '- extendedWaitUntil:', '    visible:', '      text: "Welcome"', '    timeout: 20000', '    optional: true', ''].join('\n'),
+    );
+  });
+
+  it('reads back what it wrote, next to a Wait', () => {
+    const flow: MaestroFlow = {
+      appId: 'a.b',
+      steps: [
+        { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Welcome' }, seconds: 20 },
+        { kind: 'wait', seconds: 5 },
+        { kind: 'waitUntilVisible', selector: { kind: 'id', value: 'android:id/title', index: 2 }, seconds: 1 },
+        { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Display \\(beta\\)', index: 0 }, seconds: 120 },
+      ],
+    };
+    expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+  });
+
+  it('still refuses a strict wait, a point, a text shorthand or a key of its own', () => {
+    for (const body of [
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n    optional: false\n',
+      '- extendedWaitUntil:\n    visible:\n      point: "50%,50%"\n    timeout: 5000\n    optional: true\n',
+      '- extendedWaitUntil:\n    visible: "Loaded"\n    timeout: 5000\n    optional: true\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n    optional: true\n    label: "Mine"\n',
+      '- extendedWaitUntil:\n    notVisible:\n      text: "Loaded"\n    timeout: 5000\n    optional: true\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n      enabled: true\n    timeout: 5000\n    optional: true\n',
+    ]) {
+      expect(parseBody(body), body).toThrow(/Unsupported command "extendedWaitUntil"/);
+    }
+  });
+});

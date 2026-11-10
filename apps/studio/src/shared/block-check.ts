@@ -26,6 +26,10 @@ function selectorProblem(selector: MaestroSelector, missing: string, canBePoint:
   return canBePoint ? undefined : `needs ${missing}, and a point on the screen cannot be looked for`;
 }
 
+function secondsProblem(seconds: number): string | undefined {
+  return Number.isInteger(seconds) && seconds >= 1 && seconds <= MAX_WAIT_SECONDS ? undefined : `must wait 1 to ${MAX_WAIT_SECONDS} seconds`;
+}
+
 function stepProblem(step: MaestroStep): string | undefined {
   switch (step.kind) {
     case 'tapOn':
@@ -42,7 +46,9 @@ function stepProblem(step: MaestroStep): string | undefined {
       if (textProblem(step.link, 'a link')) return textProblem(step.link, 'a link');
       return ONLY_A_REFERENCE.test(step.link) || isOpenableLink(step.link) ? undefined : 'needs a link such as https://example.com/claims or myapp://claims/123';
     case 'wait':
-      return Number.isInteger(step.seconds) && step.seconds >= 1 && step.seconds <= MAX_WAIT_SECONDS ? undefined : `must wait 1 to ${MAX_WAIT_SECONDS} seconds`;
+      return secondsProblem(step.seconds);
+    case 'waitUntilVisible':
+      return selectorProblem(step.selector, 'something to wait for', false) ?? secondsProblem(step.seconds);
     case 'eraseText':
       return step.chars === undefined || (Number.isInteger(step.chars) && step.chars >= 1) ? undefined : 'must erase at least 1 character';
     case 'runFlow':

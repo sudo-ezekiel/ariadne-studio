@@ -185,7 +185,7 @@ export function BlockSettings({ block, values, envKeys, disabled, onChange, onAd
         </select>
       </label>
       {mode === 'pick' && missing.length > 0 && (
-        <p className="piece-missing">
+        <p className="block-missing">
           {missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not saved yet, so the default {forUsers ? 'user' : 'values'} will not work. Pick or add a test
           user, or save a value in the Blocks tab.
         </p>

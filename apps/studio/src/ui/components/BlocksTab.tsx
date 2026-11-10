@@ -51,30 +51,28 @@ export function BlocksTab({ blocks, edit, envKeys, busy, sessionOpen, pickingKey
       {blocks.length === 0 ? (
         <p className="empty">No blocks in this project yet. Press New block to write the first one.</p>
       ) : (
-        <ul className="palette">
+        <ul className="palette palette-static">
           {blocks.map((block) => (
-            <li key={block.file} className={`piece piece-block ${block.error ? 'piece-broken' : ''}`}>
-              <div className="piece-row">
-                <span className="piece-icon">
-                  <PuzzleIcon />
-                </span>
-                <span className="piece-name">{block.name}</span>
-                {block.stepCount !== undefined && <span className="piece-meta">{count(block.stepCount, 'step')}</span>}
-                {block.editable ? (
-                  <button type="button" className="piece-add" disabled={busy} onClick={() => actions.onOpen(block.file)}>
-                    Edit
-                  </button>
-                ) : (
-                  <button type="button" className="piece-add" onClick={() => actions.onOpenFile(block.file)}>
-                    Show file
-                  </button>
-                )}
-              </div>
-              <div className="piece-body piece-body-flat">
-                <span className="piece-file">{block.file}</span>
-                {block.settable && <div className="piece-vars">Settings: {block.settable.join(', ')}</div>}
-                {block.error && <div className="piece-error">Cannot be used: {block.error}</div>}
-                {!block.editable && !block.error && <div className="piece-vars">Uses {(block.maestroOnly ?? []).join(', ')}, which only its file can change.</div>}
+            <li key={block.file} className={`palette-row ${block.error ? 'palette-row-broken' : ''}`}>
+              <span className="mark mark-block">
+                <PuzzleIcon size={10} />
+              </span>
+              <span className="palette-name">{block.name}</span>
+              <span className="palette-meta">{block.stepCount !== undefined && count(block.stepCount, 'step')}</span>
+              {block.editable ? (
+                <button type="button" className="palette-add" disabled={busy} onClick={() => actions.onOpen(block.file)}>
+                  Edit
+                </button>
+              ) : (
+                <button type="button" className="palette-add" onClick={() => actions.onOpenFile(block.file)}>
+                  Show file
+                </button>
+              )}
+              <div className="palette-body">
+                <span className="block-file">{block.file}</span>
+                {block.settable && <span className="block-vars">Settings: {block.settable.join(', ')}</span>}
+                {block.error && <span className="block-error">Cannot be used: {block.error}</span>}
+                {!block.editable && !block.error && <span className="block-vars">Uses {(block.maestroOnly ?? []).join(', ')}, which only its file can change.</span>}
                 <BlockSteps block={block} />
               </div>
             </li>

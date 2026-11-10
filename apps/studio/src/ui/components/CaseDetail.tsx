@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { REVIEW_TEXT, describeFlowItem, formatDuration } from '@ariadne/core/describe';
+import { REVIEW_TEXT, describeFlowItem, formatDuration, targetName } from '@ariadne/core/describe';
 import { caseFlowItems, type FlowItem } from '@ariadne/core/flow-layout';
 import { LOOKS_DIFFERENT_BELOW } from '@ariadne/core/similarity';
 import type { BlockSummary, CaseDetailResponse, EditRequest, StepPatch, StepResultView, StepView } from '../../shared/api-types.ts';
 import { api } from '../api.ts';
 import { BlockSteps } from './Blocks.tsx';
 import { PuzzleIcon } from './Icons.tsx';
+import { MarkCell } from './Mark.tsx';
+import { RowMenu } from './RowMenu.tsx';
+import { markOfStep, type Mark } from './step-marks.ts';
+import { SecondsField } from './Timing.tsx';
 import { count, formatDate, isFragile, stepSelector } from './format.ts';
 
 export type CaseActions = {
@@ -22,6 +26,8 @@ export type CaseActions = {
   onDelete: (caseId: string) => void;
   onPatchStep: (caseId: string, index: number, patch: StepPatch) => void;
   onDeleteStep: (caseId: string, index: number) => void;
+  /** Puts a wait after step `after` (0 is before step 1) with no recording; resolves true when it was saved. */
+  onAddWait: (caseId: string, after: number) => Promise<boolean>;
   onDeleteExpectation: (caseId: string, position: number) => void;
   onSplit: (caseId: string, atStep: number) => void;
 };
@@ -40,6 +46,7 @@ const KIND_LABELS: Partial<Record<StepView['kind'], string>> = {
   hideKeyboard: 'keyboard',
   openLink: 'link',
   expect: 'check',
+  waitFor: 'wait until',
   longPress: 'long press',
   doubleTap: 'double tap',
   pressKey: 'key',
@@ -101,6 +108,8 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
   const { case: testCase, yaml, runs, health, parent, dependents } = detail;
   const [runIndex, setRunIndex] = useState(0);
   const [editingStep, setEditingStep] = useState<number | null>(null);
+  /** The wait whose seconds field is open, by step number. */
+  const [changing, setChanging] = useState<number | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [referencing, setReferencing] = useState<string | null>(null);
   const run = runs[Math.min(runIndex, runs.length - 1)];
@@ -299,35 +308,56 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
         </a>
       )}
 
-      <ol className="steps">
+      <ol className="steps steps-saved">
         {items.map((item, flowIndex) => {
           const result = results.get(flowIndex);
           const step = item.kind === 'step' ? item.step : undefined;
           const selector = step ? stepSelector(step) : undefined;
-          const kind = step ? kindLabel(step.kind) : item.kind === 'expectation' ? 'end' : item.kind === 'startFrom' ? 'start' : item.kind;
+          const mark: Mark = step ? markOfStep(step.kind) : item.kind === 'expectation' ? 'end' : item.kind === 'block' ? 'block' : 'start';
+          const kind = step ? kindLabel(step.kind) : item.kind === 'expectation' ? 'end' : item.kind === 'block' ? 'block' : 'start';
           const expectationPosition = item.kind === 'expectation' ? testCase.expectations.indexOf(item.expectation) + 1 : 0;
           // Blocks before step 1 and blocks run in the middle of the case look the same.
           const blockFile = item.kind === 'block' ? item.file : step?.kind === 'block' ? step.file : undefined;
+          const timing = step?.kind === 'wait' || step?.kind === 'waitFor' ? step : undefined;
           return (
-            <li key={flowIndex} className={`step step-detail-row ${blockFile ? 'step-block' : ''}`}>
-              <span className="step-index">{flowIndex + 1}</span>
-              {blockFile ? (
-                <span className="step-kind step-kind-block">
-                  <PuzzleIcon size={12} />
-                  block
-                </span>
-              ) : (
-                <span className="step-kind">{kind}</span>
-              )}
+            <li key={flowIndex} className={`step step-${mark}`}>
+              <MarkCell mark={mark} {...(step ? { number: step.index } : {})} />
+              <span className="step-kind">
+                {blockFile && <PuzzleIcon size={11} />}
+                {kind}
+              </span>
               <span className={`step-detail ${step && isFragile(step) ? 'warn' : ''}`}>
-                {label(item)}
+                {timing && changing === timing.index ? (
+                  <SecondsField
+                    seconds={timing.seconds}
+                    {...(timing.kind === 'waitFor' ? { target: targetName(timing.selector, timing.node) } : {})}
+                    disabled={locked}
+                    onSave={(seconds) => {
+                      actions.onPatchStep(testCase.id, timing.index, { seconds });
+                      setChanging(null);
+                    }}
+                    onCancel={() => setChanging(null)}
+                  />
+                ) : (
+                  <>
+                    {label(item)}
+                    {timing && (
+                      <>
+                        {' '}
+                        <button type="button" className="link" onClick={() => setChanging(timing.index)} disabled={locked}>
+                          Change
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
                 {item.kind === 'startFrom' && (
                   <button type="button" className="link" onClick={() => actions.onOpenCase(item.caseId)}>
                     open
                   </button>
                 )}
                 {selector && <span className="selector">{selector}</span>}
-                {blockFile && <BlockSteps block={blockByFile.get(blockFile)} />}
+                {blockFile && <BlockSteps block={blockByFile.get(blockFile)} {...(step ? { number: step.index } : {})} />}
                 {step?.note && <span className="note">{step.note}</span>}
                 {step?.review && (
                   <span className="review">
@@ -356,70 +386,83 @@ export function CaseDetail({ detail, blocks, busy, sessionOpen, suiteRunning, ac
                 <Similarity result={result} />
               </span>
               <span className="shots">
-                {step?.screenshotUrl && (
+                {step?.screenshotUrl && !timing && (
                   <a href={step.screenshotUrl} target="_blank" rel="noreferrer" title="Recorded">
                     <img className="thumb" src={step.screenshotUrl} alt={`Recorded screen after step ${step.index}`} />
                   </a>
                 )}
-                {result?.replayScreenshotUrl && (
+                {result?.replayScreenshotUrl && !timing && (
                   <a href={result.replayScreenshotUrl} target="_blank" rel="noreferrer" title="Replayed">
                     <img className="thumb thumb-replay" src={result.replayScreenshotUrl} alt={`Replayed screen after row ${flowIndex + 1}`} />
                   </a>
                 )}
               </span>
-              <details className="row-menu">
-                <summary aria-label="Step actions">⋯</summary>
-                <div className="row-menu-items">
-                  {step && (
-                    <>
-                      <button type="button" onClick={() => setEditingStep(step.index)} disabled={locked}>
-                        Title and note
+              <RowMenu>
+                {step && (
+                  <>
+                    <button type="button" onClick={() => setEditingStep(step.index)} disabled={locked}>
+                      Title and note
+                    </button>
+                    {timing && (
+                      <button type="button" onClick={() => setChanging(timing.index)} disabled={locked}>
+                        Change the seconds
                       </button>
-                      <button type="button" onClick={() => actions.onEdit({ mode: 'rerecord', step: step.index })} disabled={!canRecord} title={recordTitle}>
-                        Re-record from here
-                      </button>
-                      <button type="button" onClick={() => actions.onEdit({ mode: 'insert', after: step.index })} disabled={!canRecord} title={recordTitle}>
-                        Add steps after this one
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          confirmThen(
-                            `Split after step ${step.index}? Steps 1 to ${step.index} become a new case, and this case will start from it.`,
-                            () => actions.onSplit(testCase.id, step.index),
-                          )
-                        }
-                        disabled={locked}
-                      >
-                        Split after this step
-                      </button>
-                      <button
-                        type="button"
-                        className="danger"
-                        onClick={() =>
-                          confirmThen(`Delete step ${step.index}? Later steps may no longer run; run the case to check.`, () =>
-                            actions.onDeleteStep(testCase.id, step.index),
-                          )
-                        }
-                        disabled={locked}
-                      >
-                        Delete step
-                      </button>
-                    </>
-                  )}
-                  {(item.kind === 'launch' || item.kind === 'startFrom') && (
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void actions.onAddWait(testCase.id, step.index).then((ok) => ok && setChanging(step.index + 1))}
+                      disabled={locked}
+                    >
+                      Add a wait after this step
+                    </button>
+                    <button type="button" onClick={() => actions.onEdit({ mode: 'rerecord', step: step.index })} disabled={!canRecord} title={recordTitle}>
+                      Re-record from here
+                    </button>
+                    <button type="button" onClick={() => actions.onEdit({ mode: 'insert', after: step.index })} disabled={!canRecord} title={recordTitle}>
+                      Add steps after this one
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        confirmThen(`Split after step ${step.index}? Steps 1 to ${step.index} become a new case, and this case will start from it.`, () =>
+                          actions.onSplit(testCase.id, step.index),
+                        )
+                      }
+                      disabled={locked}
+                    >
+                      Split after this step
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() =>
+                        confirmThen(timing ? 'Delete this wait?' : `Delete step ${step.index}? Later steps may no longer run; run the case to check.`, () =>
+                          actions.onDeleteStep(testCase.id, step.index),
+                        )
+                      }
+                      disabled={locked}
+                    >
+                      Delete step
+                    </button>
+                  </>
+                )}
+                {(item.kind === 'launch' || item.kind === 'startFrom') && (
+                  <>
+                    <button type="button" onClick={() => void actions.onAddWait(testCase.id, 0).then((ok) => ok && setChanging(1))} disabled={locked}>
+                      Add a wait before step 1
+                    </button>
                     <button type="button" onClick={() => actions.onEdit({ mode: 'insert', after: 0 })} disabled={!canRecord} title={recordTitle}>
                       Add steps before step 1
                     </button>
-                  )}
-                  {item.kind === 'block' && <span className="hint">Change this block in the Blocks tab.</span>}
-                  {item.kind === 'expectation' && (
-                    <button type="button" className="danger" onClick={() => actions.onDeleteExpectation(testCase.id, expectationPosition)} disabled={locked}>
-                      Delete this check
-                    </button>
-                  )}
-                </div>
-              </details>
+                  </>
+                )}
+                {item.kind === 'block' && <span className="hint">Change this block in the Blocks tab.</span>}
+                {item.kind === 'expectation' && (
+                  <button type="button" className="danger" onClick={() => actions.onDeleteExpectation(testCase.id, expectationPosition)} disabled={locked}>
+                    Delete this check
+                  </button>
+                )}
+              </RowMenu>
             </li>
           );
         })}

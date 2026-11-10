@@ -27,6 +27,24 @@ function isWaitForm(arg: unknown): arg is { timeout: number } {
   return timeout > 0 && timeout <= LONGEST_TIMER_MS && (label === undefined || label === waitName(timeout / 1000));
 }
 
+/**
+ * What a Wait until step writes, and nothing else: an id or text selector
+ * under `visible`, a timeout, and `optional` so running out never fails.
+ */
+function waitUntilVisibleForm(arg: unknown, where: string): MaestroStep | undefined {
+  if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout', 'optional'].includes(key))) return undefined;
+  const { visible, timeout, optional } = arg;
+  if (!isRecord(visible) || optional !== true || typeof timeout !== 'number' || timeout <= 0 || timeout > LONGEST_TIMER_MS) return undefined;
+  let selector: MaestroSelector;
+  try {
+    selector = parseSelector(visible, `extendedWaitUntil.visible at ${where}`);
+  } catch {
+    return undefined;
+  }
+  if (selector.kind === 'point') return undefined;
+  return { kind: 'waitUntilVisible', selector, seconds: timeout / 1000 };
+}
+
 export class MaestroParseError extends Error {
   override name = 'MaestroParseError';
 }
@@ -235,10 +253,13 @@ export function parseStep(raw: unknown, position: number): MaestroStep {
       expectKeys(arg, ['link'], `openLink at ${where}`);
       return { kind: 'openLink', link: expectString(arg.link, `openLink.link at ${where}`) };
     }
-    case 'extendedWaitUntil':
-      // Only the form a Wait step writes. Any other wait stays Maestro's to run.
+    case 'extendedWaitUntil': {
+      // Only the forms a Wait or a Wait until step writes. Any other wait stays Maestro's to run.
       if (isWaitForm(arg)) return { kind: 'wait', seconds: arg.timeout / 1000 };
+      const waitUntil = waitUntilVisibleForm(arg, where);
+      if (waitUntil) return waitUntil;
       throw new MaestroParseError(`Unsupported command "extendedWaitUntil" at ${where}`);
+    }
     case 'takeScreenshot': {
       if (typeof arg === 'string') return { kind: 'takeScreenshot', path: arg };
       if (!isRecord(arg)) throw new MaestroParseError(`takeScreenshot needs a path at ${where}`);

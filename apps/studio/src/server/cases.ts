@@ -21,6 +21,8 @@ import {
   projectEnv,
   readId,
   readSavedCase,
+  readSeconds,
+  readStepNumber,
   replayNeedsMaestro,
   replayOnDevice,
   requireNoRecording,
@@ -39,15 +41,6 @@ function refuseIfRecording(state: ServerState, caseId: string): void {
   if (state.recorder?.active && state.recorder.caseId === caseId) {
     throw new HttpError(409, 'CASE_ACTIVE', 'This case is open in the recorder. Finish or discard that first.');
   }
-}
-
-function readStepNumber(params: unknown, key: string, max: number, min = 1): number {
-  const raw = (params as Record<string, string | undefined>)[key];
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw new HttpError(400, 'BAD_STEP', `Step ${raw ?? ''} does not exist; this case has ${max} step(s).`);
-  }
-  return value;
 }
 
 function optionalText(body: unknown, key: string, maxLength: number): string | undefined {
@@ -127,25 +120,53 @@ export function registerCaseRoutes(app: FastifyInstance, state: ServerState): vo
     return caseDetail(state, caseId);
   });
 
+  // A title or a note leaves the flow as it was; new seconds change what it does, so they queue like Delete step.
   app.patch('/api/cases/:caseId/steps/:index', async (request): Promise<CaseDetailResponse> => {
     const caseId = readId(request.params, 'caseId');
     refuseIfRecording(state, caseId);
-    const testCase = await readSavedCase(state, caseId);
-    const index = readStepNumber(request.params, 'index', testCase.steps.length);
-    const step = testCase.steps[index - 1]!;
-    const title = optionalText(request.body, 'title', 200);
-    const note = optionalText(request.body, 'note', 2000);
-    if (title !== undefined) {
-      if (title) step.title = title;
-      else delete step.title;
-    }
-    if (note !== undefined) {
-      if (note) step.note = note;
-      else delete step.note;
-    }
-    if ((request.body as { review?: unknown } | undefined)?.review === null) delete step.review;
-    await saveEdited(state, testCase, false);
-    return caseDetail(state, caseId);
+    const seconds = (request.body as { seconds?: unknown } | undefined)?.seconds === undefined ? undefined : readSeconds(request.body);
+    const edit = async (): Promise<CaseDetailResponse> => {
+      const testCase = await readSavedCase(state, caseId);
+      const index = readStepNumber(request.params, 'index', testCase.steps.length);
+      const step = testCase.steps[index - 1]!;
+      const title = optionalText(request.body, 'title', 200);
+      const note = optionalText(request.body, 'note', 2000);
+      if (seconds !== undefined) {
+        if (step.kind !== 'wait' && step.kind !== 'waitFor') throw new HttpError(400, 'NOT_A_WAIT', 'Only a wait has seconds to change.');
+        step.seconds = seconds;
+      }
+      if (title !== undefined) {
+        if (title) step.title = title;
+        else delete step.title;
+      }
+      if (note !== undefined) {
+        if (note) step.note = note;
+        else delete step.note;
+      }
+      if ((request.body as { review?: unknown } | undefined)?.review === null) delete step.review;
+      await saveEdited(state, testCase, seconds !== undefined);
+      return caseDetail(state, caseId);
+    };
+    return seconds === undefined ? edit() : enqueue(state, edit);
+  });
+
+  /** Adds a wait after step `after` (0 puts it before step 1). It touches nothing on the phone, so no recording is needed. */
+  app.post('/api/cases/:caseId/steps', async (request): Promise<CaseDetailResponse> => {
+    const caseId = readId(request.params, 'caseId');
+    const { after, kind } = (request.body ?? {}) as { after?: unknown; kind?: unknown };
+    if (kind !== 'wait') throw new HttpError(400, 'BAD_REQUEST', 'Expected { after, kind: "wait", seconds }.');
+    const seconds = readSeconds(request.body);
+    refuseIfRecording(state, caseId);
+    return enqueue(state, async () => {
+      const testCase = await readSavedCase(state, caseId);
+      if (typeof after !== 'number' || !Number.isInteger(after) || after < 0 || after > testCase.steps.length) {
+        throw new HttpError(400, 'BAD_POSITION', 'That position is not in the case.');
+      }
+      testCase.steps.splice(after, 0, { index: after + 1, kind: 'wait', seconds, at: nowIso() });
+      testCase.steps = renumber(testCase.steps);
+      await saveEdited(state, testCase, true);
+      return caseDetail(state, caseId);
+    });
   });
 
   app.delete('/api/cases/:caseId/steps/:index', async (request): Promise<CaseDetailResponse> => {

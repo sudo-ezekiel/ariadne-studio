@@ -49,6 +49,7 @@ export const STEP_CHOICES: ReadonlyArray<{ label: string; step: MaestroStep }> =
   { label: 'Type', step: { kind: 'inputText', text: '' } },
   { label: 'Check', step: { kind: 'assertVisible', selector: { kind: 'text', value: '' } } },
   { label: 'Wait', step: { kind: 'wait', seconds: DEFAULT_WAIT_SECONDS } },
+  { label: 'Wait until', step: { kind: 'waitUntilVisible', selector: { kind: 'text', value: '' }, seconds: DEFAULT_WAIT_SECONDS } },
   { label: 'Scroll to', step: { kind: 'scrollUntilVisible', selector: { kind: 'text', value: '' }, direction: 'DOWN' } },
   { label: 'Check it is not visible', step: { kind: 'assertNotVisible', selector: { kind: 'text', value: '' } } },
   { label: 'Long press', step: { kind: 'longPressOn', selector: { kind: 'text', value: '' } } },

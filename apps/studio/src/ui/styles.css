@@ -893,6 +893,10 @@ button.link-on-dark:hover:not(:disabled) {
   width: auto;
 }
 
+button.toolbar-refresh {
+  margin-left: auto;
+}
+
 .toolbar-sep {
   align-self: center;
   width: 1px;
@@ -1044,11 +1048,9 @@ button.link-on-dark:hover:not(:disabled) {
 
 .case-panel h3 {
   margin: 24px 0 8px;
-  color: var(--ink-2);
-  font-size: 12px;
+  color: var(--ink);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .case-meta,
@@ -1125,40 +1127,21 @@ button.link-on-dark:hover:not(:disabled) {
   margin: 8px 0 0;
 }
 
-.piece-body.piece-body-flat {
-  margin-left: 26px;
-}
-
 .draft-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  margin: 8px 0 0;
 }
 
-.draft-step {
+.draft-body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--block-line);
-  border-radius: 8px;
-  background: var(--block-soft);
-}
-
-.draft-step-head {
-  display: flex;
-  align-self: stretch;
-  align-items: center;
-  gap: 8px;
+  min-width: 0;
 }
 
 .draft-step-name {
-  flex: 1;
-  min-width: 0;
+  min-height: 21px;
+  padding-top: 1px;
   font-weight: 600;
 }
 
@@ -1189,8 +1172,6 @@ button.link-on-dark:hover:not(:disabled) {
 
 .draft-pick {
   height: 28px;
-  border-color: var(--block-line);
-  color: var(--block);
 }
 
 .draft-direction {
@@ -1342,252 +1323,609 @@ button.record-button {
 }
 
 /*
- * Blocks are jigsaw pieces: violet, with a nub on the top edge, so a block
- * never reads as a recorded step. The start piece is the flat-topped piece
- * every stack begins with.
+ * Step lists are Ariadne's thread (docs/steps-redesign.md): a hairline runs
+ * down the first column from a ring at the start to a knot at the end, and
+ * each row wears a mark on it. A ring is a point on the thread (an action, or
+ * a check in green), a violet square is a block (a box of other steps), and a
+ * wait has no ring: the thread goes dotted for that row. Nothing in a list is
+ * a card: no fills, no side stripes, no shadows, radius 0 except the marks.
+ * The same rows serve the live recording, a saved case, the Before recording
+ * stack and the block form.
  */
 
-.stack,
-.palette {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
+.steps {
+  margin: 12px 0;
   padding: 0;
   list-style: none;
 }
 
-.palette {
-  gap: 10px;
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 27px 64px minmax(0, 1fr) auto 24px;
+  align-items: start;
+  column-gap: 10px;
+  margin: 0 -8px;
+  padding: 8px;
+  /* The hairline between rows starts after the thread, so the two never cross. */
+  background: linear-gradient(var(--line-2), var(--line-2)) no-repeat 45px 0 / calc(100% - 45px) 1px;
 }
 
-.piece {
+.step:first-child {
+  background-image: none;
+}
+
+li.step:hover,
+li.step:focus-within {
+  background-color: var(--panel-2);
+}
+
+li.step:focus-visible {
+  outline: 2px solid var(--navy-text);
+  outline-offset: -2px;
+}
+
+.steps-saved .step {
+  grid-template-columns: 27px 64px minmax(0, 1fr) 92px auto 24px;
+}
+
+.stack .step,
+.draft-steps .step {
+  grid-template-columns: 27px minmax(0, 1fr) auto;
+}
+
+/* The thread: one hairline through the first column, behind the marks. */
+
+.step-mark {
   position: relative;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  display: flex;
+  align-self: stretch;
+  justify-content: center;
+}
+
+.step-mark::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: 13px;
+  width: 1px;
+  background: var(--line);
+}
+
+.step:first-child .step-mark::before {
+  top: 10px;
+}
+
+.step:last-child .step-mark::before {
+  bottom: auto;
+  height: 18px;
+}
+
+.step:only-child .step-mark::before {
+  display: none;
+}
+
+.step-wait .step-mark::before,
+.step-tail .step-mark::before {
+  left: 12px;
+  width: 0;
+  border-left: 2px dotted var(--ink-3);
+  background: none;
+}
+
+.mark {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+li.step:hover .mark,
+li.step:focus-within .mark {
+  background: var(--panel-2);
+}
+
+.mark-start {
+  border-color: var(--navy-text);
+}
+
+.mark-check {
+  border-color: var(--pass);
+  color: var(--pass);
+}
+
+/* The knot: where the thread ends, on the case's end checks. */
+.mark-end,
+li.step:hover .mark-end {
+  width: 11px;
+  height: 11px;
+  margin-top: 5px;
+  border-color: var(--pass);
+  background: var(--pass);
+}
+
+.mark-block,
+li.step:hover .mark-block,
+li.step:focus-within .mark-block {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 0;
+  background: var(--block);
+  color: var(--on-block);
+}
+
+.mark-wait,
+li.step:hover .mark-wait {
+  border-color: transparent;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+li.step:not(:hover):not(:focus-within) .mark-wait {
   background: var(--panel);
 }
 
-.piece-start {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-left: 4px solid var(--navy-text);
-  border-radius: 14px 8px 8px 8px;
-  font-size: 13px;
+.step-tail .mark,
+.step-empty .mark {
+  visibility: hidden;
 }
 
-.piece-start-label {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
+/* Kind: one plain word in a fixed column, coloured only where colour already means something. */
 
-.piece-start-label span {
-  flex: none;
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.piece-start-label select {
-  flex: 1;
-  min-width: 0;
-}
-
-.piece-start .piece-icon {
-  color: var(--navy-text);
-}
-
-.piece-block {
-  border-color: var(--block-line);
-  border-left: 4px solid var(--block);
-  background: var(--block-soft);
-}
-
-.piece-block::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: 26px;
-  width: 16px;
-  height: 6px;
-  border: 1px solid var(--block-line);
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-  background: var(--block-soft);
-}
-
-.piece-block[draggable='true'] {
-  cursor: grab;
-}
-
-.piece-block[draggable='true']:hover {
-  border-color: color-mix(in srgb, var(--block) 45%, transparent);
-  border-left-color: var(--block);
-}
-
-.piece-block[draggable='true']:active {
-  cursor: grabbing;
-}
-
-.piece-broken {
-  border-left-color: var(--ink-3);
-  background: var(--panel-2);
-  opacity: 0.8;
-}
-
-.piece-broken::before {
-  background: var(--panel-2);
-}
-
-.piece-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-}
-
-.piece-icon {
+.step-kind {
   display: inline-flex;
-  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 21px;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.step-check .step-kind,
+.step-end .step-kind {
+  color: var(--pass);
+}
+
+.step-block .step-kind {
   color: var(--block);
 }
 
-.grip {
-  display: inline-flex;
-  flex: none;
+.step-wait .step-kind {
   color: var(--ink-3);
 }
 
-.piece-name {
+.step-detail {
+  min-width: 0;
+  padding-top: 1px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+.step-detail.warn {
+  color: var(--warn);
+}
+
+/* A pause is a thinner row, in a quieter ink, with no screen of its own. */
+.step-wait {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.step-wait .step-detail {
+  color: var(--ink-2);
+}
+
+.step-kept {
+  opacity: 0.55;
+}
+
+.step-shot {
+  display: flex;
+}
+
+.step-start .step-detail {
+  color: var(--ink-2);
+}
+
+/* Where a drop will land: the thread colour, because it is what the drop will hit. */
+
+.drop-before::after,
+.drop-after::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: -1px;
+  right: 8px;
+  left: 21px;
+  height: 2px;
+  background: var(--thread);
+}
+
+.drop-after::after {
+  top: auto;
+  bottom: -1px;
+}
+
+.drop-before .step-mark::after,
+.drop-after .step-mark::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: -12px;
+  left: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--thread);
+}
+
+.drop-after .step-mark::after {
+  top: auto;
+  bottom: -12px;
+}
+
+/* The end of a list: a quiet line saying what goes there, which lights up only while something is dragged. */
+
+.step-tail {
+  align-items: center;
+  background-image: none;
+}
+
+li.step.step-tail:hover {
+  background-color: transparent;
+}
+
+.stack-tail {
+  grid-column: 2 / -1;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.step-tail-inviting .stack-tail {
+  color: var(--thread-strong);
+  font-weight: 600;
+}
+
+.steps-live .step-tail .stack-tail {
+  grid-column: 2 / -1;
+}
+
+.step-empty .step-detail {
+  grid-column: 2 / -1;
+  color: var(--ink-2);
+}
+
+/* While recording: the Wait tray at the end of the thread. */
+
+.step-tray {
+  padding-top: 10px;
+}
+
+.tray {
+  display: flex;
+  grid-column: 2 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.tray-tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+
+.tray-tile .icon:first-child {
+  color: var(--ink-3);
+}
+
+.tray-tile:active {
+  cursor: grabbing;
+}
+
+.tray-tile[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tray-hint {
+  flex: 1;
+  min-width: 180px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.tray button {
+  height: 28px;
+}
+
+/* The seconds of a wait, changed in its row. */
+
+.seconds-field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.seconds-field input {
+  width: 64px;
+  height: 26px;
+}
+
+.seconds-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.seconds-field button {
+  height: 26px;
+  padding: 0 10px;
+}
+
+/* A step menu stays quiet until its row is looked at. */
+
+.step .row-menu summary {
+  color: var(--ink-3);
+}
+
+li.step:hover .row-menu summary,
+li.step:focus-within .row-menu summary {
+  color: var(--ink);
+}
+
+/* The Before recording stack */
+
+.stack {
+  margin: 8px 0 0;
+}
+
+.stack-start {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.stack-start span {
+  flex: none;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stack-start select {
   flex: 1;
   min-width: 0;
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.piece-meta {
-  flex: none;
-  color: var(--block);
-  font-size: 12px;
-}
-
-.piece-body {
-  margin-left: 56px;
-}
-
-.piece-file {
-  color: var(--ink-2);
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
-.piece-vars {
-  margin-top: 2px;
-  color: var(--ink-2);
-  font-size: 12px;
-}
-
-.piece-missing {
-  color: var(--warn);
-  font-weight: 600;
-}
-
-.piece-error {
-  margin-top: 2px;
-  color: var(--fail);
-  font-size: 12px;
-}
-
-.piece-add {
-  flex: none;
   height: 28px;
-  border-color: var(--block-line);
-  color: var(--block);
+}
+
+.stack-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stack-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 21px;
+  padding-top: 1px;
   font-weight: 600;
 }
 
-.piece-tools {
+.stack-meta {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.step-movable {
+  cursor: grab;
+}
+
+.step-movable:active {
+  cursor: grabbing;
+}
+
+.step-broken .stack-name {
+  color: var(--ink-2);
+}
+
+.row-tools {
   display: inline-flex;
   flex: none;
   gap: 2px;
 }
 
-.piece-tools button {
-  width: 26px;
-  height: 26px;
+.row-tools button {
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   background: none;
+  color: var(--ink-3);
+}
+
+li.step:hover .row-tools button,
+li.step:focus-within .row-tools button {
   color: var(--ink-2);
 }
 
-.piece-tools button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--block) 12%, transparent);
-  color: var(--block);
+.row-tools button:hover:not(:disabled) {
+  background: var(--line-2);
+  color: var(--ink);
 }
 
-.piece-steps summary {
-  margin-top: 4px;
+/* The block palette: rows, a violet square and the puzzle glyph, the ordinary Add button. */
+
+.palette {
+  margin: 8px 0 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line-2);
+  list-style: none;
+}
+
+.palette-row {
+  display: grid;
+  grid-template-columns: 14px 17px minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 10px;
+  margin: 0 -8px;
+  padding: 8px;
+  border-top: 1px solid var(--line-2);
+}
+
+/* The Blocks tab lists blocks to edit, not to drag, so it has no grip column. */
+.palette-static .palette-row {
+  grid-template-columns: 17px minmax(0, 1fr) auto auto;
+}
+
+.palette-static .palette-body {
+  grid-column: 2 / -1;
+}
+
+.palette-row-usable {
+  cursor: grab;
+}
+
+.palette-row-usable:active {
+  cursor: grabbing;
+}
+
+.palette-row-usable:hover {
+  background: var(--panel-2);
+}
+
+.palette-row .mark-block {
+  margin: 0;
+}
+
+.palette-row .grip {
+  display: inline-flex;
+  color: var(--ink-3);
+}
+
+.palette-name {
+  min-width: 0;
+  font-weight: 600;
+}
+
+.palette-meta {
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+button.palette-add {
+  height: 28px;
+}
+
+.palette-body {
+  display: flex;
+  grid-column: 3 / -1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.palette-row-broken .palette-name {
+  color: var(--ink-2);
+}
+
+.palette-empty {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.block-file {
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.block-vars {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.block-missing {
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.block-error {
+  color: var(--fail);
+  font-size: 12px;
+}
+
+.block-values {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+/* What a block does, its steps numbered under the row that runs it. */
+
+.block-steps summary {
+  margin-top: 2px;
   color: var(--block);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.piece-steps ol {
+.block-steps ol {
   margin: 4px 0 2px;
-  padding-left: 20px;
+  padding: 0;
   color: var(--ink-2);
   font-size: 12px;
+  list-style: none;
 }
 
-.drop-slot {
+.block-steps li {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 8px;
-  border: 2px dashed var(--line);
-  border-radius: 8px;
+  gap: 8px;
+}
+
+.block-step-number {
+  flex: none;
+  min-width: 26px;
   color: var(--ink-3);
-  font-size: 13px;
-  text-align: center;
-}
-
-.drop-slot-active {
-  border-color: var(--block);
-  background: var(--block-soft);
-  color: var(--block);
-}
-
-/* Where a dragged block will land: the thread, because it is what the drop will hit. */
-.drop-before {
-  box-shadow: 0 -5px 0 -1px var(--thread);
-}
-
-.stack-note {
-  padding: 4px 2px;
-  color: var(--ink-2);
-  font-size: 12px;
-}
-
-.stack-compact {
-  gap: 6px;
-  margin: 12px 0 4px;
-}
-
-.stack-compact .piece {
-  padding: 4px 10px;
-  font-size: 13px;
-}
-
-.stack-compact .piece-row {
-  min-height: 24px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Settings under a placed block: which test user, or a value for each setting */
@@ -1596,9 +1934,7 @@ button.record-button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 6px 0 2px 56px;
-  padding-top: 6px;
-  border-top: 1px dashed var(--block-line);
+  margin: 2px 0;
 }
 
 .setting-row {
@@ -1664,14 +2000,8 @@ button.record-button {
   height: 28px;
 }
 
-.piece-values {
-  color: var(--block);
-  font-weight: 400;
-}
-
-.block-settings .piece-missing {
+.block-settings .block-missing {
   margin: 0;
-  font-size: 12px;
 }
 
 /* While recording: run a block now, as the next step */
@@ -1684,111 +2014,6 @@ button.record-button {
   color: var(--block);
   font-weight: 600;
   cursor: pointer;
-}
-
-.run-blocks .palette {
-  margin-top: 8px;
-}
-
-.drop-slot-steps {
-  margin-top: 8px;
-  min-height: 40px;
-}
-
-.palette-empty {
-  padding: 12px;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-/* Step rows: number, kind chip, what it did, result, screens, menu */
-
-.steps {
-  margin: 12px 0;
-  padding: 0;
-  list-style: none;
-}
-
-.step {
-  display: grid;
-  grid-template-columns: 28px 64px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  margin: 0 -8px;
-  padding: 8px;
-  border-bottom: 1px solid var(--line-2);
-  border-radius: 6px;
-}
-
-.step-detail-row {
-  grid-template-columns: 28px 64px 1fr 92px auto 28px;
-  align-items: start;
-}
-
-li.step:hover {
-  background: var(--panel-2);
-}
-
-/* Chips and the open menu keep their contrast on a hovered row. */
-li.step:hover .step-index,
-li.step:hover .step-kind,
-li.step:hover .row-menu summary:hover,
-li.step:hover .row-menu[open] summary {
-  background: var(--line-2);
-}
-
-.step-kept {
-  opacity: 0.55;
-}
-
-.step-block,
-li.step.step-block:hover {
-  border-left: 4px solid var(--block);
-  background: var(--block-soft);
-}
-
-.step-kind.step-kind-block,
-li.step:hover .step-kind.step-kind-block {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--block);
-  color: var(--on-block);
-}
-
-.step-index {
-  display: inline-flex;
-  justify-self: end;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--panel-2);
-  color: var(--ink-2);
-  font-size: 12px;
-}
-
-.step-kind {
-  justify-self: start;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--panel-2);
-  color: var(--ink-2);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.step-detail {
-  overflow-wrap: anywhere;
-  color: var(--ink);
-  font-family: var(--font);
-  font-size: 13px;
-}
-
-.step-detail.warn {
-  color: var(--warn);
 }
 
 .selector {
@@ -2669,14 +2894,13 @@ code.command {
 
 .toast {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 8px 8px 12px;
   border: 1px solid var(--line);
-  border-left: 4px solid;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel);
-  box-shadow: 0 8px 24px var(--shadow);
+  box-shadow: 0 6px 18px var(--shadow);
   font-size: 13px;
 }
 
@@ -2685,14 +2909,18 @@ code.command {
 }
 
 .toast-error {
-  border-left-color: var(--fail);
+  border-color: color-mix(in srgb, var(--fail) 55%, var(--line));
+  color: var(--fail);
 }
 
-.toast-info {
-  border-left-color: var(--info);
+.toast button.toast-action {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  font-weight: 600;
 }
 
-.toast button {
+.toast button.toast-close {
   flex: none;
   width: 24px;
   height: 24px;

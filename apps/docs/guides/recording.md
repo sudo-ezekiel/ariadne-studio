@@ -42,7 +42,7 @@ Touches show where your finger went, not what you meant, so some steps come with
 | You changed text already in the field | The step erases and retypes from the end of the field | Run the case to check the text comes out right |
 | You left the app | You went to the home screen and came back, which a run will not do | Run the case to check it still works |
 
-Mistakes are recorded too, because a touch looks the same either way. Delete the extra steps in the **Cases** tab after you save. A note goes away when you press **Looks right** there.
+Mistakes are recorded too, because a touch looks the same either way. Remove the extra steps as you go, see [Remove a step](#remove-a-step), or delete them in the **Cases** tab after you save. A note goes away when you press **Looks right** there.
 
 Recording pauses by itself when you leave for the home screen or pull down the notifications, and carries on when the app is back. Touches on other apps in between are not recorded. Recent apps and two-finger gestures are not recorded either, because Maestro cannot replay them.
 
@@ -85,15 +85,48 @@ The controls under the screen add these steps:
 - **Relaunch app** closes the app and starts it again.
 - **Hide keyboard** closes the on-screen keyboard.
 - **Open link** opens a web link or an app deep link. The link must look like `scheme://...`. The device opens it with whatever app handles it.
-- **Wait** makes a run pause at this point, for 1 to 120 seconds. Nothing happens on the phone while you record. Add one before a tap on a website that has just opened, see [Known limits](/reference/known-limits#a-tap-on-a-page-that-is-still-loading).
 
-## Check mode
+## Check, Wait until and Wait
 
-A check records that something is on screen at this point in the case.
+Three controls beside the text field record something about time and the screen, and none of them touches the phone:
 
-Toggle **Check**. The outline turns green and dashed, and a click records a check for that element without touching the device. Toggle it off to go back to tapping.
+- **Check** records that something is on the screen now. The run fails if it is missing.
+- **Wait until** gives the screen up to 20 seconds to show something, then the run carries on either way.
+- **Wait** pauses the run for a fixed number of seconds, whatever the screen shows.
 
-Elements with neither a name nor an id are refused: "Nothing with a name or id here. Click on a text or a control." In Check mode holds and drags do nothing.
+Use **Wait until** where a page takes a moment to load, for example a website the app has just opened: click the button you are about to tap, and the run waits for it instead of guessing a number of seconds. Use **Check** for what the case is meant to prove.
+
+Toggle **Check**, and a click records a check for that element. The outline turns green and dashed. Toggle it off to go back to tapping.
+
+Toggle **Wait until**, and the next click records a wait for that element; the mode then turns itself off. The new row opens its seconds so you can change the 20. A run that finds the element goes on at once.
+
+Elements with neither a name nor an id are refused: "Nothing with a name or id here. Click on a text or a control." In Check and Wait until modes, holds and drags do nothing.
+
+**Wait** is a fixed pause of 1 to 120 seconds. Press it in the controls, or drag the **Wait** tile from the end of the steps to any place between two steps, see below. See also [Known limits](/reference/known-limits#a-tap-on-a-page-that-is-still-loading).
+
+## The steps while you record
+
+The steps are listed on one thread, from the start of the app at the top to the last step. The mark on the thread says what each row is:
+
+- a numbered ring is a step that acted on the phone; a green ring is a check
+- a violet square is a setup block, which runs steps of its own; **What it does** lists them, numbered under the block (4.1, 4.2)
+- a row with no ring, where the thread turns dotted, is a wait: the run only pauses there
+
+![A recording with a 3 second wait after step 2, a Wait until for "Check-up" and a check, and the Wait tile at the end of the thread](/shots/recording-wait.png)
+
+### Put a Wait between two steps
+
+At the end of the thread sits a **Wait** tile. Drag it between any two steps: an ochre line shows where it will land. The new wait starts at 20 seconds with its seconds open; type another number and press Enter, or leave it. **Add** beside the tile puts a wait after the last step, and **Add a wait after this step** in a step's menu puts one right there.
+
+A wait can go anywhere because it does nothing on the phone. A setup block runs on the phone the moment you add it, so it only goes at the end: drag it from **Run a setup block now** onto the end of the steps.
+
+### Remove a step
+
+Open the **...** menu at the end of a step and press **Remove step**, or click the row and press Delete. The message that follows has **Undo** for a few seconds.
+
+Removing a step does not move the phone back. If the step acted on the phone, for example a tap that opened a page, the phone stays where that step left it, and a note above **Finish recording** says so until you finish. Run the case after saving to check that the later steps still work. Removing a wait or a check changes nothing on the phone.
+
+Steps kept from a saved case while you **Re-record from here** or **Add steps after this one** cannot be removed here; delete them in the case afterwards.
 
 ## Typing and secrets
 

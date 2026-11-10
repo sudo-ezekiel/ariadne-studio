@@ -21,7 +21,7 @@ function assertable(selector: MaestroSelector): boolean {
 
 /**
  * For each step, the element a scroll step is scrolling towards: the
- * selector of the next tap, long press, double tap or expect step, or of the
+ * selector of the next tap, long press, double tap, expect or wait until step, or of the
  * first end expectation, skipping further scrolls in the same direction. Undefined for steps that
  * are not scrolls, and for scrolls followed by anything else (typing, back, a
  * scroll the other way, a point tap, or nothing).
@@ -37,7 +37,8 @@ export function scrollTargets(steps: readonly CaseStep[], expectations: readonly
     }
     if (next < steps.length) {
       const target = steps[next]!;
-      const onElement = target.kind === 'tap' || target.kind === 'expect' || target.kind === 'longPress' || target.kind === 'doubleTap';
+      const onElement =
+        target.kind === 'tap' || target.kind === 'expect' || target.kind === 'waitFor' || target.kind === 'longPress' || target.kind === 'doubleTap';
       return onElement && assertable(target.selector) ? target.selector : undefined;
     }
     const first = expectations[0];

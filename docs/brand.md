@@ -104,12 +104,16 @@ step. Everything else is neutral.
 
 The system sans (`system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`), no web
 fonts, because the studio runs offline. Base 14 px, line height 1.45. Headings 18 / 15 /
-13 px at weight 600; section labels 12 px, uppercase, letter-spacing 0.04em, in `--ink-2`.
+13 px at weight 600; section titles in the side panel ("Before recording", "Setup blocks")
+are 15 px, sentence case, in `--ink`. No uppercase labels with letter-spacing in front of
+text: the owner reads them as template.
 Meta and captions 12 px. Selectors, ids and YAML in the system mono
 (`ui-monospace, "SF Mono", Menlo, Consolas, monospace`) at 12 px.
 
 Spacing on a 4 px scale: 4, 8, 12, 16, 24. Radius 6 px on controls, 10 px on cards, 14 px
-on the logo tile. One primary button per region, never two side by side.
+on the logo tile. Inside a step list the radius is 0 for everything except the round marks
+on the thread (rows, block squares, the Wait tile, insertion marks). Nothing in a list gets
+a tinted background, a coloured side stripe or a shadow. One primary button per region, never two side by side.
 
 ## 5. Voice
 
@@ -137,7 +141,9 @@ the code and the Maestro files still call things; the right column is what a per
 | A step recording could not be sure of | a note on the step; "Looks right" to clear it | warning, error, low confidence |
 | Getting a Xiaomi phone ready for Run | Prepare this phone | fix, patch, unlock |
 | Recording that something is visible | check; Check mode (the toggle is "Check"); end checks | Expect, expectation, assert |
-| Making a run pause at a point in a case | Wait | Sleep, delay, pause step |
+| Making a run pause at a point in a case | Wait; rows read "Wait 20 seconds"; the tile under the steps is "Wait" | Sleep, delay, pause step |
+| Giving the screen time to show something | Wait until; rows read "Wait up to 20 seconds for "Welcome" to appear" | waitFor, extendedWaitUntil, poll, retry |
+| Taking a step out of a recording | Remove step (Undo in the message after); Delete step on a saved case | undo step, drop, discard step |
 | Running a saved case with Maestro | Run; Run all; "Last run passed"; "Not run yet" | Replay |
 | The document of one Run all for whoever accepts a release | Evidence pack; its title is "Test results report" | acceptance certificate, audit trail |
 | A case's requirement, user story or scenario code | reference; "Add a reference" | requirement id, ticket, tag |
@@ -162,17 +168,22 @@ the code and the Maestro files still call things; the right column is what a per
 | The project's folders in a column of the studio | Files; "Show files", "Hide files"; "read only" on an opened file | Explorer, workspace, file browser |
 | A control that cannot be recorded because Maestro has no command for it | "Off while recording: Maestro cannot replay this"; "live-only" in developer docs | unsupported, disabled |
 
-Kind labels on step rows, always lowercase chips: `launch`, `tap`, `long press`,
-`double tap`, `swipe`, `type`, `scroll`, `back`, `key`, `rotate`, `keyboard`, `relaunch`,
-`link`, `check`, `end`, `block`, `start`.
+Kind labels on step rows are plain lowercase words in a fixed column, never chips: `tap`,
+`long press`, `double tap`, `swipe`, `type`, `scroll`, `back`, `key`, `rotate`, `keyboard`,
+`relaunch`, `link`, `check`, `wait`, `wait until`, `end`, `block`, `start`. Only meaning
+colours them: green for `check` and `end`, violet for `block`, `--ink-3` for the waits.
 
 ## 7. UI principles
 
 1. The screen is the stage. The phone sits on a dark backdrop so the app's own colours
    read true, and every control that acts on the phone sits directly under it.
-2. One row shape. Steps during recording, steps in a saved case and steps in a
-   report are the same row: number, kind chip, what it did in words, the selector in small
-   mono, the screenshot. The result column is the only addition after a run.
+2. The list is the thread. Steps during recording, steps in a saved case, the Before
+   recording stack and the block form are the same row on one hairline that runs from a
+   ring at the start to a knot at the end checks: the mark on the thread, the kind word,
+   what it did in words, the selector in small mono, the screenshot. The mark says the kind:
+   a numbered ring for an action, a green ring for a check, a violet square for a block, no
+   ring and a dotted thread for a wait, a filled green dot for an end check. The result
+   column is the only addition after a run. docs/steps-redesign.md has the details.
 3. Highlight by meaning. Ochre for the thread, green for checks and
    passes, red for failures, amber for doubts. Nothing else is coloured.
 4. State is always visible. The status pill in the top bar says connected, busy or idle
@@ -180,13 +191,17 @@ Kind labels on step rows, always lowercase chips: `launch`, `tap`, `long press`,
    which device and app the studio is on sits in Device, above the Record and Cases tabs);
    a recording case shows a pulsing ochre dot; a running suite says which case it is on.
 5. Empty states tell you the next click ("Connect a device to see its screen here").
-6. Destructive actions are outlined red, never filled, and always confirm.
+6. Destructive actions are outlined red, never filled, and always confirm, with one
+   exception: removing a step from a recording in progress offers Undo instead, because it
+   happens after every mis-tap and nothing is lost until Finish.
 7. Recording is never hidden. The bar above the screen always holds the record button
    (Start recording, then Finish recording), and a recording frames the screen in ochre.
-8. Blocks are pieces. A setup block is drawn as a violet jigsaw piece with a puzzle icon
+8. Blocks are marked, not boxed. A setup block wears a violet square with the puzzle glyph
    wherever it appears (the library, the Before recording stack, a case being recorded,
-   a saved case), so a block is never mistaken for a recorded step. Pieces drag and drop,
-   and every drag has a click path beside it (Add, the arrows, remove).
+   a saved case), never a card, so a block is never mistaken for a recorded step. A wait
+   is the opposite: no mark at all, the thread only pauses. Blocks and the Wait tile drag
+   and drop, and every drag has a click path beside it (Add, the arrows, remove, the row
+   menu).
 
 ## 8. Saying Maestro
 

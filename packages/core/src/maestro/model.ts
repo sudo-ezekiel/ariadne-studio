@@ -45,6 +45,12 @@ export type MaestroStep =
    */
   | { kind: 'wait'; seconds: number }
   /**
+   * Gives the screen up to `seconds` to show the element, then carries on
+   * either way: an extendedWaitUntil on an id or text selector with
+   * `optional`, so running out never fails the flow.
+   */
+  | { kind: 'waitUntilVisible'; selector: MaestroSelector; seconds: number }
+  /**
    * Saves a screenshot as <path>.png in the flow's debug output. The studio
    * adds these to the copy of a flow it replays, never to flows on disk.
    */

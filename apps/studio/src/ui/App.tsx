@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Point, Rect } from '@ariadne/core/hit-test';
 import type { ExpectationCandidate, PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
-import type {
-  ActionResponse,
-  CaseDetailResponse,
-  CaseFinishResponse,
-  CurrentCaseView,
-  DeviceInfo,
-  EditRequest,
-  FileContent,
-  PhoneStatus,
-  ProjectInfo,
-  ScreenState,
-  SessionInfo,
-  StepPatch,
-  SuiteView,
+import {
+  DEFAULT_WAIT_SECONDS,
+  type ActionResponse,
+  type CaseDetailResponse,
+  type CaseFinishResponse,
+  type CurrentCaseView,
+  type DeviceInfo,
+  type EditRequest,
+  type FileContent,
+  type PhoneStatus,
+  type ProjectInfo,
+  type ScreenState,
+  type SessionInfo,
+  type StepPatch,
+  type StepView,
+  type SuiteView,
 } from '../shared/api-types.ts';
 import { opensByItself } from '../shared/setup-steps.ts';
 import { api, ApiError } from './api.ts';
@@ -24,6 +26,7 @@ import { ConnectionCard } from './components/ConnectionCard.tsx';
 import { FilesPanel, useFilesOpen } from './components/FilesPanel.tsx';
 import { Mirror } from './components/Mirror.tsx';
 import { SetupDialog } from './components/SetupDialog.tsx';
+import { actsOnPhone } from './components/step-marks.ts';
 import { Toasts, type Toast } from './components/Toasts.tsx';
 import { TopBar } from './components/TopBar.tsx';
 import { useTheme } from './theme.ts';
@@ -51,6 +54,9 @@ export function App() {
   const [openedCase, setOpenedCase] = useState<CaseDetailResponse | null>(null);
   const [suite, setSuite] = useState<SuiteView | null>(null);
   const [expectMode, setExpectMode] = useState(false);
+  const [waitUntilMode, setWaitUntilMode] = useState(false);
+  /** The wait in the recording whose seconds field is open, by step number. */
+  const [changingWait, setChangingWait] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<Rect | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -68,9 +74,9 @@ export function App() {
   const toastId = useRef(0);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const toast = useCallback((message: string, kind: Toast['kind'] = 'error') => {
+  const toast = useCallback((message: string, kind: Toast['kind'] = 'error', action?: Toast['action']) => {
     const id = ++toastId.current;
-    setToasts((current) => [...current, { id, message, kind }]);
+    setToasts((current) => [...current, { id, message, kind, ...(action ? { action } : {}) }]);
     setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), TOAST_MS);
   }, []);
 
@@ -130,6 +136,8 @@ export function App() {
   useEffect(() => {
     if (!recordingId) {
       setExpectMode(false);
+      setWaitUntilMode(false);
+      setChangingWait(null);
       setPicking(null);
       setPhone(PHONE_OFF);
     } else {
@@ -304,6 +312,30 @@ export function App() {
   const hideKeyboard = () => run('Hiding the keyboard', async () => applyAction(await api.hideKeyboard()));
   const openLink = (url: string) => run('Opening link', async () => applyAction(await api.openLink(url)));
   const addWait = (seconds: number) => run('Adding a wait', async () => applyAction(await api.wait(seconds)));
+  const waitUntilAt = (point: Point) =>
+    run('Recording a wait', async () => {
+      setWaitUntilMode(false);
+      const response = await api.waitFor(point.x, point.y);
+      await applyAction(response);
+      if (response.step) setChangingWait(response.step.index);
+    });
+  const insertWait = (after: number) =>
+    run('Adding a wait', async () => {
+      const response = await api.insertWait(DEFAULT_WAIT_SECONDS, after);
+      setCurrentCase(await api.currentCase());
+      if (response.step) setChangingWait(response.step.index);
+      return response.step?.index;
+    });
+  const restoreStep = () => run('Putting the step back', async () => setCurrentCase(await api.restoreStep()));
+  const removeStep = (step: StepView) =>
+    run('Removing the step', async () => {
+      setCurrentCase(await api.removeStep(step.index));
+      setChangingWait(null);
+      const message = actsOnPhone(step.kind) ? `Step ${step.index} removed. The phone is still where that step left it.` : `Step ${step.index} removed.`;
+      toast(message, 'info', { label: 'Undo', run: () => void restoreStep() });
+    });
+  const setWaitSeconds = (index: number, seconds: number) =>
+    run('Changing the wait', async () => setCurrentCase(await api.setStepSeconds(index, seconds)));
   const longPress = (point: Point) => run('Long pressing', async () => applyAction(await api.longPress(point.x, point.y)));
   const doubleTap = (point: Point) => run('Double tapping', async () => applyAction(await api.doubleTap(point.x, point.y)));
   const swipe = (from: Point, to: Point, durationMs: number) =>
@@ -628,11 +660,20 @@ export function App() {
           onFinish={() => void finishCase()}
           onOpenSetup={() => setSetupOpen(true)}
           expectMode={expectMode}
+          waitUntilMode={waitUntilMode}
           choosing={pickingKey !== null}
           onChoose={(point) => void pickElement(point)}
           onTap={(point) => void tap(point)}
           onExpect={(point) => void expectAt(point)}
-          onToggleExpect={() => setExpectMode((current) => !current)}
+          onToggleExpect={() => {
+            setWaitUntilMode(false);
+            setExpectMode((current) => !current);
+          }}
+          onWaitUntil={(point) => void waitUntilAt(point)}
+          onToggleWaitUntil={() => {
+            setExpectMode(false);
+            setWaitUntilMode((current) => !current);
+          }}
           onType={(text) => void type(text)}
           onBack={() => void back()}
           onScroll={(direction) => void scroll(direction)}
@@ -684,6 +725,13 @@ export function App() {
             onRecord={record}
             onRunBlock={(file, values) => void runBlock(file, values)}
             onAddTestUser={addTestUser}
+            liveActions={{
+              changing: changingWait,
+              onChanging: setChangingWait,
+              onRemoveStep: (step) => void removeStep(step),
+              onInsertWait: insertWait,
+              onSetSeconds: (index, seconds) => void setWaitSeconds(index, seconds),
+            }}
             onFinish={() => void finishCase()}
             onSavePicks={(picks) => void (currentCase?.forBlock ? finishBlockRecording(picks) : saveCase(picks))}
             onCancelPick={() => setPicking(null)}
@@ -705,6 +753,11 @@ export function App() {
               onDelete: deleteCase,
               onPatchStep: (caseId, index, patch: StepPatch) => changeCase('Saving the step', () => api.patchStep(caseId, index, patch)),
               onDeleteStep: (caseId, index) => changeCase('Deleting the step', () => api.deleteStep(caseId, index)),
+              onAddWait: (caseId, after) =>
+                run('Adding a wait', async () => {
+                  setOpenedCase(await api.addCaseWait(caseId, after, DEFAULT_WAIT_SECONDS));
+                  return true;
+                }).then((ok) => ok === true),
               onDeleteExpectation: (caseId, position) => changeCase('Deleting the check', () => api.deleteExpectation(caseId, position)),
               onSplit: (caseId, atStep) => changeCase('Splitting', () => api.splitCase(caseId, atStep)),
             }}

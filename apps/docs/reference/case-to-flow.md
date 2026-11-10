@@ -32,6 +32,7 @@ The case JSON is the source of truth, and the Flow is generated from it on every
 | Relaunch app | `launchApp` |
 | Open link | `openLink` |
 | Wait | `extendedWaitUntil`, see below |
+| Wait until | `extendedWaitUntil` with `visible` and `optional: true`, see below |
 | Hide keyboard | `hideKeyboard` |
 | Run a setup block now | `runFlow` |
 | Scroll | see below |
@@ -53,6 +54,20 @@ Maestro has no command for a pause, so a Wait is written as a wait for a label t
 ```
 
 Maestro prints it as `WARNED`, because the label never came. That is how a Wait ends, and it counts as passed.
+
+## Wait until
+
+A Wait until is written as a wait for the element that was clicked, with the same selector a Check would get. It is optional, so a run that never sees the element carries on after the timeout instead of failing:
+
+```yaml
+- extendedWaitUntil:
+    visible:
+      text: "Internet"
+    timeout: 20000
+    optional: true
+```
+
+When the element is already there the command ends at once. Ariadne reads back only this form, an id or text selector with `optional: true`; any other `extendedWaitUntil` in a block stays Maestro's to run.
 
 ## Scrolls
 

@@ -31,16 +31,19 @@ import {
   type MaestroStep,
   type PhoneKey,
   type Point,
+  type SelectorNode,
   type TestCase,
+  type Viewport,
   hasAppElements,
 } from '@ariadne/core';
 import {
-  MAX_WAIT_SECONDS,
+  DEFAULT_WAIT_SECONDS,
   type ActionResponse,
   type CandidatesResponse,
   type CaseFinishResponse,
   type CaseListItem,
   type CaseStartResponse,
+  type CurrentCaseView,
   type ProjectInfo,
   type SavedValuesRequest,
   type ScreenPick,
@@ -66,6 +69,8 @@ import {
   projectEnv,
   readPicks,
   readSavedCase,
+  readSeconds,
+  readStepNumber,
   replayNeedsMaestro,
   replayOnDevice,
   requireCase,
@@ -104,14 +109,6 @@ function readPoint(body: unknown): Point {
     throw new HttpError(400, 'BAD_REQUEST', 'Expected { x, y } in viewport pixels.');
   }
   return { x, y };
-}
-
-function readSeconds(body: unknown): number {
-  const { seconds } = (body ?? {}) as { seconds?: unknown };
-  if (typeof seconds !== 'number' || !Number.isInteger(seconds) || seconds < 1 || seconds > MAX_WAIT_SECONDS) {
-    throw new HttpError(400, 'BAD_REQUEST', `A wait is 1 to ${MAX_WAIT_SECONDS} seconds.`);
-  }
-  return seconds;
 }
 
 function readString(body: unknown, key: string): string {
@@ -394,6 +391,47 @@ async function recordedAction(
   }
   const screen = toScreenState(await captureInto(state, screenshotPath));
   return { ...(step ? { step: toStepView(step) } : {}), screen };
+}
+
+/**
+ * Records a check or a wait until for the element under `point`. No device
+ * action: the step's evidence is a copy of the screen the BA looked at.
+ */
+async function recordFromScreen(
+  state: ServerState,
+  recorder: Recorder,
+  point: Point,
+  kind: 'expect' | 'waitFor',
+  record: (node: SelectorNode, viewport: Viewport, screenshot: string | undefined, nodes: readonly SelectorNode[]) => CaseStep,
+): Promise<ActionResponse> {
+  const latest = await freshLatest(state);
+  const node = resolveTapTarget(latest.nodes, point, latest.viewport);
+  if (!node || chooseSelector(node, latest.nodes, point, latest.viewport).kind === 'point') {
+    throw new HttpError(400, 'NO_ELEMENT', 'Nothing with a name or id here. Click on a text or a control.');
+  }
+  const evidence = state.project.evidencePath(recorder.caseId!, recorder.evidenceNumberForNext(kind));
+  let screenshot: string | undefined;
+  if (await exists(latest.screenshotPath)) {
+    await mkdir(dirname(evidence.absolute), { recursive: true });
+    await copyFile(latest.screenshotPath, evidence.absolute);
+    screenshot = evidence.relative;
+  }
+  const step = record(node, latest.viewport, screenshot, latest.nodes);
+  return { step: toStepView(step), screen: toScreenState(latest), resolved: toLiteNode(node) };
+}
+
+/** Steps kept from the saved case while it is re-recorded or extended; they stay as they were. */
+function keptSteps(state: ServerState): number {
+  return state.editing?.keptSteps ?? 0;
+}
+
+/** A step of the recording from the URL, which must not be one kept from the saved case. */
+function readLiveStep(state: ServerState, recorder: Recorder, params: unknown): number {
+  const index = readStepNumber(params, 'index', recorder.stepCount);
+  if (index <= keptSteps(state)) {
+    throw new HttpError(409, 'KEPT_STEP', 'This step is part of the saved case. Finish or discard the recording, then delete it from the case.');
+  }
+  return index;
 }
 
 export function registerRoutes(app: FastifyInstance, state: ServerState): void {
@@ -895,36 +933,90 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     });
   });
 
-  /** A pause for a run to sit through. Nothing happens on the device, so it also goes through while using the phone. */
+  /**
+   * A pause for a run to sit through. Nothing happens on the device, so it also
+   * goes through while using the phone. With `after` it goes after that step,
+   * with no screenshot, and the screen is the last one seen.
+   */
   app.post('/api/case/wait', async (request): Promise<ActionResponse> => {
     const seconds = readSeconds(request.body);
+    const after = (request.body as { after?: unknown } | undefined)?.after;
     requireSession(state);
-    requireCase(state);
-    return enqueue(state, () =>
-      recordedAction(state, async () => undefined, (recorder, screenshot) => recorder.recordWait(seconds, screenshot), 'wait'),
-    );
+    const recorder = requireCase(state);
+    if (after === undefined) {
+      return enqueue(state, () =>
+        recordedAction(state, async () => undefined, (active, screenshot) => active.recordWait(seconds, screenshot), 'wait'),
+      );
+    }
+    return enqueue(state, async () => {
+      requireRecording(state, recorder);
+      if (typeof after !== 'number' || !Number.isInteger(after) || after < keptSteps(state) || after > recorder.stepCount) {
+        throw new HttpError(400, 'BAD_POSITION', 'That position is not in the case.');
+      }
+      if (!state.latest) throw new HttpError(404, 'NO_SCREEN', 'Nothing has been captured yet.');
+      const step = recorder.insertWait(seconds, after);
+      return { step: toStepView(step), screen: toScreenState(state.latest) };
+    });
   });
 
   app.post('/api/case/expect', async (request): Promise<ActionResponse> => {
     const point = readPoint(request.body);
     requireSession(state);
     const recorder = requireCase(state);
+    return enqueue(state, () =>
+      recordFromScreen(state, recorder, point, 'expect', (node, viewport, screenshot, nodes) =>
+        recorder.recordExpect(node, point, viewport, screenshot, nodes),
+      ),
+    );
+  });
+
+  /** Gives the screen time to show the element under the click; like a check, nothing is pressed. */
+  app.post('/api/case/wait-for', async (request): Promise<ActionResponse> => {
+    const point = readPoint(request.body);
+    const seconds = (request.body as { seconds?: unknown } | undefined)?.seconds === undefined ? DEFAULT_WAIT_SECONDS : readSeconds(request.body);
+    requireSession(state);
+    const recorder = requireCase(state);
+    return enqueue(state, () =>
+      recordFromScreen(state, recorder, point, 'waitFor', (node, viewport, screenshot, nodes) =>
+        recorder.recordWaitFor(node, point, viewport, seconds, screenshot, nodes),
+      ),
+    );
+  });
+
+  /**
+   * Takes a step out of the recording. The phone is not touched, so it stays
+   * where the step left it; Undo (restore) puts the step back.
+   */
+  app.delete('/api/case/steps/:index', async (request): Promise<CurrentCaseView> => {
+    const recorder = requireCase(state);
     return enqueue(state, async () => {
-      const latest = await freshLatest(state);
-      const node = resolveTapTarget(latest.nodes, point, latest.viewport);
-      if (!node || chooseSelector(node, latest.nodes, point, latest.viewport).kind === 'point') {
-        throw new HttpError(400, 'NO_ELEMENT', 'Nothing with a name or id here. Click on a text or a control.');
-      }
-      // No device action: the step's evidence is the screen the BA looked at.
-      const evidence = state.project.evidencePath(recorder.caseId!, recorder.evidenceNumberForNext('expect'));
-      let screenshot: string | undefined;
-      if (await exists(latest.screenshotPath)) {
-        await mkdir(dirname(evidence.absolute), { recursive: true });
-        await copyFile(latest.screenshotPath, evidence.absolute);
-        screenshot = evidence.relative;
-      }
-      const step = recorder.recordExpect(node, point, latest.viewport, screenshot, latest.nodes);
-      return { step: toStepView(step), screen: toScreenState(latest), resolved: toLiteNode(node) };
+      requireRecording(state, recorder);
+      recorder.removeStep(readLiveStep(state, recorder, request.params));
+      return currentCaseView(state)!;
+    });
+  });
+
+  /** Puts the step removed last back where it was. */
+  app.post('/api/case/steps/restore', async (): Promise<CurrentCaseView> => {
+    const recorder = requireCase(state);
+    return enqueue(state, async () => {
+      requireRecording(state, recorder);
+      if (!recorder.restoreRemoved()) throw new HttpError(404, 'NOTHING_REMOVED', 'Nothing to put back.');
+      return currentCaseView(state)!;
+    });
+  });
+
+  /** Changes the seconds of a wait or a wait until in the recording. */
+  app.patch('/api/case/steps/:index', async (request): Promise<CurrentCaseView> => {
+    const seconds = readSeconds(request.body);
+    const recorder = requireCase(state);
+    return enqueue(state, async () => {
+      requireRecording(state, recorder);
+      const index = readStepNumber(request.params, 'index', recorder.stepCount);
+      const kind = recorder.toCase().steps[index - 1]!.kind;
+      if (kind !== 'wait' && kind !== 'waitFor') throw new HttpError(400, 'NOT_A_WAIT', 'Only a wait has seconds to change.');
+      recorder.setSeconds(index, seconds);
+      return currentCaseView(state)!;
     });
   });
 
@@ -969,6 +1061,11 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
         }
       }
       const saved = await saveCaseAndFlow(state, testCase);
+      // Steps removed and never put back leave screenshots nothing refers to.
+      const referenced = new Set(testCase.steps.map((step) => step.screenshot));
+      for (const screenshot of recorder.removedScreenshots()) {
+        if (!referenced.has(screenshot)) await rm(state.project.path(screenshot), { force: true });
+      }
       state.recorder = undefined;
       state.editing = undefined;
       state.offered = undefined;

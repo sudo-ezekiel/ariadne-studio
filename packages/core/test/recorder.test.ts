@@ -522,3 +522,110 @@ describe('lastEvidenceNumber', () => {
     expect(started().toCase().lastEvidenceNumber).toBeUndefined();
   });
 });
+
+describe('Recorder removing and inserting steps', () => {
+  const kinds = (recorder: Recorder) => recorder.toCase().steps.map((step) => `${step.index}:${step.kind}`);
+
+  it('removes a step, renumbers the rest, and puts it back where it was', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.recordWait(5, shot(3));
+    recorder.removeStep(2);
+    expect(kinds(recorder)).toEqual(['1:back', '2:wait']);
+    expect(recorder.removedDeviceSteps).toBe(1);
+    expect(recorder.removedScreenshots()).toEqual([shot(2)]);
+    recorder.restoreRemoved();
+    expect(kinds(recorder)).toEqual(['1:back', '2:scroll', '3:wait']);
+    expect(recorder.removedCount).toBe(0);
+    expect(recorder.restoreRemoved()).toBeUndefined();
+  });
+
+  it('puts removed steps back last removed first, each at its old place', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.recordWait(5, shot(3));
+    recorder.removeStep(3);
+    recorder.removeStep(2);
+    expect(recorder.removedDeviceSteps).toBe(1);
+    recorder.restoreRemoved();
+    expect(kinds(recorder)).toEqual(['1:back', '2:scroll']);
+    recorder.removeStep(1);
+    recorder.removeStep(1);
+    expect(kinds(recorder)).toEqual([]);
+    recorder.restoreRemoved();
+    recorder.restoreRemoved();
+    recorder.restoreRemoved();
+    expect(kinds(recorder)).toEqual(['1:back', '2:scroll', '3:wait']);
+  });
+
+  it('refuses to remove a step kept from the saved case', () => {
+    const recorder = started({ steps: [{ index: 1, kind: 'back', at }] });
+    recorder.recordBack(shot(2));
+    expect(() => recorder.removeStep(1)).toThrow(/saved case/);
+    expect(() => recorder.removeStep(3)).toThrow(/no step 3/);
+    recorder.removeStep(2);
+    expect(recorder.stepCount).toBe(1);
+  });
+
+  it('inserts a wait at the start, in the middle and at the end, without an evidence number', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.insertWait(3, 0);
+    recorder.insertWait(4, 2);
+    recorder.insertWait(5, 4);
+    expect(kinds(recorder)).toEqual(['1:wait', '2:back', '3:wait', '4:scroll', '5:wait']);
+    expect(recorder.toCase().steps[2]).toEqual({ index: 3, kind: 'wait', seconds: 4, at: '2026-10-30T17:12:05.000Z' });
+    expect(recorder.evidenceNumberForNext('back')).toBe(3);
+    expect(() => recorder.insertWait(5, 6)).toThrow();
+  });
+
+  it('inserts a wait only after the kept steps', () => {
+    const recorder = started({ steps: [{ index: 1, kind: 'back', at }] });
+    expect(() => recorder.insertWait(5, 0)).toThrow();
+    recorder.insertWait(5, 1);
+    expect(kinds(recorder)).toEqual(['1:back', '2:wait']);
+  });
+
+  it('changes the seconds of a wait and of a wait until, and of nothing else', () => {
+    const recorder = started();
+    const nodes = settingsHome();
+    recorder.recordWait(5);
+    recorder.recordWaitFor(byLabel(nodes, 'Network & internet'), { x: 428, y: 698 }, viewport, 20, shot(2), nodes);
+    recorder.recordBack();
+    recorder.setSeconds(1, 8);
+    recorder.setSeconds(2, 30);
+    expect(recorder.toCase().steps.map((step) => ('seconds' in step ? step.seconds : undefined))).toEqual([8, 30, undefined]);
+    expect(() => recorder.setSeconds(3, 8)).toThrow(/not a wait/);
+  });
+
+  it('does not merge typing into the last step after a removal or an insertion, until a new step is recorded', () => {
+    const recorder = started();
+    recorder.recordInput('hel', shot(1));
+    recorder.recordBack(shot(2));
+    recorder.removeStep(2);
+    expect(recorder.evidenceNumberForNext('type', 'lo')).toBe(3);
+    recorder.recordInput('lo', shot(3));
+    recorder.recordInput('!', shot(3));
+    expect(recorder.toCase().steps.map((step) => (step.kind === 'type' ? step.text : step.kind))).toEqual(['hel', 'lo!']);
+    recorder.insertWait(5, 1);
+    // Back was step 2 when it was removed, so it goes back in as step 2, before the wait.
+    recorder.restoreRemoved();
+    recorder.recordInput('more', shot(4));
+    expect(recorder.toCase().steps.map((step) => (step.kind === 'type' ? step.text : step.kind))).toEqual(['hel', 'back', 'wait', 'lo!', 'more']);
+  });
+
+  it('records a wait until that becomes an optional extendedWaitUntil, and a scroll before it scrolls to it', () => {
+    const recorder = started();
+    const nodes = settingsHome();
+    recorder.recordScroll('down');
+    const step = recorder.recordWaitFor(byLabel(nodes, 'Network & internet'), { x: 428, y: 698 }, viewport, 20, shot(2), nodes);
+    expect(step).toMatchObject({ index: 2, kind: 'waitFor', selector: { kind: 'text', value: 'Network & internet' }, seconds: 20, screenshot: shot(2) });
+    expect(recorder.toFlow().steps.slice(1)).toEqual([
+      { kind: 'scrollUntilVisible', selector: { kind: 'text', value: 'Network & internet' }, direction: 'DOWN' },
+      { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Network & internet' }, seconds: 20 },
+    ]);
+  });
+});

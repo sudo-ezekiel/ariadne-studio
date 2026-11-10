@@ -5,6 +5,28 @@ All notable changes to Ariadne Studio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Wait until**, beside Check and Wait under the screen: click something on the screen, and a run
+  waits up to 20 seconds for it to appear, then carries on either way. Use it before a tap on a page
+  that is still loading instead of guessing a number of seconds. The block form offers it too.
+- **Remove step** while recording, from a step's menu or with Delete, with **Undo** in the message
+  after it. A note above **Finish recording** says when a removed step had acted on the phone.
+- A **Wait** tile at the end of the steps: drag it between any two steps, or press **Add**. Every
+  step's menu has **Add a wait after this step**, and a wait's seconds can be changed in its row.
+- Saved cases can take a wait after any step, or before step 1, and change its seconds, without
+  recording again.
+
+### Changed
+
+- Step lists are drawn as one thread with a mark on it for each row: a ring for a step, a green
+  ring for a check, a violet square for a block, a dotted stretch for a wait. The cards with a
+  coloured edge are gone from the steps, the setup blocks, the block form and the messages.
+- A saved case numbers its rows by step, so step 3 in the list is the step 3 its menu talks about.
+- Refresh under the screen is an icon at the end of the second row.
+
 ## [0.1.2] - 2026-11-08
 
 ### Added
