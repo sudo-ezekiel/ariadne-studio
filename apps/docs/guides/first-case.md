@@ -65,7 +65,7 @@ Click the elements in the screen. Each click is sent to the device and listed as
 2. Type `Dentist` in the **Text to type** box and press **Type**.
 3. Click the save icon at the top right. The event list comes back with Dentist in it.
 
-![Check mode on while recording, with Dentist outlined in the event list and five steps listed](/shots/first-case-recording.png)
+![Check mode on while recording, with Dentist outlined in the event list and four steps listed](/shots/first-case-recording.png)
 
 ## Add a check
 

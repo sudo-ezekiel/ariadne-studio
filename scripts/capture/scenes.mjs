@@ -1,8 +1,9 @@
 // Records the site's footage on real apps with the real studio.
-//   node scripts/capture/scenes.mjs calendar|blocks|existing
+//   node scripts/capture/scenes.mjs calendar|blocks|existing|anki|first|docs
 // With CAPTURE_THEME=dark it records the studio's dark theme instead, for the
 // landing page's dark mode: only the footage that page shows, under -dark names.
-// The docs and the other stills stay light.
+// The docs and the other stills stay light. `first` takes the stills only the
+// docs show; `docs` then copies the site's stills the docs reuse into place.
 // Needs an emulator (CAPTURE_DEVICE, default emulator-5560) with Fossify
 // Calendar and the WebdriverIO demo app installed, and a built UI (pnpm build).
 // Everything shown is really happening; only waits on the device are shortened.
@@ -10,10 +11,11 @@ import { execFileSync, spawn } from 'node:child_process';
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Page, Studio, clickNode, delay } from './lib.mjs';
+import { Page, Studio, clickNode, delay, mirrorPoint } from './lib.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const SITE = join(ROOT, 'site');
+const DOCS = join(ROOT, 'apps/docs/public/shots');
 const DEVICE = process.env.CAPTURE_DEVICE ?? 'emulator-5560';
 const PORT = 4801;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -252,7 +254,7 @@ async function calendar() {
     await studio.api('POST', '/api/action/back').catch(() => undefined);
     await page.goto(BASE, 1400);
     await page.evaluate(`(() => {
-      const select = document.querySelector('.piece-start-label select');
+      const select = document.querySelector('.stack-start select');
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(firstId)});
       select.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
@@ -367,7 +369,7 @@ async function blocks() {
 
     step('block under Before recording, with a test user');
     await page.fill('.composer input', 'Submit the form');
-    await page.evaluate(`[...document.querySelectorAll('.palette .piece')].find((el) => el.textContent.includes('Log in')).querySelector('.piece-add').click()`);
+    await page.evaluate(`[...document.querySelectorAll('.palette .palette-row')].find((el) => el.textContent.includes('Log in')).querySelector('.palette-add').click()`);
     await delay(500);
     await page.evaluate(`(() => {
       const select = document.querySelector('.block-settings select');
@@ -390,7 +392,7 @@ async function blocks() {
     step('a block in the middle of the recording');
     await page.evaluate(`document.querySelector('details.run-blocks').open = true`);
     await delay(400);
-    await page.evaluate(`[...document.querySelectorAll('.run-blocks .piece')].find((el) => el.textContent.includes('Dismiss the popup')).querySelector('.piece-add').click()`);
+    await page.evaluate(`[...document.querySelectorAll('.run-blocks .palette-row')].find((el) => el.textContent.includes('Dismiss the popup')).querySelector('.palette-add').click()`);
     await delay(300);
     await page.settle();
     await delay(600);
@@ -433,7 +435,7 @@ async function existing() {
 
     step('record from a team subflow');
     await page.fill('.composer input', 'Open the forms');
-    await page.evaluate(`[...document.querySelectorAll('.palette .piece')].find((el) => el.textContent.includes('Log in')).querySelector('.piece-add').click()`);
+    await page.evaluate(`[...document.querySelectorAll('.palette .palette-row')].find((el) => el.textContent.includes('Log in')).querySelector('.palette-add').click()`);
     await delay(400);
     await page.click('.record-button');
     await page.settle();
@@ -483,7 +485,7 @@ async function anki() {
 
     step('record from the block');
     await page.fill('.composer input', 'Add a card');
-    await page.evaluate(`document.querySelector('.palette .piece .piece-add').click()`);
+    await page.evaluate(`document.querySelector('.palette .palette-row .palette-add').click()`);
     await delay(400);
     await page.click('.record-button');
     await page.settle();
@@ -510,7 +512,119 @@ async function anki() {
   }
 }
 
-const scenes = { calendar, blocks, existing, anki };
+/** Hovers the node with `text` in the mirror, so the studio outlines it. */
+async function hoverNode(page, studio, text, options) {
+  const screen = await studio.screen();
+  const { rect } = await studio.node(text, options);
+  const at = await mirrorPoint(page, screen, { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+  await page.moveTo(at.x, at.y);
+  await delay(400);
+}
+
+const liveRow = (text) => `[...document.querySelectorAll('li.step')].find((li) => li.textContent.includes(${JSON.stringify(text)}))`;
+
+/** The stills only the docs show: the first case of the getting-started guide, and waits on the thread. */
+async function first() {
+  const project = '/tmp/calendar-first';
+  freshProject(project, CALENDAR);
+  const { studio, stop } = await startStudio(project);
+  const page = await Page.open();
+  try {
+    step('preparing the app');
+    await prepareCalendar(studio);
+    await openStudio(page);
+
+    step('the New case form');
+    await page.fill('.composer input', 'Create an event');
+    await page.moveTo(1000, 960, 150);
+    await page.shot(join(DOCS, 'first-case-new-case.png'));
+
+    step('recording, with Check on');
+    await page.click('.record-button');
+    await page.settle();
+    await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
+    await delay(1500);
+    await tapMirror(page, studio, 'calendar_fab');
+    await tapMirror(page, studio, 'fab_event_label');
+    await typeOnDevice(page, 'Dentist');
+    await tapMirror(page, studio, 'save');
+    await page.click('.mirror-controls button', 'Check');
+    await delay(300);
+    await hoverNode(page, studio, 'Dentist', { exact: true });
+    await page.shot(join(DOCS, 'first-case-recording.png'));
+    await tapMirror(page, studio, 'Dentist', { exact: true });
+
+    step('saved');
+    await finishRecording(page);
+    await page.click('.yaml-box summary');
+    await delay(600);
+    await page.moveTo(1000, 960, 150);
+    await page.shot(join(DOCS, 'first-case-saved.png'));
+
+    step('a wait between two steps, and a wait until');
+    await page.goto(BASE, 1400);
+    await startRecording(page, 'Add a second event');
+    await tapMirror(page, studio, 'calendar_fab');
+    await tapMirror(page, studio, 'fab_event_label');
+    await typeOnDevice(page, 'Check-up');
+    await tapMirror(page, studio, 'save');
+    // A wait after "Event", from the row's menu: the same as dropping the Wait tile there.
+    await page.evaluate(`${liveRow('Tap "Event"')}.querySelector('.row-menu summary').click()`);
+    await delay(300);
+    await clickNow(page, '.row-menu[open] .row-menu-items button', 'Add a wait after this step');
+    await page.waitFor(`document.querySelector('.seconds-field input')`, { what: 'the seconds of the new wait' });
+    await page.evaluate(`document.querySelector('.seconds-field input').select()`);
+    await page.type('3');
+    await page.click('.seconds-field button[type=submit]');
+    await delay(600);
+    await page.click('.mirror-controls button', 'Wait until');
+    await delay(300);
+    await tapMirror(page, studio, 'Check-up', { exact: true });
+    await page.waitFor(`document.querySelector('.seconds-field')`, { what: 'the seconds of the wait until' });
+    await page.click('.seconds-field button', 'Cancel');
+    await delay(300);
+    await page.click('.mirror-controls button', 'Check');
+    await delay(300);
+    await tapMirror(page, studio, 'Check-up', { exact: true });
+    await page.moveTo(1000, 960, 150);
+    await page.shot(join(DOCS, 'recording-wait.png'));
+    // Through the API: the button asks with a browser dialog first.
+    await studio.api('POST', '/api/case/discard');
+    console.log(`console errors: ${JSON.stringify(page.errors)}`);
+  } finally {
+    await page.close();
+    await stop();
+  }
+}
+
+/** The docs reuse some of the site's stills, a few under names of their own. */
+const DOCS_COPIES = {
+  'img/block-mid-recording.png': 'block-mid-recording.png',
+  'img/block-real-app.png': 'block-real-app.png',
+  'img/blocks-before-recording.png': 'blocks-before-recording.png',
+  'img/chained-cases.png': 'cases-list.png',
+  'img/device-setup.png': 'device-setup.png',
+  'img/end-checks.png': 'end-checks.png',
+  'img/existing-project.png': 'existing-project.png',
+  'img/studio-dark-files.png': 'files-sidebar.png',
+  'img/studio-recording.png': 'recording.png',
+  'img/run-failed.png': 'run-failed.png',
+  'img/run-passed.png': 'run-passed.png',
+  'img/run-report.png': 'run-report.png',
+  'img/run-video-failed.png': 'run-video-failed.png',
+  'media/run-poster.png': 'run-video.png',
+  'img/settings-run-video.png': 'settings-run-video.png',
+  'img/test-case-document.png': 'test-case-document.png',
+};
+
+async function docs() {
+  for (const [from, to] of Object.entries(DOCS_COPIES)) {
+    copyFileSync(join(SITE, from), join(DOCS, to));
+    console.log(`  ${from} -> ${to}`);
+  }
+}
+
+const scenes = { calendar, blocks, existing, anki, first, docs };
 const name = process.argv[2];
 if (!scenes[name]) {
   console.error(`Usage: node scripts/capture/scenes.mjs ${Object.keys(scenes).join('|')}`);
