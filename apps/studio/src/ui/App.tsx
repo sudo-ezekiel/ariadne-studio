@@ -79,6 +79,12 @@ export function App() {
     setToasts((current) => [...current, { id, message, kind, ...(action ? { action } : {}) }]);
     setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), TOAST_MS);
   }, []);
+  /** The server puts back only the step removed last, and only while recording, so older Undo buttons must go. */
+  const dropUndo = useCallback(() => setToasts((current) => current.filter((item) => item.action?.label !== 'Undo')), []);
+  const recording = currentCase !== null;
+  useEffect(() => {
+    if (!recording) dropUndo();
+  }, [recording, dropUndo]);
 
   /** Runs one server call at a time and turns failures into toasts. */
   const run = useCallback(
@@ -326,12 +332,18 @@ export function App() {
       if (response.step) setChangingWait(response.step.index);
       return response.step?.index;
     });
-  const restoreStep = () => run('Putting the step back', async () => setCurrentCase(await api.restoreStep()));
+  const restoreStep = () =>
+    run('Putting the step back', async () => {
+      setCurrentCase(await api.restoreStep());
+      // Later steps move down by one, so an open seconds field would now be on another row.
+      setChangingWait(null);
+    });
   const removeStep = (step: StepView) =>
     run('Removing the step', async () => {
       setCurrentCase(await api.removeStep(step.index));
       setChangingWait(null);
       const message = actsOnPhone(step.kind) ? `Step ${step.index} removed. The phone is still where that step left it.` : `Step ${step.index} removed.`;
+      dropUndo();
       toast(message, 'info', { label: 'Undo', run: () => void restoreStep() });
     });
   const setWaitSeconds = (index: number, seconds: number) =>
@@ -756,6 +768,8 @@ export function App() {
               onAddWait: (caseId, after) =>
                 run('Adding a wait', async () => {
                   setOpenedCase(await api.addCaseWait(caseId, after, DEFAULT_WAIT_SECONDS));
+                  // The edit makes earlier runs stale, which the Cases list shows.
+                  setProject(await api.project());
                   return true;
                 }).then((ok) => ok === true),
               onDeleteExpectation: (caseId, position) => changeCase('Deleting the check', () => api.deleteExpectation(caseId, position)),

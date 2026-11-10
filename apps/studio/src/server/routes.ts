@@ -1012,7 +1012,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     const recorder = requireCase(state);
     return enqueue(state, async () => {
       requireRecording(state, recorder);
-      const index = readStepNumber(request.params, 'index', recorder.stepCount);
+      const index = readLiveStep(state, recorder, request.params);
       const kind = recorder.toCase().steps[index - 1]!.kind;
       if (kind !== 'wait' && kind !== 'waitFor') throw new HttpError(400, 'NOT_A_WAIT', 'Only a wait has seconds to change.');
       recorder.setSeconds(index, seconds);
@@ -1061,14 +1061,20 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
         }
       }
       const saved = await saveCaseAndFlow(state, testCase);
-      // Steps removed and never put back leave screenshots nothing refers to.
-      const referenced = new Set(testCase.steps.map((step) => step.screenshot));
-      for (const screenshot of recorder.removedScreenshots()) {
-        if (!referenced.has(screenshot)) await rm(state.project.path(screenshot), { force: true });
-      }
+      // The case is saved, so the recording is over before any cleanup: a
+      // Discard after a failed cleanup would delete the saved case's screenshots.
       state.recorder = undefined;
       state.editing = undefined;
       state.offered = undefined;
+      // Steps removed and never put back leave screenshots nothing refers to.
+      // One that cannot go (a file lock on Windows) is only clutter.
+      const referenced = new Set(testCase.steps.map((step) => step.screenshot));
+      for (const screenshot of recorder.removedScreenshots()) {
+        if (referenced.has(screenshot)) continue;
+        await rm(state.project.path(screenshot), { force: true, maxRetries: 3 }).catch((error: unknown) => {
+          console.error(`[studio] could not remove ${screenshot}: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      }
       return {
         caseId: testCase.id,
         flowPath: saved.flowPath,

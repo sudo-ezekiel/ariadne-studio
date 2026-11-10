@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { encodePng, type DeviceSnapshot, type OpenOptions, type Point } from '@ariadne/core';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildServer } from '../src/server/index.ts';
 import type { DeviceLike } from '../src/server/state.ts';
 import type { ActionResponse, CaseDetailResponse, CaseStartResponse, CurrentCaseView } from '../src/shared/api-types.ts';
@@ -151,6 +151,53 @@ describe('steps while recording', () => {
     expect(refused.body.error?.code).toBe('KEPT_STEP');
     expect((await call('POST', '/api/case/wait', { seconds: 5, after: 1 })).body.error?.code).toBe('BAD_POSITION');
     expect((await call<ActionResponse>('POST', '/api/case/wait', { seconds: 5, after: 2 })).body.step?.index).toBe(3);
+  });
+
+  it('refuses to change the seconds of a wait kept from the saved case, and leaves them as they were', async () => {
+    const caseId = await recordThree();
+    await call('POST', '/api/case/finish', { picks: [] });
+    // Step 3 is the saved wait; inserting after it keeps all three steps.
+    expect((await call('POST', `/api/cases/${caseId}/edit`, { mode: 'insert', after: 3 })).status).toBe(200);
+    const refused = await call('PATCH', '/api/case/steps/3', { seconds: 9 });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error?.code).toBe('KEPT_STEP');
+    const current = (await call<CurrentCaseView>('GET', '/api/case/current')).body;
+    expect(current.steps[2]).toMatchObject({ kind: 'wait', seconds: 5 });
+    // A wait recorded in this edit can still be changed.
+    const added = await call<ActionResponse>('POST', '/api/case/wait', { seconds: 5, after: 3 });
+    expect(added.body.step?.index).toBe(4);
+    expect((await call<CurrentCaseView>('PATCH', '/api/case/steps/4', { seconds: 9 })).body.steps[3]).toMatchObject({ kind: 'wait', seconds: 9 });
+  });
+
+  it('finishes and ends the recording when the screenshot of a removed step cannot be deleted', async () => {
+    const caseId = await recordThree();
+    const view = (await call<CurrentCaseView>('GET', '/api/case/current')).body;
+    const [back, tap] = [view.steps[0]!.screenshot!, view.steps[1]!.screenshot!];
+    await call('DELETE', '/api/case/steps/2');
+    // A non-empty directory in place of the file makes rm(path, { force: true }) throw.
+    await rm(join(dir, tap));
+    mkdirSync(join(dir, tap, 'inside'), { recursive: true });
+    await writeFile(join(dir, tap, 'inside', 'file.txt'), 'x');
+    await expect(rm(join(dir, tap), { force: true })).rejects.toThrow();
+
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const finished = await call<{ caseId: string }>('POST', '/api/case/finish', { picks: [] });
+      expect(finished.status).toBe(200);
+      expect(finished.body.caseId).toBe(caseId);
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not remove ${tap}`));
+    } finally {
+      errors.mockRestore();
+    }
+
+    const saved = (await call<CaseDetailResponse>('GET', `/api/cases/${caseId}`)).body.case;
+    expect(saved.steps.map((step) => step.kind)).toEqual(['back', 'wait']);
+    expect((await call('GET', '/api/case/current')).body).toBeNull();
+    const discarded = await call('POST', '/api/case/discard');
+    expect(discarded.status).toBe(409);
+    expect(discarded.body.error?.code).toBe('NO_CASE');
+    expect(await exists(back)).toBe(true);
+    expect((await call('GET', `/api/cases/${caseId}`)).status).toBe(200);
   });
 
   it('records a wait until on a named element, and refuses empty space', async () => {

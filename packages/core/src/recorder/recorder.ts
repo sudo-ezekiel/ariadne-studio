@@ -117,8 +117,11 @@ export class Recorder {
   private evidenceCounter = 0;
   /** Steps the case resumed with; they are kept as they are, so nothing merges into them. */
   private keptSteps = 0;
-  /** Steps removed while recording, last on top, with the index each had, so Undo can put one back. */
-  private removed: Array<{ step: CaseStep; index: number }> = [];
+  /**
+   * Steps removed while recording, last on top, each with the step it came
+   * after (none for the first) and the index it had, so Undo can put it back.
+   */
+  private removed: Array<{ step: CaseStep; after: CaseStep | undefined; index: number }> = [];
   /**
    * Set when a step was removed, put back or inserted, until the next step is
    * recorded: the last step may then not be the one just recorded, and typed
@@ -189,22 +192,26 @@ export class Recorder {
     this.requireActive();
     this.requireStep(index);
     if (index <= this.keptSteps) throw new Error(`Step ${index} is part of the saved case and cannot be removed while recording`);
+    const after = this.steps[index - 2];
     const [step] = this.steps.splice(index - 1, 1);
-    this.removed.push({ step: step!, index });
+    this.removed.push({ step: step!, after, index });
     this.renumber();
     return step!;
   }
 
   /**
-   * Puts the last removed step back where it was, or at the end when the case
-   * is now shorter than that. Undefined when nothing was removed.
+   * Puts the last removed step back right after the step it came after, or
+   * first if it was first. Waits can be inserted in the meantime, so its old
+   * index could land it among other steps that act on the phone; the index is
+   * only a fallback. Undefined when nothing was removed.
    */
   restoreRemoved(): CaseStep | undefined {
     this.requireActive();
     const last = this.removed.pop();
     if (!last) return undefined;
-    const position = Math.min(last.index, this.steps.length + 1);
-    this.steps.splice(position - 1, 0, last.step);
+    const anchor = last.after === undefined ? -1 : this.steps.indexOf(last.after);
+    const position = last.after === undefined ? 0 : anchor >= 0 ? anchor + 1 : Math.min(last.index - 1, this.steps.length);
+    this.steps.splice(position, 0, last.step);
     this.renumber();
     return last.step;
   }

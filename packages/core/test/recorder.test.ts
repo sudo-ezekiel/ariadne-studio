@@ -560,6 +560,58 @@ describe('Recorder removing and inserting steps', () => {
     expect(kinds(recorder)).toEqual(['1:back', '2:scroll', '3:wait']);
   });
 
+  it('puts a removed last step back after the step it followed, even when a wait was inserted first', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.recordWait(5, shot(3));
+    recorder.removeStep(3);
+    recorder.insertWait(20, 0);
+    recorder.restoreRemoved();
+    // Its old index would have put it before the scroll: wait, back, wait, scroll.
+    expect(kinds(recorder)).toEqual(['1:wait', '2:back', '3:scroll', '4:wait']);
+  });
+
+  it('keeps a removed middle step directly after the step it followed when a wait is inserted after that step', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.recordWait(5, shot(3));
+    recorder.removeStep(2);
+    recorder.insertWait(20, 1);
+    expect(kinds(recorder)).toEqual(['1:back', '2:wait', '3:wait']);
+    recorder.restoreRemoved();
+    const steps = recorder.toCase().steps;
+    expect(steps.filter((step) => step.screenshot !== undefined).map((step) => step.kind)).toEqual(['back', 'scroll', 'wait']);
+    expect(steps[0]!.kind).toBe('back');
+    expect(steps[1]!.kind).toBe('scroll');
+  });
+
+  it('puts a removed first step back first, ahead of a wait inserted at the start', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.removeStep(1);
+    recorder.insertWait(20, 0);
+    expect(kinds(recorder)).toEqual(['1:wait', '2:scroll']);
+    recorder.restoreRemoved();
+    expect(kinds(recorder)).toEqual(['1:back', '2:wait', '3:scroll']);
+  });
+
+  it('puts two removed steps back in their original order when a wait was inserted in between', () => {
+    const recorder = started();
+    recorder.recordBack(shot(1));
+    recorder.recordScroll('down', shot(2));
+    recorder.recordWait(5, shot(3));
+    recorder.removeStep(3);
+    recorder.removeStep(2);
+    recorder.insertWait(20, 0);
+    recorder.restoreRemoved();
+    recorder.restoreRemoved();
+    expect(kinds(recorder)).toEqual(['1:wait', '2:back', '3:scroll', '4:wait']);
+    expect(recorder.toCase().steps[3]!.screenshot).toBe(shot(3));
+  });
+
   it('refuses to remove a step kept from the saved case', () => {
     const recorder = started({ steps: [{ index: 1, kind: 'back', at }] });
     recorder.recordBack(shot(2));
