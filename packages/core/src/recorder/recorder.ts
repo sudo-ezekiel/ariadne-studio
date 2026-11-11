@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import type { Point, Viewport } from '../device/hit-test.ts';
-import type { MaestroFlow, MaestroKey, MaestroOrientation, MaestroSelector, MaestroStep, PercentPoint } from '../maestro/model.ts';
+import { LONGEST_TIMER_MS, type MaestroFlow, type MaestroKey, type MaestroOrientation, type MaestroSelector, type MaestroStep, type PercentPoint } from '../maestro/model.ts';
 import { chooseSelector, type SelectorNode } from '../maestro/selector.ts';
 import type {
   BlockUse,
@@ -86,6 +86,17 @@ const DEFAULT_FLOW_PATHS: FlowPaths = {
 
 /** Steps that do nothing on the device when they are recorded. */
 const TOUCHES_NOTHING: ReadonlySet<StepKind> = new Set(['wait', 'waitFor', 'expect']);
+
+/**
+ * The seconds of a wait or a wait until, as the flow reader takes them back:
+ * more than 0, and no longer than a timer can hold. The studio asks for whole
+ * seconds up to a much lower limit; this only keeps other callers honest.
+ */
+function requireWaitSeconds(seconds: number): void {
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > LONGEST_TIMER_MS) {
+    throw new Error(`A wait is more than 0 and at most ${LONGEST_TIMER_MS / 1000} seconds, not ${seconds}`);
+  }
+}
 
 const ENV_PLACEHOLDER = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 
@@ -223,6 +234,7 @@ export class Recorder {
    */
   insertWait(seconds: number, after: number): CaseStep {
     this.requireActive();
+    requireWaitSeconds(seconds);
     if (!Number.isInteger(after) || after < this.keptSteps || after > this.steps.length) {
       throw new Error(`A wait can go after step ${this.keptSteps} to ${this.steps.length}, not after step ${after}`);
     }
@@ -237,6 +249,7 @@ export class Recorder {
     this.requireActive();
     const step = this.requireStep(index);
     if (step.kind !== 'wait' && step.kind !== 'waitFor') throw new Error(`Step ${index} is not a wait`);
+    requireWaitSeconds(seconds);
     step.seconds = seconds;
     return step;
   }
@@ -402,6 +415,7 @@ export class Recorder {
   }
 
   recordWait(seconds: number, screenshotPath?: string): CaseStep {
+    requireWaitSeconds(seconds);
     return this.recordSimple({ kind: 'wait', seconds }, screenshotPath);
   }
 
@@ -476,6 +490,7 @@ export class Recorder {
     allNodes: readonly SelectorNode[],
   ): CaseStep {
     this.requireActive();
+    requireWaitSeconds(seconds);
     const step: CaseStep = {
       index: this.steps.length + 1,
       kind: 'waitFor',

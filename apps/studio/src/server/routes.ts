@@ -404,6 +404,8 @@ async function recordFromScreen(
   kind: 'expect' | 'waitFor',
   record: (node: SelectorNode, viewport: Viewport, screenshot: string | undefined, nodes: readonly SelectorNode[]) => CaseStep,
 ): Promise<ActionResponse> {
+  // A Discard queued ahead of this click has ended the recording, and its folder must stay gone.
+  requireRecording(state, recorder);
   const latest = await freshLatest(state);
   const node = resolveTapTarget(latest.nodes, point, latest.viewport);
   if (!node || chooseSelector(node, latest.nodes, point, latest.viewport).kind === 'point') {
@@ -1052,24 +1054,19 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
       if (editing?.mode === 'insert') {
         testCase.steps = [...testCase.steps, ...editing.tail].map((step, position) => ({ ...step, index: position + 1 }));
       }
-      if (editing) {
-        // Screenshots of replaced steps are no longer referenced by anything.
-        const original = await state.project.readCase(editing.caseId).catch(() => undefined);
-        const kept = new Set(testCase.steps.map((step) => step.screenshot));
-        for (const step of original?.steps ?? []) {
-          if (step.screenshot && !kept.has(step.screenshot)) await rm(state.project.path(step.screenshot), { force: true });
-        }
-      }
+      // Read before the save replaces it: its screenshots of replaced steps go once the new case is safe.
+      const original = editing ? await state.project.readCase(editing.caseId).catch(() => undefined) : undefined;
       const saved = await saveCaseAndFlow(state, testCase);
       // The case is saved, so the recording is over before any cleanup: a
       // Discard after a failed cleanup would delete the saved case's screenshots.
       state.recorder = undefined;
       state.editing = undefined;
       state.offered = undefined;
-      // Steps removed and never put back leave screenshots nothing refers to.
-      // One that cannot go (a file lock on Windows) is only clutter.
+      // Replaced steps, and steps removed and never put back, leave screenshots
+      // nothing refers to. One that cannot go (a file lock on Windows) is only clutter.
       const referenced = new Set(testCase.steps.map((step) => step.screenshot));
-      for (const screenshot of recorder.removedScreenshots()) {
+      const unreferenced = new Set([...(original?.steps ?? []).flatMap((step) => (step.screenshot ? [step.screenshot] : [])), ...recorder.removedScreenshots()]);
+      for (const screenshot of unreferenced) {
         if (referenced.has(screenshot)) continue;
         await rm(state.project.path(screenshot), { force: true, maxRetries: 3 }).catch((error: unknown) => {
           console.error(`[studio] could not remove ${screenshot}: ${error instanceof Error ? error.message : String(error)}`);

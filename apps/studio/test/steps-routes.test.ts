@@ -200,6 +200,54 @@ describe('steps while recording', () => {
     expect((await call('GET', `/api/cases/${caseId}`)).status).toBe(200);
   });
 
+  it('deletes the screenshots of the replaced steps once a re-record is saved', async () => {
+    const caseId = await recordThree();
+    const original = (await call<CurrentCaseView>('GET', '/api/case/current')).body.steps.map((step) => step.screenshot!);
+    await call('POST', '/api/case/finish', { picks: [] });
+    expect((await call('POST', `/api/cases/${caseId}/edit`, { mode: 'rerecord', step: 2 })).status).toBe(200);
+    const added = await call<ActionResponse>('POST', '/api/action/back');
+    const fresh = added.body.step!.screenshot!;
+    expect(await exists(original[1]!)).toBe(true);
+    expect((await call('POST', '/api/case/finish', { picks: [] })).status).toBe(200);
+    expect(await exists(original[0]!)).toBe(true);
+    expect(await exists(original[1]!)).toBe(false);
+    expect(await exists(original[2]!)).toBe(false);
+    expect(await exists(fresh)).toBe(true);
+  });
+
+  it('finishes and ends the recording when the screenshot of a replaced step cannot be deleted in a re-record', async () => {
+    const caseId = await recordThree();
+    const original = (await call<CurrentCaseView>('GET', '/api/case/current')).body.steps.map((step) => step.screenshot!);
+    await call('POST', '/api/case/finish', { picks: [] });
+    expect((await call('POST', `/api/cases/${caseId}/edit`, { mode: 'rerecord', step: 2 })).status).toBe(200);
+    await call('POST', '/api/action/back');
+    const stuck = original[1]!;
+    await rm(join(dir, stuck));
+    mkdirSync(join(dir, stuck, 'inside'), { recursive: true });
+    await writeFile(join(dir, stuck, 'inside', 'file.txt'), 'x');
+    await expect(rm(join(dir, stuck), { force: true })).rejects.toThrow();
+
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const finished = await call<{ caseId: string }>('POST', '/api/case/finish', { picks: [] });
+      expect(finished.status).toBe(200);
+      expect(finished.body.caseId).toBe(caseId);
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not remove ${stuck}`));
+    } finally {
+      errors.mockRestore();
+    }
+
+    expect((await call('GET', '/api/case/current')).body).toBeNull();
+    const discarded = await call('POST', '/api/case/discard');
+    expect(discarded.status).toBe(409);
+    expect(discarded.body.error?.code).toBe('NO_CASE');
+    const saved = (await call<CaseDetailResponse>('GET', `/api/cases/${caseId}`)).body.case;
+    expect(saved.steps.map((step) => step.kind)).toEqual(['back', 'back']);
+    for (const step of saved.steps) expect(await exists(step.screenshot!)).toBe(true);
+    // The step that could be deleted is gone, so the failed one did not stop the rest.
+    expect(await exists(original[2]!)).toBe(false);
+  });
+
   it('records a wait until on a named element, and refuses empty space', async () => {
     const { body } = await call<CaseStartResponse>('POST', '/api/case/start', { name: 'Welcome' });
     const recorded = await call<ActionResponse>('POST', '/api/case/wait-for', { x: 200, y: 1100 });
@@ -273,5 +321,67 @@ describe('waits in a saved case', () => {
 
     expect((await call('PATCH', `${url}/steps/2`, { seconds: 7 })).body.error?.code).toBe('NOT_A_WAIT');
     expect((await call('POST', `${url}/steps`, { after: 3, kind: 'wait', seconds: 20 })).body.error?.code).toBe('BAD_POSITION');
+  });
+});
+
+describe('a Discard queued ahead of a click that reads the screen', () => {
+  let dir: string;
+  let app: FastifyInstance;
+  let phone: Phone;
+  let release: () => void;
+  let discardInHandler: () => void;
+  let holding: Promise<void>;
+  let holdingStarted: () => void;
+  let started: Promise<void>;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ariadne-queued-discard-test-'));
+    phone = new Phone();
+    holding = new Promise<void>((resolve) => (release = resolve));
+    started = new Promise<void>((resolve) => (holdingStarted = resolve));
+    const discardReached = new Promise<void>((resolve) => (discardInHandler = resolve));
+    // The first Back holds the device queue until it is released.
+    phone.back = async () => {
+      holdingStarted();
+      await holding;
+    };
+    app = await buildServer({ projectDir: dir, session: phone as unknown as DeviceLike, phoneTools: { locked: async () => false } });
+    // The click is only let into its handler once the Discard is in its own, and after a turn of the
+    // event loop: by then the Discard has run its microtasks up to its place in the queue.
+    app.addHook('preHandler', async (request) => {
+      if (request.url === '/api/case/discard') discardInHandler();
+      else if (request.url === '/api/case/expect' || request.url === '/api/case/wait-for') {
+        await discardReached;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    });
+    await call('POST', '/api/session/open', { deviceId: 'phone', appId: 'app' });
+  });
+
+  afterEach(async () => {
+    release();
+    await app.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function call<T>(method: 'GET' | 'POST', url: string, payload?: object) {
+    const response = await app.inject({ method, url, ...(payload ? { payload } : {}) });
+    return { status: response.statusCode, body: response.json() as T & { error?: { code: string; message: string } } };
+  }
+
+  it.each(['expect', 'wait-for'])('ends the %s click with NO_CASE and writes nothing into the discarded folder', async (route) => {
+    const { body } = await call<CaseStartResponse>('POST', '/api/case/start', { name: 'Welcome' });
+    const holder = call('POST', '/api/action/back');
+    await started;
+    const discard = call('POST', '/api/case/discard');
+    const click = call('POST', `/api/case/${route}`, { x: 200, y: 1100 });
+    release();
+    expect((await holder).status).toBe(200);
+    expect((await discard).status).toBe(200);
+    const clicked = await click;
+    expect(clicked.status).toBe(409);
+    expect(clicked.body.error?.code).toBe('NO_CASE');
+    await expect(access(join(dir, 'evidence', body.caseId))).rejects.toThrow();
+    expect((await call('GET', '/api/case/current')).body).toBeNull();
   });
 });

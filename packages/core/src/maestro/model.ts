@@ -119,6 +119,9 @@ export function describeSelector(selector: MaestroSelector): string {
 /** The label a Wait step waits for. It marks the command as a Wait when a flow is read back. */
 export const NEVER_ON_SCREEN = 'ariadne-wait';
 
+/** The longest delay a timer can hold. A Wait is replayed on one, and a longer one would fire at once. */
+export const LONGEST_TIMER_MS = 2_147_483_647;
+
 /** How a Wait step reads in the case, the flow and the reports. */
 export function waitName(seconds: number): string {
   return `Wait ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;

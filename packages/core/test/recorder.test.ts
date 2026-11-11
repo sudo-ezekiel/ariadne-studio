@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toMaestroYaml } from '../src/maestro/emit.ts';
+import { LONGEST_TIMER_MS } from '../src/maestro/model.ts';
+import { parseMaestroFlow } from '../src/maestro/parse.ts';
 import type { CaseStep, TestCase } from '../src/recorder/case-types.ts';
 import { caseToFlow, evidenceNumber, focusedPasswordField, isEnvPlaceholder, Recorder } from '../src/recorder/recorder.ts';
 import { byLabel, settingsHome, viewport } from './fixtures.ts';
@@ -679,5 +681,44 @@ describe('Recorder removing and inserting steps', () => {
       { kind: 'scrollUntilVisible', selector: { kind: 'text', value: 'Network & internet' }, direction: 'DOWN' },
       { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Network & internet' }, seconds: 20 },
     ]);
+  });
+});
+
+describe('Recorder wait seconds', () => {
+  const nodes = settingsHome();
+  const target = byLabel(nodes, 'Network & internet');
+  const LONGEST = LONGEST_TIMER_MS / 1000;
+
+  /** Each way a wait gets its seconds, on a recorder that already has a wait and a wait until to change. */
+  const ways: Record<string, (recorder: Recorder, seconds: number) => unknown> = {
+    recordWait: (recorder, seconds) => recorder.recordWait(seconds),
+    insertWait: (recorder, seconds) => recorder.insertWait(seconds, 0),
+    setSeconds: (recorder, seconds) => recorder.setSeconds(1, seconds),
+    recordWaitFor: (recorder, seconds) => recorder.recordWaitFor(target, { x: 428, y: 698 }, viewport, seconds, undefined, nodes),
+  };
+
+  function withWaits(): Recorder {
+    const recorder = started();
+    recorder.recordWait(5);
+    recorder.recordBack();
+    return recorder;
+  }
+
+  const refused = [0, -1, Number.NaN, Number.POSITIVE_INFINITY, LONGEST + 1];
+
+  describe.each(Object.keys(ways))('%s', (name) => {
+    it.each(refused)('throws for %s and leaves the steps as they were', (seconds) => {
+      const recorder = withWaits();
+      const before = structuredClone(recorder.toCase().steps);
+      expect(() => ways[name]!(recorder, seconds)).toThrow(/A wait is more than 0/);
+      expect(recorder.toCase().steps).toEqual(before);
+    });
+
+    it.each([0.5, LONGEST])('accepts %s, and the flow it records is read back by the parser', (seconds) => {
+      const recorder = withWaits();
+      ways[name]!(recorder, seconds);
+      const flow = recorder.toFlow();
+      expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+    });
   });
 });

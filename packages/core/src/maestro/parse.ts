@@ -1,5 +1,6 @@
 import { parseAllDocuments } from 'yaml';
 import {
+  LONGEST_TIMER_MS,
   MAESTRO_KEYS,
   MAESTRO_ORIENTATIONS,
   NEVER_ON_SCREEN,
@@ -15,9 +16,6 @@ import {
 // studio can show flows and developer-written blocks; anything outside the
 // subset throws rather than being silently dropped, so a block that uses other
 // commands is reported as "not previewable" instead of shown incompletely.
-
-/** The longest delay a timer can hold. A Wait is replayed on one, and a longer one would fire at once. */
-const LONGEST_TIMER_MS = 2_147_483_647;
 
 /** What a Wait step writes, and nothing else: a label or a key of someone's own would be lost on the way through. */
 function isWaitForm(arg: unknown): arg is { timeout: number } {
