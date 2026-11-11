@@ -121,6 +121,8 @@ export class PhoneCapture {
   private screenActions = 0;
   /** A finger on the phone since the screen here began acting: what it types is the tester's. */
   private phoneTookOver = false;
+  /** When the screen here last finished acting. A snapshot begun before then shows a field's text from before it. */
+  private settledAt = 0;
   /** Ends the pause between two snapshots early, when a touch begins. */
   private wake: (() => void) | undefined;
   private paused = false;
@@ -251,7 +253,8 @@ export class PhoneCapture {
 
   /**
    * The screen here is about to act on the phone. What was typed on the phone
-   * is written first, so the steps keep their order, and the pace drops back.
+   * is written first, so the steps keep their order, and the pace drops back
+   * unless a finger touched the phone meanwhile.
    */
   async yieldToScreen(): Promise<void> {
     this.screenActions += 1;
@@ -261,9 +264,23 @@ export class PhoneCapture {
     if (this.following && last && !last.outside) this.noteField(last);
     await this.flushTyping();
     this.cameBack = false;
-    if (!this.following) return;
+    if (!this.following || this.phoneTookOver) return;
     this.following = false;
     this.revision += 1;
+  }
+
+  /**
+   * The screen here has acted, and `nodes` is the screen it left, read in the device queue before
+   * any later snapshot. Text it put in a field is already its step, so typing on the phone counts
+   * from the text the field has now. Text typed on the phone while it acted is part of that text.
+   */
+  screenSettled(nodes: DeviceSnapshot['nodes']): void {
+    this.settledAt = Date.now();
+    const typing = this.typing;
+    // A password is counted in key presses on the phone, never read from the field.
+    if (!typing || typing.password) return;
+    const field = focusedField(nodes);
+    if (field?.key === typing.key) typing.start = typing.value = field.value;
   }
 
   /**
@@ -489,9 +506,11 @@ export class PhoneCapture {
    * Follows the focused field. It runs on every snapshot, so `start` is the
    * text from before typing began and text that arrives without key presses
    * (a paste, autofill) still counts. Text not written yet keeps its place when
-   * focus moves on; the next gesture writes it.
+   * focus moves on; the next gesture writes it. A snapshot from before the screen here last acted
+   * is passed over: it would take back what that action typed, or count it as typed on the phone.
    */
   private noteField(screen: PhoneScreen): void {
+    if (screen.startedAt <= this.settledAt) return;
     const field = focusedField(screen.nodes);
     if (!field) return;
     const typing = this.typing;
@@ -570,10 +589,13 @@ export async function stopPhoneCapture(state: ServerState): Promise<void> {
   const capture = state.phone;
   if (!capture) return state.phoneStopping;
   state.phone = undefined;
+  const earlier = state.phoneStopping;
   const stopping = capture.stop();
-  // Whoever waits later only waits; a failure is the first caller's to report.
+  // Whoever waits later only waits, for this stop and any still under way, as when the phone
+  // stopped by itself and a later capture was stopped too. A failure is the first caller's to report.
   const stopped: Promise<void> = stopping
     .catch(() => undefined)
+    .then(() => earlier)
     .finally(() => {
       if (state.phoneStopping === stopped) state.phoneStopping = undefined;
     });

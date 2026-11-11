@@ -245,7 +245,7 @@ export function Mirror(props: Props) {
   const fieldShown = field !== undefined;
   // Text in the box belongs to the field it was typed for. Dropped before the screen is painted
   // when that field goes, so a password never shows, or is typed, in the next one.
-  const typedFor = field ? fieldKey(field) : undefined;
+  const typedFor = screen && field ? fieldKey(screen.nodes, field) : undefined;
   const draftFor = useRef(typedFor);
   useLayoutEffect(() => {
     if (draftFor.current === typedFor) return;

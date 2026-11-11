@@ -41,34 +41,56 @@ describe('focusedField', () => {
 
 describe('fieldKey', () => {
   const email: SnapshotNodeLite = { identifier: 'input', label: 'Email', focused: true, editable: true, rect };
+  /** The key of `field` on a screen where it is the only node. */
+  const alone = (field: SnapshotNodeLite) => fieldKey([field], field);
 
   it('differs between a password field and a plain field that share an identifier', () => {
-    expect(fieldKey({ ...email, password: true })).not.toBe(fieldKey(email));
+    const password: SnapshotNodeLite = { ...email, label: '', focused: false, password: true, rect: { ...rect, y: 600 } };
+    const nodes = [email, password];
+    expect(fieldKey(nodes, password)).not.toBe(fieldKey(nodes, email));
   });
 
   it('keeps the key of the same field at another place, since a field moves when the keyboard opens', () => {
-    expect(fieldKey({ ...email, rect: { ...rect, y: 100 } })).toBe(fieldKey(email));
+    const moved = { ...email, rect: { ...rect, y: 100 } };
+    expect(alone(moved)).toBe(alone(email));
   });
 
   it('keeps the key when only the focus changes', () => {
-    expect(fieldKey({ ...email, focused: false })).toBe(fieldKey(email));
+    const unfocused = { ...email, focused: false };
+    expect(alone(unfocused)).toBe(alone(email));
   });
 
-  it('changes with the label', () => {
-    expect(fieldKey({ ...email, label: 'Username' })).not.toBe(fieldKey(email));
+  it('keeps the key when only the label changes, since on Android the label is the text typed in the field', () => {
+    const typed = { ...email, label: 'maria@example.com' };
+    expect(alone(typed)).toBe(alone(email));
   });
 
   it('changes with the content description', () => {
-    expect(fieldKey({ ...email, contentDescription: 'Work email' })).not.toBe(fieldKey(email));
+    expect(alone({ ...email, contentDescription: 'Work email' })).not.toBe(alone(email));
   });
 
   it('changes with the identifier and the role', () => {
-    expect(fieldKey({ ...email, identifier: 'other' })).not.toBe(fieldKey(email));
-    expect(fieldKey({ ...email, role: 'search' })).not.toBe(fieldKey(email));
+    expect(alone({ ...email, identifier: 'other' })).not.toBe(alone(email));
+    expect(alone({ ...email, role: 'search' })).not.toBe(alone(email));
   });
 
   it('does not run two different fields together when one value is empty', () => {
-    expect(fieldKey({ label: 'ab' })).not.toBe(fieldKey({ identifier: 'a', label: 'b' }));
+    expect(alone({ editable: true, contentDescription: 'ab' })).not.toBe(alone({ editable: true, contentDescription: 'a', role: 'b' }));
+  });
+
+  it('tells apart two fields alike in every trait by their order on the screen', () => {
+    const first: SnapshotNodeLite = { role: 'text-field', editable: true, focused: true, rect };
+    const second: SnapshotNodeLite = { role: 'text-field', editable: true, rect: { ...rect, y: 600 } };
+    const nodes = [first, second];
+    expect(fieldKey(nodes, second)).not.toBe(fieldKey(nodes, first));
+  });
+
+  it('keeps the key of the same field when the keyboard opens and moves it up the screen', () => {
+    const name = (y: number, extra: SnapshotNodeLite = {}): SnapshotNodeLite => ({ role: 'text-field', editable: true, rect: { ...rect, y }, ...extra });
+    const before: SnapshotNodeLite[] = [{ label: 'Sign up', rect: { ...rect, y: 100 } }, name(1200), name(1500, { focused: true })];
+    const after: SnapshotNodeLite[] = [name(300), name(600, { focused: true, label: 'maria' }), { label: 'q', rect: { ...rect, y: 1800 } }];
+    expect(fieldKey(after, after[1]!)).toBe(fieldKey(before, before[2]!));
+    expect(fieldKey(after, after[0]!)).toBe(fieldKey(before, before[1]!));
   });
 });
 

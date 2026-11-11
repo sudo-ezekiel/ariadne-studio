@@ -16,17 +16,25 @@ type Size = { width: number; height: number };
 export function focusedField(nodes: readonly SnapshotNodeLite[]): (SnapshotNodeLite & { rect: Rect }) | undefined {
   return nodes.find(
     (node): node is SnapshotNodeLite & { rect: Rect } =>
-      node.focused === true && (node.editable === true || node.password === true) && node.rect !== undefined && node.rect.width > 0 && node.rect.height > 0,
+      node.focused === true && takesText(node) && node.rect !== undefined && node.rect.width > 0 && node.rect.height > 0,
   );
 }
 
+function takesText(node: SnapshotNodeLite): boolean {
+  return node.editable === true || node.password === true;
+}
+
 /**
- * Which field the text in the box was typed for. When the focus moves to another field the text
- * is dropped, so it is never typed into that field, and a password never shows in a plain box.
- * The place is left out: a field moves when the keyboard opens.
+ * Which field of `nodes` the text in the box was typed for. When the focus moves to another field
+ * the text is dropped, so it is never typed into that field, and a password never shows in a plain
+ * box. Neither the place nor the label counts: a field moves when the keyboard opens, and on Android
+ * a field's label is the text in it. Fields alike in all else are told apart by their order.
  */
-export function fieldKey(field: SnapshotNodeLite): string {
-  return JSON.stringify([field.identifier ?? '', field.password === true, field.contentDescription ?? '', field.label ?? '', field.role ?? '']);
+export function fieldKey(nodes: readonly SnapshotNodeLite[], field: SnapshotNodeLite): string {
+  const traits = (node: SnapshotNodeLite) => JSON.stringify([node.identifier ?? '', node.password === true, node.contentDescription ?? '', node.role ?? '']);
+  const own = traits(field);
+  const order = nodes.filter((node) => takesText(node) && traits(node) === own).indexOf(field);
+  return JSON.stringify([own, order]);
 }
 
 /**

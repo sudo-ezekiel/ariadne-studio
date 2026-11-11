@@ -255,12 +255,8 @@ export function App() {
     api
       .phoneStart()
       .then((next) => {
-        if (recordingNow.current !== recordingId) return;
-        // Turned off while the phone was being started: stop it rather than follow it.
-        if (!followPhoneNow.current) {
-          if (next.active) void api.phoneStop().then(setPhone, () => undefined);
-          return;
-        }
+        // Turned off while the phone was being started: turning it off told the server, which ended this start.
+        if (recordingNow.current !== recordingId || !followPhoneNow.current) return;
         setPhone(next);
       })
       .catch((error: unknown) => {
@@ -277,8 +273,9 @@ export function App() {
     }
     setFollowPhoneChoice(on);
     followPhoneNow.current = on;
+    // Off is always sent, even before the phone is on: the server then drops a start still under way.
     if (on) phoneTriedFor.current = undefined;
-    else if (phone.active) void api.phoneStop().then(setPhone, () => undefined);
+    else void api.phoneStop().then(setPhone, () => undefined);
   };
 
   // Closing a file goes back to the tab that was showing before it.

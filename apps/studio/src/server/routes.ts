@@ -327,6 +327,16 @@ async function projectInfo(state: ServerState): Promise<ProjectInfo> {
   };
 }
 
+/**
+ * The field that has focus is a password field. While the phone is recorded too, a finger on it may
+ * have moved the focus since the screen here last looked, so the phone is asked again: a password
+ * must not be recorded as plain text because the screen here was out of date.
+ */
+async function typingIntoPassword(state: ServerState): Promise<boolean> {
+  const nodes = state.phone ? (await state.session.snapshot()).nodes : state.latest?.nodes;
+  return nodes !== undefined && focusedPasswordField(nodes);
+}
+
 /** The latest snapshot, re-taken (without a screenshot) when it is too old to trust. */
 async function freshLatest(state: ServerState): Promise<Latest> {
   let latest = state.latest;
@@ -392,8 +402,10 @@ async function recordedAction(
     step = record(recorder, evidence.relative);
     screenshotPath = evidence.absolute;
   }
-  const screen = toScreenState(await captureInto(state, screenshotPath));
-  return { ...(step ? { step: toStepView(step) } : {}), screen };
+  const latest = await captureInto(state, screenshotPath);
+  // What this put in a field is its step; typing on the phone counts from the screen it left.
+  state.phone?.screenSettled(latest.nodes);
+  return { ...(step ? { step: toStepView(step) } : {}), screen: toScreenState(latest) };
 }
 
 /**
@@ -606,7 +618,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
           .find((candidate) => env[candidate] === text);
         if (key) {
           recordedText = `\${${key}}`;
-        } else if (state.latest && focusedPasswordField(state.latest.nodes)) {
+        } else if (await typingIntoPassword(state)) {
           // A block only needs the setting's name: each case gives it the value.
           if (state.recordingBlock) {
             recordedText = reference(passwordSetting(Object.keys(env)));

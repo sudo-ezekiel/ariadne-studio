@@ -70,6 +70,8 @@ class PhoneDevice implements DeviceLike {
   snapshots = 0;
   captures = 0;
   openError: Error | undefined;
+  /** While set, snapshots wait for it. The captures the studio takes for its own steps do not. */
+  held: Promise<void> | undefined;
 
   get isOpen() { return this.target !== undefined; }
   get deviceId() { return this.target?.deviceId; }
@@ -83,14 +85,18 @@ class PhoneDevice implements DeviceLike {
     this.target = { deviceId: options.deviceId, appId: options.appId };
   }
   async snapshot(): Promise<DeviceSnapshot> {
-    this.snapshots += 1;
-    return { nodes: this.nodes, viewport: VIEWPORT, takenAt: new Date().toISOString(), ...(this.keyboard ? { keyboard: this.keyboard } : {}) };
+    await this.held;
+    return this.look();
   }
   async capture(screenshotPath: string) {
     this.captures += 1;
     mkdirSync(dirname(screenshotPath), { recursive: true });
     await writeFile(screenshotPath, PNG);
-    return { ...(await this.snapshot()), screenshotPath };
+    return { ...this.look(), screenshotPath };
+  }
+  private look(): DeviceSnapshot {
+    this.snapshots += 1;
+    return { nodes: this.nodes, viewport: VIEWPORT, takenAt: new Date().toISOString(), ...(this.keyboard ? { keyboard: this.keyboard } : {}) };
   }
   async tapAt(_point: Point) {}
   async typeText(_text: string) {}
@@ -111,6 +117,18 @@ class PhoneDevice implements DeviceLike {
   async pinch() {}
   async pressKey() {}
   async setOrientation() {}
+}
+
+/** Holds the device's snapshots, though not the studio's own captures, until the returned function is called. */
+function holdSnapshots(device: PhoneDevice): () => void {
+  let release: () => void = () => undefined;
+  device.held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return () => {
+    device.held = undefined;
+    release();
+  };
 }
 
 type Rig = {
@@ -825,6 +843,23 @@ describe('the studio while the phone is the input', () => {
     expect(response.body.step).toMatchObject({ kind: 'wait', seconds: 5 });
   });
 
+  it('refuses to type an unsaved value into a password field the phone moved the focus to since the screen here last looked', async () => {
+    const r = await rig();
+    const SECRET = 'hunter2-Sup3r';
+    const user = (focused: boolean) => field('user', 900, { focused, value: '' });
+    const password = (focused: boolean) => field('pw', 1100, { focused, password: true, value: '' });
+    r.device.nodes = appScreen([user(true), password(false)]);
+    await startPhone(r);
+    // A tap on the phone moved the focus; nothing here has captured the screen since.
+    r.device.nodes = appScreen([user(false), password(true)]);
+    const typed = vi.fn(async (_text: string) => undefined);
+    r.device.typeText = typed;
+    const response = await call(r, 'POST', '/api/action/type', { text: SECRET });
+    expect(response).toMatchObject({ status: 400, body: { error: { code: 'PASSWORD_FIELD' } } });
+    expect(typed).not.toHaveBeenCalled();
+    expect(JSON.stringify(await currentSteps(r))).not.toContain(SECRET);
+  });
+
   it('allows actions again once the phone is stopped', async () => {
     const r = await rig();
     await startPhone(r);
@@ -1010,6 +1045,111 @@ describe('a finger on the phone while the screen here is acting', () => {
     expect(steps[1]).toMatchObject({ text: '${PASSWORD}', review: 'password' });
     expect(JSON.stringify(steps)).not.toContain(SECRET);
   });
+
+  const typingScreen = (value: string) => appScreen([field('f', 900, { focused: true, value }), ...keyboardNodes()]);
+
+  /** Types `text` from the screen here, and a finger presses a key on the phone while it is being typed. */
+  async function typeWhileTouched(r: Rig, text: string): Promise<void> {
+    let begin: () => void = () => undefined;
+    const begun = new Promise<void>((resolve) => {
+      begin = resolve;
+    });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    r.device.typeText = async (typed: string) => {
+      begin();
+      await gate;
+      r.device.nodes = typingScreen(typed);
+    };
+    const response = call(r, 'POST', '/api/action/type', { text });
+    await begun;
+    await finger(r, KEY);
+    release();
+    expect((await response).status).toBe(200);
+  }
+
+  it('records text typed from the screen once when a finger touched the phone while it was typed', async () => {
+    const r = await rig();
+    r.device.nodes = typingScreen('');
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    await typeWhileTouched(r, 'maria');
+    await finger(r, REGISTER);
+    await waitForSteps(r, 2);
+    await call(r, 'POST', '/api/phone/stop');
+    const steps = await currentSteps(r);
+    expect(steps.map((step) => step.kind)).toEqual(['type', 'tap']);
+    expect(steps[0]?.text).toBe('maria');
+  });
+
+  it('records only what the phone typed after that, not the text typed from the screen again', async () => {
+    const r = await rig();
+    r.device.nodes = typingScreen('');
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    await typeWhileTouched(r, 'maria');
+    r.device.nodes = typingScreen('maria@example.com');
+    await finger(r, KEY);
+    await settled(r);
+    await finger(r, REGISTER);
+    await waitForSteps(r, 2);
+    await call(r, 'POST', '/api/phone/stop');
+    const steps = await currentSteps(r);
+    // The recorder adds the phone's text to the Type step just before it.
+    expect(steps.map((step) => step.kind)).toEqual(['type', 'tap']);
+    expect(steps[0]?.text).toBe('maria@example.com');
+  });
+
+  it('does not record text typed from the screen again for a touch before the phone has been seen since', async () => {
+    const r = await rig();
+    r.device.nodes = typingScreen('');
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    let release: () => void = () => undefined;
+    r.device.typeText = async (text: string) => {
+      r.device.nodes = typingScreen(text);
+      release = holdSnapshots(r.device);
+    };
+    expect((await call(r, 'POST', '/api/action/type', { text: 'maria' })).status).toBe(200);
+    // The newest snapshot the touch can be read against is from before the text was typed.
+    await finger(r, REGISTER);
+    await waitForSteps(r, 2);
+    release();
+    await call(r, 'POST', '/api/phone/stop');
+    const steps = await currentSteps(r);
+    expect(steps.map((step) => step.kind)).toEqual(['type', 'tap']);
+    expect(steps[0]?.text).toBe('maria');
+  });
+
+  it('keeps following when a finger touches the phone while the screen here waits for a touch still being read', async () => {
+    const r = await rig();
+    await startPhone(r);
+    await finger(r, SIGN_IN);
+    await waitForSteps(r, 1);
+    expect((await status(r)).following).toBe(true);
+    const original = PhoneCapture.prototype.yieldToScreen;
+    let enter: () => void = () => undefined;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    vi.spyOn(PhoneCapture.prototype, 'yieldToScreen').mockImplementation(function (this: PhoneCapture) {
+      enter();
+      return original.call(this);
+    });
+    // No snapshot from after this touch comes, so it is still being read when the check arrives.
+    const release = holdSnapshots(r.device);
+    await finger(r, REGISTER);
+    const checked = call(r, 'POST', '/api/case/expect', { x: SIGN_IN.x, y: SIGN_IN.y });
+    await entered;
+    await finger(r, SIGN_IN);
+    // The touch on Register is still being read: its step is not written yet.
+    expect(await currentSteps(r)).toHaveLength(1);
+    release();
+    expect((await checked).status).toBe(200);
+    expect((await status(r)).following).toBe(true);
+  });
 });
 
 describe('a phone start that is no longer wanted when it finishes', () => {
@@ -1031,6 +1171,19 @@ describe('a phone start that is no longer wanted when it finishes', () => {
     return { release, begun };
   }
 
+  /**
+   * Says when a request to `url` has run its handler up to the handler's first wait, which for these
+   * routes is after the phone start was dropped. Set up before the first request.
+   */
+  function handled(r: Rig, url: string): Promise<void> {
+    return new Promise((resolve) => {
+      r.app.addHook('preHandler', async (request) => {
+        // The handler is called once the hooks are done, without waiting for the next turn of the event loop.
+        if (request.url === url) setImmediate(resolve);
+      });
+    });
+  }
+
   it('stays off, with the touch watch ended, when a stop came first', async () => {
     const r = await rig();
     await openAndRecord(r);
@@ -1039,21 +1192,23 @@ describe('a phone start that is no longer wanted when it finishes', () => {
     await read.begun;
     expect((await call(r, 'POST', '/api/phone/stop')).status).toBe(200);
     read.release();
-    expect((await start).status).toBe(200);
+    expect(await start).toMatchObject({ status: 200, body: { active: false } });
     expect(await status(r)).toMatchObject({ active: false });
     expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
   });
 
   it('stays off, with the touch watch ended, when the case was finished first', async () => {
     const r = await rig();
+    const finishing = handled(r, '/api/case/finish');
     await openAndRecord(r);
     await call(r, 'POST', '/api/action/tap', { x: SIGN_IN.x, y: SIGN_IN.y });
     const read = slowRead(r);
     const start = call(r, 'POST', '/api/phone/start');
     await read.begun;
     const finish = call(r, 'POST', '/api/case/finish');
+    await finishing;
     read.release();
-    expect((await start).status).toBe(200);
+    expect(await start).toMatchObject({ status: 200, body: { active: false } });
     expect((await finish).status).toBe(200);
     expect(await status(r)).toMatchObject({ active: false });
     expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
@@ -1061,13 +1216,15 @@ describe('a phone start that is no longer wanted when it finishes', () => {
 
   it('stays off, with the touch watch ended, when the case was discarded first', async () => {
     const r = await rig();
+    const discarding = handled(r, '/api/case/discard');
     await openAndRecord(r);
     const read = slowRead(r);
     const start = call(r, 'POST', '/api/phone/start');
     await read.begun;
     const discard = call(r, 'POST', '/api/case/discard');
+    await discarding;
     read.release();
-    expect((await start).status).toBe(200);
+    expect(await start).toMatchObject({ status: 200, body: { active: false } });
     expect((await discard).status).toBe(200);
     expect(await status(r)).toMatchObject({ active: false });
     expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
@@ -1075,14 +1232,16 @@ describe('a phone start that is no longer wanted when it finishes', () => {
 
   it('stays off, with the touch watch ended, when the session was closed first', async () => {
     const r = await rig();
+    const closing = handled(r, '/api/session/close');
     await openAndRecord(r);
     const read = slowRead(r);
     const start = call(r, 'POST', '/api/phone/start');
     await read.begun;
     const closed = call(r, 'POST', '/api/session/close');
+    await closing;
     read.release();
-    await start;
-    await closed;
+    expect(await start).toMatchObject({ status: 200, body: { active: false } });
+    expect((await closed).status).toBe(200);
     expect(await status(r)).toMatchObject({ active: false });
     expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
   });
@@ -1107,6 +1266,40 @@ describe('closing the app after the touch stream ended by itself', () => {
     r.endWatch();
     await r.app.close();
     expect(existsSync(join(r.dir, 'diagnostics', 'phone-sessions.jsonl'))).toBe(true);
+  });
+
+  it('also waits for that stop when another capture was started and stopped since', async () => {
+    const r = await rig();
+    await startPhone(r);
+    // The phone's next answer about its lock screen is held, so the first capture cannot finish stopping.
+    let ask: () => void = () => undefined;
+    const asked = new Promise<void>((resolve) => {
+      ask = resolve;
+    });
+    let answer: () => void = () => undefined;
+    const answered = new Promise<boolean>((resolve) => {
+      answer = () => resolve(false);
+    });
+    r.tools.locked.mockImplementationOnce(async () => {
+      ask();
+      return answered;
+    });
+    await asked;
+    r.endWatch();
+    await waitFor(async () => (await status(r)).active === false, 'the capture to stop');
+    expect((await call(r, 'POST', '/api/phone/start')).body).toMatchObject({ active: true });
+    expect((await call(r, 'POST', '/api/phone/stop')).body).toMatchObject({ active: false });
+
+    let closed = false;
+    const closing = r.app.close().then(() => {
+      closed = true;
+    });
+    await sleep(200);
+    expect(closed).toBe(false);
+    answer();
+    await closing;
+    const sessions = await readFile(join(r.dir, 'diagnostics', 'phone-sessions.jsonl'), 'utf8');
+    expect(sessions.trim().split('\n')).toHaveLength(2);
   });
 });
 
