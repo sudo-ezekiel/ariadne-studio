@@ -80,6 +80,11 @@ export type CaseStep =
   | (StepBase & { kind: 'openLink'; url: string })
   /** A pause on a run, for a page still getting ready. Nothing happens on the device when it is recorded. */
   | (StepBase & { kind: 'wait'; seconds: number })
+  /**
+   * Gives the screen up to `seconds` to show the element the BA clicked, then
+   * the run carries on either way. Recorded like an expect; the device was not touched.
+   */
+  | (StepBase & { kind: 'waitFor'; selector: MaestroSelector; point: Point; node?: RecordedNode; seconds: number })
   | (StepBase & { kind: 'hideKeyboard' })
   /**
    * A setup block run in the middle of the case (Maestro runFlow), e.g. log

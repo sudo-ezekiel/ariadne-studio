@@ -47,6 +47,10 @@ The studio replays the case up to the step before, through agent-device, and ope
 
 Steps 1 to N become a new case, "`<name>`, start", which starts the way this one did. This case keeps the rest and now starts from the new one.
 
+### Add a wait
+
+**Add a wait after this step**, and **Add a wait before step 1** on the start row, put a 20 second wait into the saved case straight away, with no recording, because a wait does nothing on the phone. Its seconds open so you can change them; **Change the seconds** on a wait row opens them again later. Runs from before the change are marked as before the edit.
+
 ### Delete
 
 **Delete step** removes a step, and on an end check, **Delete this check** removes the check. Later steps may not run any more, so run the case to check.

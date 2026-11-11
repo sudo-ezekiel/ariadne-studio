@@ -109,6 +109,11 @@ const ORIENTATION_WORDS: Readonly<Record<MaestroOrientation, string>> = {
   UPSIDE_DOWN: 'Rotate upside down',
 };
 
+/** "Wait up to 20 seconds for "Welcome" to appear". */
+function waitUntilName(seconds: number, element: string): string {
+  return `Wait up to ${seconds} ${seconds === 1 ? 'second' : 'seconds'} for ${element} to appear`;
+}
+
 /**
  * The generated description of a step, used when the BA has not given it a
  * title. `scrollTarget` is the element a scroll step scrolls to on replay
@@ -144,6 +149,8 @@ export function describeStep(step: CaseStep, scrollTarget?: MaestroSelector): st
       return `Open the link ${step.url}`;
     case 'wait':
       return waitName(step.seconds);
+    case 'waitFor':
+      return waitUntilName(step.seconds, targetName(step.selector, step.node));
     case 'hideKeyboard':
       return 'Hide the keyboard';
     case 'erase':
@@ -164,6 +171,7 @@ export function stepTitle(step: CaseStep, scrollTarget?: MaestroSelector): strin
 export function stepExpected(step: CaseStep): string {
   if (step.note?.trim()) return step.note.trim();
   if (step.kind === 'expect') return `${targetName(step.selector, step.node)} is visible`;
+  if (step.kind === 'waitFor') return `${targetName(step.selector, step.node)} appears within ${step.seconds} ${step.seconds === 1 ? 'second' : 'seconds'}`;
   return '';
 }
 
@@ -207,6 +215,8 @@ export function describeMaestroStep(step: MaestroStep): string {
       return `Open the link ${step.link}`;
     case 'wait':
       return waitName(step.seconds);
+    case 'waitUntilVisible':
+      return waitUntilName(step.seconds, elementName(step.selector));
     case 'takeScreenshot':
       return 'Take a screenshot';
     case 'startRecording':

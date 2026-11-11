@@ -24,11 +24,12 @@ export function stepText(step: StepView, scrollUntilVisible?: MaestroSelector): 
   return stepTitle(step, scrollUntilVisible);
 }
 
-/** The selector behind a tap, long press, double tap or expect (or the line of a swipe), shown small under its description. */
+/** The selector behind a tap, long press, double tap, check or wait until (or the line of a swipe), shown small under its description. */
 export function stepSelector(step: StepView): string | undefined {
   switch (step.kind) {
     case 'tap':
     case 'expect':
+    case 'waitFor':
     case 'longPress':
     case 'doubleTap':
       return selectorText(step.selector);

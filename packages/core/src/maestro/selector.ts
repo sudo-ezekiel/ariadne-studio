@@ -1,5 +1,5 @@
 import type { HitTestNode, Point, Viewport } from '../device/hit-test.ts';
-import { escapeMaestroRegex } from './escape.ts';
+import { escapeMaestroRegex, unescapeMaestroRegex } from './escape.ts';
 import type { MaestroSelector, PercentPoint } from './model.ts';
 
 /*
@@ -134,6 +134,19 @@ function orderedMatches(allNodes: readonly SelectorNode[], candidate: Candidate)
         a.order - b.order,
     )
     .map(({ node }) => node);
+}
+
+/**
+ * True when an element on screen matches an id or text selector as Maestro
+ * would find it: the value unescaped, the deepest match only, and with an
+ * index, that many matches and one more. Nodes hidden from the user do not
+ * count. A point selector always counts, since there is nothing to look for.
+ */
+export function selectorOnScreen(allNodes: readonly SelectorNode[], selector: MaestroSelector): boolean {
+  if (selector.kind === 'point') return true;
+  const visible = allNodes.filter((node) => node.visibleToUser !== false);
+  const matches = orderedMatches(visible, { kind: selector.kind, value: unescapeMaestroRegex(selector.value) });
+  return matches.length > (selector.index ?? 0);
 }
 
 function isSameNode(a: SelectorNode, b: SelectorNode): boolean {

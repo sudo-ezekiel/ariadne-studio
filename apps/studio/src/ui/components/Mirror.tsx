@@ -1,7 +1,8 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
-import { DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
+import { DEFAULT_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
+import { RefreshIcon } from './Icons.tsx';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
 import { PhoneButtons } from './PhoneButtons.tsx';
@@ -32,12 +33,16 @@ type Props = {
   onOpenSetup: () => void;
   /** While on, a click records an assertVisible instead of tapping. */
   expectMode: boolean;
+  /** While on, a click records a wait until that element shows; nothing is pressed. */
+  waitUntilMode: boolean;
   /** While on, a click chooses an element for a step of a block; nothing is pressed. */
   choosing: boolean;
   onChoose: (point: Point) => void;
   onTap: (point: Point) => void;
   onExpect: (point: Point) => void;
   onToggleExpect: () => void;
+  onWaitUntil: (point: Point) => void;
+  onToggleWaitUntil: () => void;
   onType: (text: string) => void;
   onBack: () => void;
   onScroll: (direction: ScrollDirection) => void;
@@ -45,7 +50,6 @@ type Props = {
   onRefresh: () => void;
   onHideKeyboard: () => void;
   onOpenLink: (url: string) => void;
-  onWait: (seconds: number) => void;
   onLongPress: (point: Point) => void;
   onDoubleTap: (point: Point) => void;
   /** A drag across the screen, in viewport pixels, and how long it took. */
@@ -125,7 +129,7 @@ function StageBar(props: Props) {
   const { recording, sessionOpen, busy, picking, suiteRunning, phone } = props;
   if (recording) {
     return (
-      <div className="stage-bar stage-bar-live">
+      <div className="stage-bar">
         <span className="stage-state">
           <span className="rec-dot rec-dot-lg" aria-hidden="true" />
           <span className="stage-state-word">Recording</span>
@@ -217,15 +221,15 @@ function EmptyScreen({ sessionOpen, devicesFound, onOpenSetup }: Pick<Props, 'se
 }
 
 export function Mirror(props: Props) {
-  const { screen, busy, highlight, sessionOpen, caseActive, expectMode, choosing } = props;
+  const { screen, busy, highlight, sessionOpen, caseActive, expectMode, waitUntilMode, choosing } = props;
+  /** Check and Wait until both read an element off the screen and press nothing. */
+  const looking = expectMode || waitUntilMode;
   const usingPhone = props.phone.active;
   /** Everything but Check waits while the phone is the input. */
   const inputOff = !sessionOpen || busy || usingPhone;
   const [hover, setHover] = useState<SnapshotNodeLite | undefined>();
   const [text, setText] = useState('');
   const [link, setLink] = useState<string | null>(null);
-  const [wait, setWait] = useState<string | null>(null);
-  const waitValid = Number.isInteger(Number(wait)) && Number(wait) >= 1 && Number(wait) <= MAX_WAIT_SECONDS;
   const press = useRef<Press | null>(null);
   /** The drag being drawn, in viewport pixels. */
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
@@ -235,7 +239,7 @@ export function Mirror(props: Props) {
   // Check mode keeps priority: a tap records a check, holds and drags do nothing.
   // The mouse wheel is left alone, so scrolling the page never records a step.
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (busy || !screen || event.button !== 0 || (usingPhone && !expectMode)) return;
+    if (busy || !screen || event.button !== 0 || (usingPhone && !looking)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     press.current = {
       pointerId: event.pointerId,
@@ -249,7 +253,7 @@ export function Mirror(props: Props) {
     const current = press.current;
     if (!current || !screen || event.pointerId !== current.pointerId) return;
     current.maxDistance = Math.max(current.maxDistance, distance(current.client, { x: event.clientX, y: event.clientY }));
-    if (!expectMode && !choosing && current.maxDistance >= DRAG_PX) setDrag({ from: current.point, to: toViewport(event, screen) });
+    if (!looking && !choosing && current.maxDistance >= DRAG_PX) setDrag({ from: current.point, to: toViewport(event, screen) });
   };
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const current = press.current;
@@ -260,6 +264,8 @@ export function Mirror(props: Props) {
     const gesture = classifyPointer({ durationMs, maxDistancePx: current.maxDistance });
     if (choosing) {
       if (gesture === 'tap') props.onChoose(current.point);
+    } else if (waitUntilMode) {
+      if (gesture === 'tap') props.onWaitUntil(current.point);
     } else if (expectMode) {
       if (gesture === 'tap') props.onExpect(current.point);
     } else if (gesture === 'tap') props.onTap(current.point);
@@ -288,6 +294,8 @@ export function Mirror(props: Props) {
 
   const captionText = choosing
     ? `Click the element for this step${hover && !busy ? `: ${caption(hover)}` : ''}`
+    : waitUntilMode
+    ? `Wait until mode: click what the run should wait for${hover && !busy ? `: ${caption(hover)}` : ''}`
     : expectMode
     ? `Check mode: click what must be visible${hover && !busy ? `: ${caption(hover)}` : ''}`
     : hover && !busy
@@ -320,7 +328,7 @@ export function Mirror(props: Props) {
         <div className="mirror-frame">
           {screen ? (
             <div
-              className={`screen ${busy ? 'screen-busy' : ''} ${expectMode ? 'screen-expect' : ''} ${choosing ? 'screen-choose' : ''} ${screen.width > screen.height ? 'screen-landscape' : ''}`}
+              className={`screen ${busy ? 'screen-busy' : ''} ${looking ? 'screen-expect' : ''} ${choosing ? 'screen-choose' : ''} ${screen.width > screen.height ? 'screen-landscape' : ''}`}
               style={{ aspectRatio: `${screen.width} / ${screen.height}`, ['--screen-ratio' as string]: screen.width / screen.height }}
               onMouseMove={(event) => setHover(resolveNodeAt(screen.nodes, toViewport(event, screen)))}
               onMouseLeave={() => setHover(undefined)}
@@ -338,7 +346,7 @@ export function Mirror(props: Props) {
               <img src={screen.imageUrl} alt="Device screen" draggable={false} />
               {screen.secure && <SecureElements screen={screen} />}
               {hover?.rect && !busy && (
-                <div className={`outline ${expectMode ? 'outline-expect' : 'outline-hover'}`} style={boxStyle(hover.rect, screen)} />
+                <div className={`outline ${looking ? 'outline-expect' : 'outline-hover'}`} style={boxStyle(hover.rect, screen)} />
               )}
               {highlight && <div className="outline outline-hit" style={boxStyle(highlight, screen)} />}
               {drag && (
@@ -353,7 +361,7 @@ export function Mirror(props: Props) {
           )}
         </div>
       </div>
-      <div className={`mirror-caption ${expectMode ? 'mirror-caption-expect' : ''} ${choosing ? 'mirror-caption-choose' : ''}`}>{captionText}</div>
+      <div className={`mirror-caption ${looking ? 'mirror-caption-expect' : ''} ${choosing ? 'mirror-caption-choose' : ''}`}>{captionText}</div>
       <PhoneButtons
         disabled={inputOff}
         recording={caseActive}
@@ -391,21 +399,26 @@ export function Mirror(props: Props) {
             aria-pressed={expectMode}
             onClick={props.onToggleExpect}
             disabled={!sessionOpen || !caseActive || busy}
-            title={caseActive ? 'Record that an element is visible, without tapping it' : 'Start a case first'}
+            title={caseActive ? 'Record that this is on the screen. The run fails if it is missing.' : 'Start a case first'}
           >
             Check
           </button>
-          <button type="button" onClick={() => props.onScroll('down')} disabled={inputOff}>
-            Scroll down
-          </button>
-          <button type="button" onClick={() => props.onScroll('up')} disabled={inputOff}>
-            Scroll up
+          <button
+            type="button"
+            className={waitUntilMode ? 'toggle-on' : ''}
+            aria-pressed={waitUntilMode}
+            onClick={props.onToggleWaitUntil}
+            disabled={!sessionOpen || !caseActive || busy}
+            title={
+              caseActive
+                ? `Click something the run should wait for. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear; the run fails if it never does.`
+                : 'Start a case first'
+            }
+          >
+            Wait until
           </button>
         </form>
         <div className="mirror-controls">
-          <button type="button" onClick={props.onRefresh} disabled={!sessionOpen || busy} title="Look at the phone again now. The screen here also follows it by itself.">
-            Refresh
-          </button>
           <button type="button" onClick={props.onRelaunch} disabled={inputOff} title="Close the app and start it again">
             Relaunch app
           </button>
@@ -415,10 +428,7 @@ export function Mirror(props: Props) {
           {link === null ? (
             <button
               type="button"
-              onClick={() => {
-                setWait(null);
-                setLink('');
-              }}
+              onClick={() => setLink('')}
               disabled={inputOff}
               title="Open a web link or an app deep link"
             >
@@ -449,47 +459,22 @@ export function Mirror(props: Props) {
               </button>
             </form>
           )}
-          {wait === null || !caseActive ? (
-            <button
-              type="button"
-              onClick={() => {
-                setLink(null);
-                setWait(String(DEFAULT_WAIT_SECONDS));
-              }}
-              disabled={!sessionOpen || !caseActive || busy}
-              title={caseActive ? 'Make a run pause here, for a page that is still loading. Nothing happens on the phone now' : 'Start a case first'}
-            >
-              Wait
-            </button>
-          ) : (
-            <form
-              className="inline-form wait-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!waitValid) return;
-                props.onWait(Number(wait));
-                setWait(null);
-              }}
-            >
-              <input
-                autoFocus
-                type="number"
-                min={1}
-                max={MAX_WAIT_SECONDS}
-                value={wait}
-                onChange={(event) => setWait(event.target.value)}
-                aria-label="Seconds to wait"
-                disabled={!sessionOpen || busy}
-              />
-              <span>seconds</span>
-              <button type="submit" disabled={!sessionOpen || busy || !waitValid}>
-                Add
-              </button>
-              <button type="button" onClick={() => setWait(null)}>
-                Cancel
-              </button>
-            </form>
-          )}
+          <button type="button" onClick={() => props.onScroll('down')} disabled={inputOff}>
+            Scroll down
+          </button>
+          <button type="button" onClick={() => props.onScroll('up')} disabled={inputOff}>
+            Scroll up
+          </button>
+          <button
+            type="button"
+            className="icon-button toolbar-refresh"
+            onClick={props.onRefresh}
+            disabled={!sessionOpen || busy}
+            aria-label="Refresh"
+            title="Refresh: look at the phone again now. The screen here also follows it by itself."
+          >
+            <RefreshIcon />
+          </button>
         </div>
       </div>
     </section>

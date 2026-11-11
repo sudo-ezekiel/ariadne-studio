@@ -24,6 +24,8 @@ import {
   type Field,
 } from './block-steps.ts';
 import { BlockSettings } from './BlockSettings.tsx';
+import { MarkCell } from './Mark.tsx';
+import { markOfMaestroStep } from './step-marks.ts';
 
 const SETTINGS_LIST = 'block-setting-names';
 const SWIPE_DIRECTIONS: readonly SwipeDirection[] = ['LEFT', 'RIGHT', 'UP', 'DOWN'];
@@ -146,7 +148,7 @@ function StepFields({ draft, disabled, picking, pickOff, password, onChange, onP
         <>
           <TextField field={field!} label="Text to type" placeholder="For example: 12345" disabled={disabled} onChange={setField} />
           {password && (
-            <p className="piece-missing draft-note">
+            <p className="block-missing draft-note">
               {password === 'sure' ? 'This goes into a password field.' : 'This looks like a password field.'} Use a setting, so the password stays in .env on this computer and out of the block.
             </p>
           )}
@@ -154,6 +156,25 @@ function StepFields({ draft, disabled, picking, pickOff, password, onChange, onP
       );
     case 'openLink':
       return <TextField field={field!} label="Link" placeholder="https://... or myapp://..." disabled={disabled} onChange={setField} />;
+    case 'waitUntilVisible':
+      return (
+        <>
+          <TargetField field={field!} disabled={disabled} picking={picking} pickOff={pickOff} onChange={setField} onPick={onPick} />
+          <label className="draft-inline">
+            up to
+            <input
+              type="number"
+              aria-label="Seconds to wait at most"
+              min={1}
+              max={MAX_WAIT_SECONDS}
+              value={Number.isNaN(step.seconds) ? '' : step.seconds}
+              disabled={disabled}
+              onChange={(event) => onChange({ ...draft, step: { ...step, seconds: event.target.valueAsNumber } })}
+            />
+            seconds
+          </label>
+        </>
+      );
     case 'wait':
       return (
         <label className="draft-inline">
@@ -232,24 +253,25 @@ function StepFields({ draft, disabled, picking, pickOff, password, onChange, onP
 function StepRow(props: RowProps) {
   const { draft, position, last, disabled, onMove, onRemove } = props;
   const label = stepLabel(draft.step);
+  const mark = markOfMaestroStep(draft.step);
   return (
-    <li className="draft-step">
-      <div className="draft-step-head">
-        <span className="step-index">{position + 1}</span>
+    <li className={`step step-draft step-${mark}`}>
+      <MarkCell mark={mark} number={position + 1} />
+      <div className="draft-body">
         <span className="draft-step-name">{label ?? describeMaestroStep(draft.step)}</span>
-        <span className="piece-tools">
-          <button type="button" onClick={() => onMove(position - 1)} disabled={disabled || position === 0} aria-label={`Move step ${position + 1} up`} title="Move up">
-            ↑
-          </button>
-          <button type="button" onClick={() => onMove(position + 1)} disabled={disabled || last} aria-label={`Move step ${position + 1} down`} title="Move down">
-            ↓
-          </button>
-          <button type="button" onClick={onRemove} disabled={disabled} aria-label={`Remove step ${position + 1}`} title="Remove">
-            ×
-          </button>
-        </span>
+        {label ? <StepFields {...props} /> : <p className="hint">Kept as it is in the file.</p>}
       </div>
-      {label ? <StepFields {...props} /> : <p className="hint">Kept as it is in the file.</p>}
+      <span className="row-tools">
+        <button type="button" onClick={() => onMove(position - 1)} disabled={disabled || position === 0} aria-label={`Move step ${position + 1} up`} title="Move up">
+          ↑
+        </button>
+        <button type="button" onClick={() => onMove(position + 1)} disabled={disabled || last} aria-label={`Move step ${position + 1} down`} title="Move down">
+          ↓
+        </button>
+        <button type="button" onClick={onRemove} disabled={disabled} aria-label={`Remove step ${position + 1}`} title="Remove">
+          ×
+        </button>
+      </span>
     </li>
   );
 }
@@ -322,7 +344,8 @@ export function BlockEditor({ edit, summary, envKeys, busy, sessionOpen, picking
   const problem = sureAt >= 0 ? `Step ${sureAt + 1} goes into a password field, so make its text a setting.` : blockProblem(edit.name, built);
   const settings = blockSettings(edit.steps);
   const lastStep = built[built.length - 1];
-  const endsOnCheck = lastStep?.kind === 'assertVisible' || lastStep?.kind === 'assertNotVisible' || lastStep?.kind === 'wait';
+  const endsOnCheck =
+    lastStep?.kind === 'assertVisible' || lastStep?.kind === 'assertNotVisible' || lastStep?.kind === 'wait' || lastStep?.kind === 'waitUntilVisible';
 
   const setSteps = (steps: DraftStep[]) => onChange({ ...edit, steps });
   const addStep = (choice: number) => setSteps([...edit.steps, draftStep(STEP_CHOICES[choice]!.step)]);
@@ -359,7 +382,7 @@ export function BlockEditor({ edit, summary, envKeys, busy, sessionOpen, picking
           Press Record steps and use the app on the screen, or add steps one by one. Recording starts from the screen shown now, so press Relaunch app first for a block that starts the app.
         </p>
       ) : (
-        <ol className="draft-steps">
+        <ol className="steps draft-steps">
           {edit.steps.map((draft, position) => (
             <StepRow
               key={draft.key}

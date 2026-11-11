@@ -8,6 +8,7 @@ import {
   SYSTEM_UI,
   blackPicture,
   caseToFlow,
+  elementName,
   expectationCandidates,
   foregroundApp,
   looksLikeHomeApp,
@@ -15,15 +16,18 @@ import {
   relocateFlow,
   replaySegments,
   screenView,
+  selectorOnScreen,
   toMaestroYaml,
   type DirectAction,
   type ExpectationCandidate,
   type MaestroFlow,
+  type MaestroSelector,
   type MaestroStep,
   type Recorder,
   type TestCase,
   type DescribeNames,
 } from '@ariadne/core';
+import { MAX_WAIT_SECONDS } from '../shared/api-types.ts';
 import { capturingScreenshot, scratchScreenshot, type Latest, type ServerState } from './state.ts';
 
 /** An error with a stable code the UI can show: 4xx for client mistakes, 5xx for device or tool failures. */
@@ -48,6 +52,25 @@ export function readId(params: unknown, key: 'caseId' | 'runId' | 'suiteId'): st
   const value = (params as Record<string, string | undefined>)[key];
   if (!value || !ID_PATTERN.test(value)) {
     throw new HttpError(400, 'BAD_REQUEST', `Unknown ${key === 'caseId' ? 'case' : key === 'runId' ? 'run' : 'suite run'}.`);
+  }
+  return value;
+}
+
+/** The `seconds` of a wait: a whole number from 1 to MAX_WAIT_SECONDS. */
+export function readSeconds(body: unknown): number {
+  const { seconds } = (body ?? {}) as { seconds?: unknown };
+  if (typeof seconds !== 'number' || !Number.isInteger(seconds) || seconds < 1 || seconds > MAX_WAIT_SECONDS) {
+    throw new HttpError(400, 'BAD_REQUEST', `A wait is 1 to ${MAX_WAIT_SECONDS} seconds.`);
+  }
+  return seconds;
+}
+
+/** A 1-based step number from the URL, from `min` to `max`. */
+export function readStepNumber(params: unknown, key: string, max: number, min = 1): number {
+  const raw = (params as Record<string, string | undefined>)[key];
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new HttpError(400, 'BAD_STEP', `Step ${raw ?? ''} does not exist; this case has ${max} step(s).`);
   }
   return value;
 }
@@ -278,7 +301,35 @@ async function performDirect(state: ServerState, action: DirectAction): Promise<
       return action.kind === 'longPress' ? state.session.longPressAt(at) : state.session.doubleTapAt(at);
     }
     case 'wait':
-      return new Promise((resolve) => setTimeout(resolve, action.seconds * 1000));
+      return pause(action.seconds * 1000);
+    case 'waitFor':
+      return waitForElement(state, action.selector, action.seconds * 1000);
+  }
+}
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** How often a wait until looks at the screen again. */
+const WAIT_FOR_POLL_MS = 500;
+
+/**
+ * Looks at the screen until an element matches `selector`, and fails when `ms`
+ * have gone by without one, as Maestro's extendedWaitUntil does.
+ */
+async function waitForElement(state: ServerState, selector: MaestroSelector, ms: number): Promise<void> {
+  // A deadline that is not a number never comes, and the loop would never end.
+  if (!(ms > 0 && Number.isFinite(ms))) throw new Error(`A wait until needs more than 0 seconds, not ${ms / 1000}.`);
+  const deadline = Date.now() + ms;
+  for (;;) {
+    if (selectorOnScreen((await state.session.snapshot()).nodes, selector)) return;
+    const left = deadline - Date.now();
+    if (left <= 0) {
+      const seconds = ms / 1000;
+      throw new Error(`Waited ${seconds} ${seconds === 1 ? 'second' : 'seconds'} for ${elementName(selector)} and it never appeared.`);
+    }
+    await pause(Math.min(WAIT_FOR_POLL_MS, left));
   }
 }
 

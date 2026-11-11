@@ -1,5 +1,6 @@
 import { parseAllDocuments } from 'yaml';
 import {
+  LONGEST_TIMER_MS,
   MAESTRO_KEYS,
   MAESTRO_ORIENTATIONS,
   NEVER_ON_SCREEN,
@@ -16,15 +17,33 @@ import {
 // subset throws rather than being silently dropped, so a block that uses other
 // commands is reported as "not previewable" instead of shown incompletely.
 
-/** The longest delay a timer can hold. A Wait is replayed on one, and a longer one would fire at once. */
-const LONGEST_TIMER_MS = 2_147_483_647;
-
 /** What a Wait step writes, and nothing else: a label or a key of someone's own would be lost on the way through. */
 function isWaitForm(arg: unknown): arg is { timeout: number } {
   if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout', 'optional', 'label'].includes(key))) return false;
   const { visible, timeout, optional, label } = arg;
   if (visible !== NEVER_ON_SCREEN || optional !== true || typeof timeout !== 'number') return false;
   return timeout > 0 && timeout <= LONGEST_TIMER_MS && (label === undefined || label === waitName(timeout / 1000));
+}
+
+/**
+ * What a Wait until step writes, and nothing else: an id or text selector
+ * under `visible` and a timeout, with no `optional`, so running out fails the
+ * run on this step. An optional one would pass and leave the failure to a
+ * later step, so it stays Maestro's to run.
+ */
+function waitUntilVisibleForm(arg: unknown, where: string): MaestroStep | undefined {
+  if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout'].includes(key))) return undefined;
+  const { visible, timeout } = arg;
+  // Written this way round so `.nan`, which YAML reads as NaN, fails too.
+  if (!isRecord(visible) || typeof timeout !== 'number' || !(timeout > 0 && timeout <= LONGEST_TIMER_MS)) return undefined;
+  let selector: MaestroSelector;
+  try {
+    selector = parseSelector(visible, `extendedWaitUntil.visible at ${where}`);
+  } catch {
+    return undefined;
+  }
+  if (selector.kind === 'point') return undefined;
+  return { kind: 'waitUntilVisible', selector, seconds: timeout / 1000 };
 }
 
 export class MaestroParseError extends Error {
@@ -235,10 +254,13 @@ export function parseStep(raw: unknown, position: number): MaestroStep {
       expectKeys(arg, ['link'], `openLink at ${where}`);
       return { kind: 'openLink', link: expectString(arg.link, `openLink.link at ${where}`) };
     }
-    case 'extendedWaitUntil':
-      // Only the form a Wait step writes. Any other wait stays Maestro's to run.
+    case 'extendedWaitUntil': {
+      // Only the forms a Wait or a Wait until step writes. Any other wait stays Maestro's to run.
       if (isWaitForm(arg)) return { kind: 'wait', seconds: arg.timeout / 1000 };
+      const waitUntil = waitUntilVisibleForm(arg, where);
+      if (waitUntil) return waitUntil;
       throw new MaestroParseError(`Unsupported command "extendedWaitUntil" at ${where}`);
+    }
     case 'takeScreenshot': {
       if (typeof arg === 'string') return { kind: 'takeScreenshot', path: arg };
       if (!isRecord(arg)) throw new MaestroParseError(`takeScreenshot needs a path at ${where}`);

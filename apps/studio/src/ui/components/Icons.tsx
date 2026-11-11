@@ -99,7 +99,7 @@ export function RefreshIcon(props: IconProps) {
   );
 }
 
-/** A jigsaw piece: the shape every setup block wears, wherever it appears. */
+/** A jigsaw piece: the glyph every setup block carries, wherever it appears. */
 export function PuzzleIcon({ size = 16 }: IconProps) {
   return (
     <svg className="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
@@ -108,11 +108,12 @@ export function PuzzleIcon({ size = 16 }: IconProps) {
   );
 }
 
-/** Where a case begins: a fresh start of the app or the end of another case. */
-export function StartIcon(props: IconProps) {
+/** A clock: a pause on a run, which waits for time to pass and runs nothing. */
+export function WaitIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M5 3.5v9l7-4.5z" />
+      <circle cx="8" cy="8" r="5.8" />
+      <path d="M8 4.8V8l2.2 1.6" />
     </Svg>
   );
 }

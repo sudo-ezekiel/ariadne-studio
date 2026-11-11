@@ -193,6 +193,14 @@ export type CurrentCaseView = CaseView & {
   editing?: EditingInfo;
   /** These steps go into a block on Finish, and no case is saved. */
   forBlock?: boolean;
+  /**
+   * How many removed steps that Undo could still put back acted on the phone
+   * (anything but a wait, a wait until or a check). The phone did not go back.
+   * Unset when there are none.
+   */
+  removedDeviceSteps?: number;
+  /** A removed step can be put back with POST /api/case/steps/restore. Unset when none can. */
+  canRestore?: boolean;
 };
 
 export type EditRequest = { mode: 'rerecord'; step: number } | { mode: 'insert'; after: number };
@@ -278,8 +286,17 @@ export type CaseDetailResponse = {
 
 /** An empty `reference` removes it. */
 export type CasePatch = { name?: string; muted?: boolean; reference?: string };
-/** `review: null` says someone has looked at a flagged step. */
-export type StepPatch = { title?: string; note?: string; review?: null };
+/** `review: null` says someone has looked at a flagged step. `seconds` is only for a wait or a wait until. */
+export type StepPatch = { title?: string; note?: string; review?: null; seconds?: number };
+
+/** POST /api/case/wait. With `after`, the wait goes after that step (0 puts it first) and no screenshot is taken. */
+export type WaitRequest = { seconds: number; after?: number };
+
+/** POST /api/case/wait-for: the element under the click in viewport pixels; `seconds` defaults to DEFAULT_WAIT_SECONDS. */
+export type WaitForRequest = { x: number; y: number; seconds?: number };
+
+/** POST /api/cases/:caseId/steps: a wait after step `after` of a saved case (0 puts it first). */
+export type AddCaseStepRequest = { after: number; kind: 'wait'; seconds: number };
 
 export type SuiteView = SuiteRun & { counts: SuiteCounts; passed: boolean; reportUrl: string };
 

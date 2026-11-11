@@ -1,6 +1,7 @@
 import type { ScrollDirection } from '@ariadne/core/types';
 import type {
   ActionResponse,
+  AddCaseStepRequest,
   ApiErrorBody,
   BlockDetail,
   BlockRecordingResponse,
@@ -33,6 +34,8 @@ import type {
   SuiteView,
   SwipeRequest,
   ToolInstallStatus,
+  WaitForRequest,
+  WaitRequest,
 } from '../shared/api-types.ts';
 
 export class ApiError extends Error {
@@ -96,7 +99,6 @@ export const api = {
   scroll: (direction: ScrollDirection) => request<ActionResponse>('POST', '/api/action/scroll', { direction }),
   relaunch: () => request<ActionResponse>('POST', '/api/action/relaunch'),
   openLink: (url: string) => request<ActionResponse>('POST', '/api/action/open-link', { url }),
-  wait: (seconds: number) => request<ActionResponse>('POST', '/api/case/wait', { seconds }),
   hideKeyboard: () => request<ActionResponse>('POST', '/api/action/hide-keyboard'),
   longPress: (x: number, y: number) => request<ActionResponse>('POST', '/api/action/long-press', { x, y }),
   doubleTap: (x: number, y: number) => request<ActionResponse>('POST', '/api/action/double-tap', { x, y }),
@@ -105,6 +107,12 @@ export const api = {
   rotate: (orientation: RotateRequest['orientation']) => request<ActionResponse>('POST', '/api/action/rotate', { orientation }),
   pinch: (zoom: PinchRequest['zoom']) => request<ActionResponse>('POST', '/api/action/pinch', { zoom }),
   expect: (x: number, y: number) => request<ActionResponse>('POST', '/api/case/expect', { x, y }),
+  waitFor: (x: number, y: number) => request<ActionResponse>('POST', '/api/case/wait-for', { x, y } satisfies WaitForRequest),
+  /** A wait put after step `after` of the recording; nothing is captured from the phone. */
+  insertWait: (seconds: number, after: number) => request<ActionResponse>('POST', '/api/case/wait', { seconds, after } satisfies WaitRequest),
+  removeStep: (index: number) => request<CurrentCaseView>('DELETE', `/api/case/steps/${index}`),
+  restoreStep: () => request<CurrentCaseView>('POST', '/api/case/steps/restore'),
+  setStepSeconds: (index: number, seconds: number) => request<CurrentCaseView>('PATCH', `/api/case/steps/${index}`, { seconds }),
   startCase: (name: string, start: { blocks: CaseBlockRequest[] } | { startFrom: string }) =>
     request<CaseStartResponse>('POST', '/api/case/start', { name, ...start }),
   runBlock: (use: CaseBlockRequest) => request<ActionResponse>('POST', '/api/case/block', use),
@@ -134,6 +142,8 @@ export const api = {
   patchStep: (caseId: string, index: number, patch: StepPatch) =>
     request<CaseDetailResponse>('PATCH', `${caseUrl(caseId)}/steps/${index}`, patch),
   deleteStep: (caseId: string, index: number) => request<CaseDetailResponse>('DELETE', `${caseUrl(caseId)}/steps/${index}`),
+  addCaseWait: (caseId: string, after: number, seconds: number) =>
+    request<CaseDetailResponse>('POST', `${caseUrl(caseId)}/steps`, { after, kind: 'wait', seconds } satisfies AddCaseStepRequest),
   deleteExpectation: (caseId: string, position: number) =>
     request<CaseDetailResponse>('DELETE', `${caseUrl(caseId)}/expectations/${position}`),
   splitCase: (caseId: string, atStep: number) => request<CaseDetailResponse>('POST', `${caseUrl(caseId)}/split`, { atStep }),

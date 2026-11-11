@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toMaestroYaml } from '../src/maestro/emit.ts';
-import type { MaestroFlow } from '../src/maestro/model.ts';
+import type { MaestroFlow, MaestroStep } from '../src/maestro/model.ts';
 import { MaestroParseError, parseMaestroFlow } from '../src/maestro/parse.ts';
 
 describe('toMaestroYaml', () => {
@@ -386,9 +386,17 @@ describe('wait', () => {
     expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
   });
 
-  it('still refuses an extendedWaitUntil for something real on screen', () => {
+  it('reads a strict extendedWaitUntil for something real on screen as a wait until, and refuses the text shorthand', () => {
     expect(parseBody('- extendedWaitUntil:\n    visible: "Loaded"\n    timeout: 5000\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
-    expect(parseBody('- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n')).toThrow(MaestroParseError);
+    expect(parseMaestroFlow('appId: a\n---\n- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n').steps).toEqual([
+      { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Loaded' }, seconds: 5 },
+    ]);
+  });
+
+  it('refuses an optional extendedWaitUntil for something real on screen, since running out would not fail', () => {
+    expect(parseBody('- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n    optional: true\n')).toThrow(
+      /Unsupported command "extendedWaitUntil"/,
+    );
   });
 
   it('still refuses an extendedWaitUntil for the Wait label when it has no timeout', () => {
@@ -477,5 +485,64 @@ describe('wait', () => {
 
   it('refuses a bare extendedWaitUntil', () => {
     expect(parseBody('- extendedWaitUntil\n')).toThrow(/Unsupported command "extendedWaitUntil"/);
+  });
+});
+
+describe('wait until', () => {
+  const parseBody = (body: string) => () => parseMaestroFlow(`appId: a\n---\n${body}`);
+
+  it('emits a strict extendedWaitUntil on the selector, with no optional key so running out fails the run', () => {
+    const flow: MaestroFlow = { appId: 'a.b', steps: [{ kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Welcome' }, seconds: 20 }] };
+    expect(toMaestroYaml(flow)).toBe(
+      ['appId: a.b', '---', '- extendedWaitUntil:', '    visible:', '      text: "Welcome"', '    timeout: 20000', ''].join('\n'),
+    );
+    expect(toMaestroYaml(flow)).not.toContain('optional');
+  });
+
+  it('reads back what it wrote, next to a Wait', () => {
+    const flow: MaestroFlow = {
+      appId: 'a.b',
+      steps: [
+        { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Welcome' }, seconds: 20 },
+        { kind: 'wait', seconds: 5 },
+        { kind: 'waitUntilVisible', selector: { kind: 'id', value: 'android:id/title', index: 2 }, seconds: 1 },
+        { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Display \\(beta\\)', index: 0 }, seconds: 120 },
+      ],
+    };
+    expect(parseMaestroFlow(toMaestroYaml(flow))).toEqual(flow);
+  });
+
+  it('gives back the same wait until after emitting and parsing it, with no optional key in between', () => {
+    const step: MaestroStep = { kind: 'waitUntilVisible', selector: { kind: 'id', value: 'com.app:id/done', index: 1 }, seconds: 45 };
+    const yaml = toMaestroYaml({ appId: 'a.b', steps: [step] });
+    expect(yaml).toContain('timeout: 45000');
+    expect(yaml).not.toContain('optional');
+    expect(parseMaestroFlow(yaml).steps).toEqual([step]);
+  });
+
+  it('reads a fractional timeout as a wait until of fractional seconds, since only the studio forms flag it', () => {
+    expect(parseMaestroFlow('appId: a\n---\n- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 1500\n').steps).toEqual([
+      { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Loaded' }, seconds: 1.5 },
+    ]);
+  });
+
+  it('refuses an optional wait, a point, a text shorthand, a bad timeout or a key of its own', () => {
+    for (const body of [
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n    optional: false\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "X"\n    timeout: 20000\n    optional: true\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 0\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 2147483648\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: .nan\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: .inf\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n',
+      '- extendedWaitUntil:\n    visible:\n      point: "50%,50%"\n    timeout: 5000\n',
+      '- extendedWaitUntil:\n    visible: "Loaded"\n    timeout: 5000\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n    label: "Mine"\n',
+      '- extendedWaitUntil:\n    visible:\n      point: "50%,50%"\n    timeout: 5000\n    optional: true\n',
+      '- extendedWaitUntil:\n    notVisible:\n      text: "Loaded"\n    timeout: 5000\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n      enabled: true\n    timeout: 5000\n',
+    ]) {
+      expect(parseBody(body), body).toThrow(/Unsupported command "extendedWaitUntil"/);
+    }
   });
 });

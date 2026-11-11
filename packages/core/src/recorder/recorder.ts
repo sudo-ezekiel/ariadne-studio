@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import type { Point, Viewport } from '../device/hit-test.ts';
-import type { MaestroFlow, MaestroKey, MaestroOrientation, MaestroSelector, MaestroStep, PercentPoint } from '../maestro/model.ts';
+import { LONGEST_TIMER_MS, type MaestroFlow, type MaestroKey, type MaestroOrientation, type MaestroSelector, type MaestroStep, type PercentPoint } from '../maestro/model.ts';
 import { chooseSelector, type SelectorNode } from '../maestro/selector.ts';
 import type {
   BlockUse,
@@ -84,6 +84,20 @@ const DEFAULT_FLOW_PATHS: FlowPaths = {
   runFlowFile: (blockFile) => posix.relative(FLOWS_DIR, blockFile.split('\\').join('/')),
 };
 
+/** Steps that do nothing on the device when they are recorded. */
+const TOUCHES_NOTHING: ReadonlySet<StepKind> = new Set(['wait', 'waitFor', 'expect']);
+
+/**
+ * The seconds of a wait or a wait until, as the flow reader takes them back:
+ * more than 0, and no longer than a timer can hold. The studio asks for whole
+ * seconds up to a much lower limit; this only keeps other callers honest.
+ */
+function requireWaitSeconds(seconds: number): void {
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > LONGEST_TIMER_MS) {
+    throw new Error(`A wait is more than 0 and at most ${LONGEST_TIMER_MS / 1000} seconds, not ${seconds}`);
+  }
+}
+
 const ENV_PLACEHOLDER = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 
 const EVIDENCE_NUMBER = /step-(\d+)\.png$/;
@@ -114,6 +128,17 @@ export class Recorder {
   private evidenceCounter = 0;
   /** Steps the case resumed with; they are kept as they are, so nothing merges into them. */
   private keptSteps = 0;
+  /**
+   * Steps removed while recording, last on top, each with the step it came
+   * after (none for the first) and the index it had, so Undo can put it back.
+   */
+  private removed: Array<{ step: CaseStep; after: CaseStep | undefined; index: number }> = [];
+  /**
+   * Set when a step was removed, put back or inserted, until the next step is
+   * recorded: the last step may then not be the one just recorded, and typed
+   * text must not merge into it.
+   */
+  private listChanged = false;
   private readonly now: () => Date;
 
   constructor(options: { now?: () => Date } = {}) {
@@ -137,6 +162,8 @@ export class Recorder {
     this.expectations = (meta.expectations ?? []).map((expectation) => structuredClone(expectation));
     this.createdAt = meta.createdAt ?? this.now().toISOString();
     this.keptSteps = this.steps.length;
+    this.removed = [];
+    this.listChanged = false;
     this.evidenceCounter = Math.max(
       meta.evidenceFloor ?? 0,
       this.steps.length,
@@ -147,6 +174,84 @@ export class Recorder {
   /** Steps recorded so far, including any the case resumed with. */
   get stepCount(): number {
     return this.steps.length;
+  }
+
+  /** How many removed steps Undo can still put back. */
+  get removedCount(): number {
+    return this.removed.length;
+  }
+
+  /**
+   * How many of the removed steps acted on the phone: anything but a wait, a
+   * wait until or a check. The phone stays where those steps left it.
+   */
+  get removedDeviceSteps(): number {
+    return this.removed.filter(({ step }) => !TOUCHES_NOTHING.has(step.kind)).length;
+  }
+
+  /** Screenshots of the removed steps; once the case is saved, nothing refers to them. */
+  removedScreenshots(): string[] {
+    return this.removed.flatMap(({ step }) => (step.screenshot ? [step.screenshot] : []));
+  }
+
+  /**
+   * Takes step `index` (1-based) out of the case; later steps move up. The
+   * step goes on the removed stack, so restoreRemoved can put it back. A step
+   * the case resumed with cannot be removed here.
+   */
+  removeStep(index: number): CaseStep {
+    this.requireActive();
+    this.requireStep(index);
+    if (index <= this.keptSteps) throw new Error(`Step ${index} is part of the saved case and cannot be removed while recording`);
+    const after = this.steps[index - 2];
+    const [step] = this.steps.splice(index - 1, 1);
+    this.removed.push({ step: step!, after, index });
+    this.renumber();
+    return step!;
+  }
+
+  /**
+   * Puts the last removed step back right after the step it came after, or
+   * first if it was first. Waits can be inserted in the meantime, so its old
+   * index could land it among other steps that act on the phone; the index is
+   * only a fallback. Undefined when nothing was removed.
+   */
+  restoreRemoved(): CaseStep | undefined {
+    this.requireActive();
+    const last = this.removed.pop();
+    if (!last) return undefined;
+    const anchor = last.after === undefined ? -1 : this.steps.indexOf(last.after);
+    const position = last.after === undefined ? 0 : anchor >= 0 ? anchor + 1 : Math.min(last.index - 1, this.steps.length);
+    this.steps.splice(position, 0, last.step);
+    this.renumber();
+    return last.step;
+  }
+
+  /**
+   * Inserts a wait after step `after` (0 puts it first). Nothing happens on
+   * the device and there is no screenshot, so it takes no evidence number. It
+   * goes after the steps the case resumed with.
+   */
+  insertWait(seconds: number, after: number): CaseStep {
+    this.requireActive();
+    requireWaitSeconds(seconds);
+    if (!Number.isInteger(after) || after < this.keptSteps || after > this.steps.length) {
+      throw new Error(`A wait can go after step ${this.keptSteps} to ${this.steps.length}, not after step ${after}`);
+    }
+    const step: CaseStep = { index: after + 1, kind: 'wait', seconds, at: this.now().toISOString() };
+    this.steps.splice(after, 0, step);
+    this.renumber();
+    return step;
+  }
+
+  /** Changes how long a wait or a wait until step gives the screen. */
+  setSeconds(index: number, seconds: number): CaseStep {
+    this.requireActive();
+    const step = this.requireStep(index);
+    if (step.kind !== 'wait' && step.kind !== 'waitFor') throw new Error(`Step ${index} is not a wait`);
+    requireWaitSeconds(seconds);
+    step.seconds = seconds;
+    return step;
   }
 
   /**
@@ -310,6 +415,7 @@ export class Recorder {
   }
 
   recordWait(seconds: number, screenshotPath?: string): CaseStep {
+    requireWaitSeconds(seconds);
     return this.recordSimple({ kind: 'wait', seconds }, screenshotPath);
   }
 
@@ -370,6 +476,34 @@ export class Recorder {
     return this.push(step);
   }
 
+  /**
+   * Records a wait until for the node the BA clicked, with the same selector
+   * rules as a check. Callers check first that the selector is not a point:
+   * there is nothing to wait for at a position.
+   */
+  recordWaitFor(
+    node: SelectorNode,
+    point: Point,
+    viewport: Viewport,
+    seconds: number,
+    screenshotPath: string | undefined,
+    allNodes: readonly SelectorNode[],
+  ): CaseStep {
+    this.requireActive();
+    requireWaitSeconds(seconds);
+    const step: CaseStep = {
+      index: this.steps.length + 1,
+      kind: 'waitFor',
+      selector: chooseSelector(node, allNodes, point, viewport),
+      point: { x: Math.round(point.x), y: Math.round(point.y) },
+      node: recordedNode(node),
+      seconds,
+      ...(screenshotPath ? { screenshot: screenshotPath } : {}),
+      at: this.now().toISOString(),
+    };
+    return this.push(step);
+  }
+
   /** Adds an end-of-case expectation (from the picker); emitted after every step. */
   addExpectation(expectation: { selector: MaestroSelector; node?: RecordedNode }): Expectation {
     this.requireActive();
@@ -414,6 +548,7 @@ export class Recorder {
   /** Adds a new step; it uses up the next evidence number whether or not it has a screenshot. */
   private push(step: CaseStep): CaseStep {
     this.steps.push(step);
+    this.listChanged = false;
     this.evidenceCounter = Math.max(this.evidenceCounter + 1, evidenceNumber(step.screenshot) ?? 0);
     return step;
   }
@@ -428,7 +563,23 @@ export class Recorder {
     if (last?.kind !== 'type' || isEnvPlaceholder(last.text)) return false;
     // A step kept from the saved case stays exactly as it was saved.
     if (this.steps.length <= this.keptSteps) return false;
+    // After a removal or an insertion the last step was not just recorded.
+    if (this.listChanged) return false;
     return text === undefined || !isEnvPlaceholder(text);
+  }
+
+  private requireStep(index: number): CaseStep {
+    const step = Number.isInteger(index) ? this.steps[index - 1] : undefined;
+    if (!step || index < 1) throw new Error(`There is no step ${index}; the case has ${this.steps.length}`);
+    return step;
+  }
+
+  /** Numbers the steps 1, 2, 3 again after one was taken out or put in. */
+  private renumber(): void {
+    this.steps.forEach((step, position) => {
+      step.index = position + 1;
+    });
+    this.listChanged = true;
   }
 
   private requireActive(): CaseMeta {
@@ -471,6 +622,8 @@ function stepToMaestro(
       return { kind: 'openLink', link: step.url };
     case 'wait':
       return { kind: 'wait', seconds: step.seconds };
+    case 'waitFor':
+      return { kind: 'waitUntilVisible', selector: step.selector, seconds: step.seconds };
     case 'hideKeyboard':
       return { kind: 'hideKeyboard' };
     case 'scroll':

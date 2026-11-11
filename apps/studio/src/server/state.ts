@@ -190,8 +190,14 @@ export function toCaseView(testCase: TestCase): CaseView {
 }
 
 export function currentCaseView(state: ServerState): CurrentCaseView | null {
-  if (!state.recorder?.active) return null;
-  const view = toCaseView(state.recorder.toCase());
+  const recorder = state.recorder;
+  if (!recorder?.active) return null;
+  const removedDeviceSteps = recorder.removedDeviceSteps;
+  const view: CurrentCaseView = {
+    ...toCaseView(recorder.toCase()),
+    ...(removedDeviceSteps > 0 ? { removedDeviceSteps } : {}),
+    ...(recorder.removedCount > 0 ? { canRestore: true } : {}),
+  };
   const editing = state.editing;
   if (state.recordingBlock) return { ...view, forBlock: true };
   return editing
