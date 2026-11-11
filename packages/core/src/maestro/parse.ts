@@ -34,7 +34,8 @@ function isWaitForm(arg: unknown): arg is { timeout: number } {
 function waitUntilVisibleForm(arg: unknown, where: string): MaestroStep | undefined {
   if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout'].includes(key))) return undefined;
   const { visible, timeout } = arg;
-  if (!isRecord(visible) || typeof timeout !== 'number' || timeout <= 0 || timeout > LONGEST_TIMER_MS) return undefined;
+  // Written this way round so `.nan`, which YAML reads as NaN, fails too.
+  if (!isRecord(visible) || typeof timeout !== 'number' || !(timeout > 0 && timeout <= LONGEST_TIMER_MS)) return undefined;
   let selector: MaestroSelector;
   try {
     selector = parseSelector(visible, `extendedWaitUntil.visible at ${where}`);

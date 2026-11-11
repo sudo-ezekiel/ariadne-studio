@@ -466,7 +466,7 @@ whole evidence folder already). After any removal or insertion, `mergesIntoLast`
 until a new step is pushed, so typed text never merges into a step the BA did not just record.
 
 Core model for Wait until: `CaseStep` gains `{ kind: 'waitFor'; selector; point; node?; seconds }`;
-`MaestroStep` gains `{ kind: 'waitUntilVisible'; selector; timeoutMs }`; `emit.ts`, `parse.ts`
+`MaestroStep` gains `{ kind: 'waitUntilVisible'; selector; seconds }`; `emit.ts`, `parse.ts`
 (section 5), `describe.ts` (`describeStep`, `describeMaestroStep`, `stepExpected` reads "X appears within N seconds"),
 `recorder.ts` `stepToMaestro`, `flow-layout.ts` `scrollTargets` (a wait until with an id or text is
 a scroll target like a check), `device-replay.ts` (`agentDeviceReplays` false, `DirectAction {

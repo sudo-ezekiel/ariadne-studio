@@ -520,12 +520,20 @@ describe('wait until', () => {
     expect(parseMaestroFlow(yaml).steps).toEqual([step]);
   });
 
+  it('reads a fractional timeout as a wait until of fractional seconds, since only the studio forms flag it', () => {
+    expect(parseMaestroFlow('appId: a\n---\n- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 1500\n').steps).toEqual([
+      { kind: 'waitUntilVisible', selector: { kind: 'text', value: 'Loaded' }, seconds: 1.5 },
+    ]);
+  });
+
   it('refuses an optional wait, a point, a text shorthand, a bad timeout or a key of its own', () => {
     for (const body of [
       '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 5000\n    optional: false\n',
       '- extendedWaitUntil:\n    visible:\n      text: "X"\n    timeout: 20000\n    optional: true\n',
       '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 0\n',
       '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: 2147483648\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: .nan\n',
+      '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n    timeout: .inf\n',
       '- extendedWaitUntil:\n    visible:\n      text: "Loaded"\n',
       '- extendedWaitUntil:\n    visible:\n      point: "50%,50%"\n    timeout: 5000\n',
       '- extendedWaitUntil:\n    visible: "Loaded"\n    timeout: 5000\n',

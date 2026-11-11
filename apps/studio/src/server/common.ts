@@ -319,6 +319,8 @@ const WAIT_FOR_POLL_MS = 500;
  * have gone by without one, as Maestro's extendedWaitUntil does.
  */
 async function waitForElement(state: ServerState, selector: MaestroSelector, ms: number): Promise<void> {
+  // A deadline that is not a number never comes, and the loop would never end.
+  if (!(ms > 0 && Number.isFinite(ms))) throw new Error(`A wait until needs more than 0 seconds, not ${ms / 1000}.`);
   const deadline = Date.now() + ms;
   for (;;) {
     if (selectorOnScreen((await state.session.snapshot()).nodes, selector)) return;
