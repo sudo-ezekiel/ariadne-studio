@@ -685,7 +685,7 @@ export function App() {
             setExpectMode(false);
             setWaitUntilMode((current) => !current);
           }}
-          onType={(text) => void type(text)}
+          onType={(text) => type(text)}
           onBack={() => void back()}
           onScroll={(direction) => void scroll(direction)}
           onRelaunch={() => void relaunch()}

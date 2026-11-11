@@ -157,6 +157,10 @@ export function toLiteNode(node: LiteSource): SnapshotNodeLite {
   if (node.rect) lite.rect = { ...node.rect };
   if (node.hittable !== undefined) lite.hittable = node.hittable;
   if (node.systemBar) lite.systemBar = node.systemBar;
+  // Flags only, so the screen can offer a text box over the focused field; never its value.
+  if (node.focused === true) lite.focused = true;
+  if (node.editable === true) lite.editable = true;
+  if (node.password === true) lite.password = true;
   return lite;
 }
 

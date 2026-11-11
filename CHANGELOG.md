@@ -16,6 +16,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   after it. A note above **Finish recording** says when a removed step had acted on the phone.
 - A **Wait** tile at the end of the steps: drag it between any two steps, or press **Add**. Every
   step's menu has **Add a wait after this step**, and a wait's seconds can be changed in its row.
+- Type straight into the screen: click a field and a text box appears over it. Press Enter to send
+  the text as one type step; a click elsewhere on the screen sends it first. Over a password field
+  the box shows dots. The **Text to type** box under the screen stays for fields that do not
+  report their focus, such as those in web pages.
 - Saved cases can take a wait after any step, or before step 1, and change its seconds, without
   recording again.
 

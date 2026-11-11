@@ -1,10 +1,11 @@
-import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
 import { DEFAULT_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
 import { RefreshIcon } from './Icons.tsx';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
+import { focusedField, inlineBox } from './inline-field.ts';
 import { PhoneButtons } from './PhoneButtons.tsx';
 import { ScreenMenu, type ScreenMenuChoice } from './ScreenMenu.tsx';
 
@@ -43,7 +44,8 @@ type Props = {
   onToggleExpect: () => void;
   onWaitUntil: (point: Point) => void;
   onToggleWaitUntil: () => void;
-  onType: (text: string) => void;
+  /** Settles when the text has been typed (or refused), so a click made meanwhile can follow it. */
+  onType: (text: string) => Promise<unknown>;
   onBack: () => void;
   onScroll: (direction: ScrollDirection) => void;
   onRelaunch: () => void;
@@ -234,12 +236,79 @@ export function Mirror(props: Props) {
   /** The drag being drawn, in viewport pixels. */
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
   const [menu, setMenu] = useState<{ at: Point; point: Point } | null>(null);
+  const screenBox = useRef<HTMLDivElement>(null);
+  /** How big the screen is drawn here, in CSS pixels, to place the text box over a field. */
+  const [drawn, setDrawn] = useState<{ width: number; height: number } | null>(null);
+  /** What is in the text box over the focused field; a ref too, for handlers that run before a render. */
+  const [typed, setTyped] = useState('');
+  const pending = useRef('');
+  /** The text being sent from the box, until the device has it. A click made meanwhile waits for it. */
+  const sending = useRef<Promise<unknown> | null>(null);
+  /** The last thing done here was a tap on the screen (or Enter in the box), so a focused field may take the keyboard. */
+  const focusAfter = useRef(false);
+  const fieldInput = useRef<HTMLInputElement>(null);
+
+  // Typing straight into the screen: only in plain tap mode, and only over a field the phone reports as focused.
+  const field = screen && !screen.hidden && !inputOff && !looking && !choosing ? focusedField(screen.nodes) : undefined;
+  const fieldShown = field !== undefined;
+  const hasScreen = screen !== null;
+  useEffect(() => {
+    const element = screenBox.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setDrawn({ width: element.clientWidth, height: element.clientHeight }));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasScreen]);
+  // Take the keyboard only after a tap here made a field focused; never on a refresh, so other inputs keep it.
+  useEffect(() => {
+    if (busy) return;
+    if (focusAfter.current && fieldShown) fieldInput.current?.focus();
+    focusAfter.current = false;
+  }, [busy, fieldShown]);
+
+  /** Sends what is in the box as one Type step. Returns undefined when there is nothing to send. */
+  const sendTyped = (): Promise<unknown> | undefined => {
+    const value = pending.current;
+    if (!value) return undefined;
+    pending.current = '';
+    setTyped('');
+    const typing = props.onType(value);
+    sending.current = typing;
+    const done = () => {
+      if (sending.current === typing) sending.current = null;
+    };
+    typing.then(done, done);
+    return typing;
+  };
+  /** Runs a press once text sent from the box has reached the device, so the steps read type, then the press. */
+  const afterTyping = (action: () => void) => {
+    const typing = sending.current;
+    if (typing) void typing.then(action, action);
+    else action();
+  };
+  const onFieldKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (pending.current) focusAfter.current = true;
+      void sendTyped();
+    } else if (event.key === 'Tab') {
+      void sendTyped();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      pending.current = '';
+      setTyped('');
+      event.currentTarget.blur();
+    }
+  };
 
   // A press becomes a tap, a long press or a swipe when it ends (classifyPointer).
   // Check mode keeps priority: a tap records a check, holds and drags do nothing.
   // The mouse wheel is left alone, so scrolling the page never records a step.
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (busy || !screen || event.button !== 0 || (usingPhone && !looking)) return;
+    // Text waiting in the box goes first. Its own busy state must not swallow this press.
+    void sendTyped();
+    if ((busy && !sending.current) || !screen || event.button !== 0 || (usingPhone && !looking)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     press.current = {
       pointerId: event.pointerId,
@@ -259,18 +328,23 @@ export function Mirror(props: Props) {
     const current = press.current;
     press.current = null;
     setDrag(null);
-    if (!current || !screen || busy || event.pointerId !== current.pointerId) return;
+    if (!current || !screen || (busy && !sending.current) || event.pointerId !== current.pointerId) return;
     const durationMs = event.timeStamp - current.startedAt;
     const gesture = classifyPointer({ durationMs, maxDistancePx: current.maxDistance });
-    if (choosing) {
-      if (gesture === 'tap') props.onChoose(current.point);
-    } else if (waitUntilMode) {
-      if (gesture === 'tap') props.onWaitUntil(current.point);
-    } else if (expectMode) {
-      if (gesture === 'tap') props.onExpect(current.point);
-    } else if (gesture === 'tap') props.onTap(current.point);
-    else if (gesture === 'hold') props.onLongPress(current.point);
-    else props.onSwipe(current.point, toViewport(event, screen), durationMs);
+    const to = toViewport(event, screen);
+    afterTyping(() => {
+      if (choosing) {
+        if (gesture === 'tap') props.onChoose(current.point);
+      } else if (waitUntilMode) {
+        if (gesture === 'tap') props.onWaitUntil(current.point);
+      } else if (expectMode) {
+        if (gesture === 'tap') props.onExpect(current.point);
+      } else if (gesture === 'tap') {
+        focusAfter.current = true;
+        props.onTap(current.point);
+      } else if (gesture === 'hold') props.onLongPress(current.point);
+      else props.onSwipe(current.point, to, durationMs);
+    });
   };
   const cancelPress = () => {
     press.current = null;
@@ -280,15 +354,19 @@ export function Mirror(props: Props) {
     const point = menu?.point;
     setMenu(null);
     if (!point) return;
-    if (choice === 'tap') props.onTap(point);
-    else if (choice === 'doubleTap') props.onDoubleTap(point);
-    else if (choice === 'longPress') props.onLongPress(point);
-    else props.onExpect(point);
+    afterTyping(() => {
+      if (choice === 'tap') {
+        focusAfter.current = true;
+        props.onTap(point);
+      } else if (choice === 'doubleTap') props.onDoubleTap(point);
+      else if (choice === 'longPress') props.onLongPress(point);
+      else props.onExpect(point);
+    });
   };
 
   const submitText = () => {
     if (!text) return;
-    props.onType(text);
+    void props.onType(text);
     setText('');
   };
 
@@ -328,6 +406,7 @@ export function Mirror(props: Props) {
         <div className="mirror-frame">
           {screen ? (
             <div
+              ref={screenBox}
               className={`screen ${busy ? 'screen-busy' : ''} ${looking ? 'screen-expect' : ''} ${choosing ? 'screen-choose' : ''} ${screen.width > screen.height ? 'screen-landscape' : ''}`}
               style={{ aspectRatio: `${screen.width} / ${screen.height}`, ['--screen-ratio' as string]: screen.width / screen.height }}
               onMouseMove={(event) => setHover(resolveNodeAt(screen.nodes, toViewport(event, screen)))}
@@ -339,7 +418,7 @@ export function Mirror(props: Props) {
               onContextMenu={(event) => {
                 event.preventDefault();
                 cancelPress();
-                if (busy || usingPhone || choosing) return;
+                if ((busy && !sending.current) || usingPhone || choosing) return;
                 setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen) });
               }}
             >
@@ -354,6 +433,30 @@ export function Mirror(props: Props) {
                   <line x1={drag.from.x} y1={drag.from.y} x2={drag.to.x} y2={drag.to.y} />
                   <circle cx={drag.from.x} cy={drag.from.y} r="1" />
                 </svg>
+              )}
+              {field && drawn && (
+                <input
+                  ref={fieldInput}
+                  className="field-input"
+                  type={field.password ? 'password' : 'text'}
+                  style={inlineBox(screen, drawn, field.rect)}
+                  value={typed}
+                  onChange={(event) => {
+                    pending.current = event.target.value;
+                    setTyped(event.target.value);
+                  }}
+                  onKeyDown={onFieldKey}
+                  onBlur={() => void sendTyped()}
+                  // A press in the box is typing, not a tap on the phone; the right-click menu is the browser's, for Paste.
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerUp={(event) => event.stopPropagation()}
+                  onContextMenu={(event) => event.stopPropagation()}
+                  placeholder={(!field.password && (field.label ?? field.contentDescription)) || 'Type, then Enter'}
+                  title="Enter types this into the field on the phone. Escape leaves it."
+                  aria-label="Type into the field on the phone"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               )}
             </div>
           ) : (

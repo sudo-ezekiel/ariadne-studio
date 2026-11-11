@@ -31,6 +31,12 @@ export type SnapshotNodeLite = {
   rect?: Rect;
   hittable?: boolean;
   systemBar?: 'status' | 'navigation';
+  /** The field has the device's focus: the screen draws a text box over it. Present only when true. */
+  focused?: boolean;
+  /** Takes text. Present only when true. */
+  editable?: boolean;
+  /** A password field, so the text box over it hides what is typed. Present only when true; never the field's value. */
+  password?: boolean;
 };
 
 export type ScreenState = {

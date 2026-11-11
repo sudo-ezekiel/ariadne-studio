@@ -685,6 +685,24 @@ button.menu-item {
   background: rgba(30, 125, 60, 0.12);
 }
 
+/* Typing straight into the screen: a real input over the field that has focus on the phone. */
+.screen .field-input {
+  position: absolute;
+  padding: 0 8px;
+  border: 1px solid var(--thread);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: text;
+  user-select: text;
+}
+
+.screen .field-input:focus {
+  border-color: var(--thread);
+  outline: 2px solid var(--thread);
+  outline-offset: 0;
+}
+
 .mirror-empty {
   align-self: center;
   display: flex;

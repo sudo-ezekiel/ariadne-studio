@@ -132,7 +132,9 @@ Steps kept from a saved case while you **Re-record from here** or **Add steps af
 
 ## Typing and secrets
 
-Use the **Text to type** box plus **Type** to type into the field that has focus on the device.
+Click a field on the screen, and a text box appears right over it with the cursor in it. Type, then press Enter (or Tab) to send the text to the phone as one type step. Escape clears the box and leaves the field. Clicking somewhere else on the screen with text still in the box sends the text first, then makes the click, so the steps stay in that order. Over a password field the box shows dots, not the text.
+
+Some fields do not tell Ariadne they have focus, for example inside a web page or a custom drawn control, so no box appears. For those, click the field, then use the **Text to type** box under the screen and press **Type**.
 
 Consecutive plain typing merges into one step. A placeholder is always a step of its own.
 

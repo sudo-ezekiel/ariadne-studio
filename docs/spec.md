@@ -364,7 +364,12 @@ Functional and legible beats pretty. Layout:
   cursor using the lite nodes (pure client-side hit test, same rules as the server; share
   the function from core if the bundling is simple, otherwise copy it and note that).
   Below the mirror: a text field plus a Type button (POSTs `/api/action/type`), and a Back
-  button.
+  button. Since 2026-11-11 the mirror also draws a real `<input>` over the node that is
+  `focused` and `editable` (or `password`, then `type="password"`), in plain tap mode only.
+  `toLiteNode` passes those three flags, never a value. It takes focus only after a tap on the
+  mirror; Enter or Tab sends it through the same Type call, Escape clears it, and a mirror
+  click with text pending sends the text before the click. The text field below stays for
+  fields the snapshot does not report.
 - Right: case panel. When no case is active: a name field and Start case. When active: the
   case name, the live step list (one row per step: index, kind, selector shown as
   `id: ...` or `text: ...` or `point`, thumbnail of the step screenshot), Finish case and
