@@ -244,12 +244,25 @@ export function App() {
   // with no switch between them. Once per recording: a phone that cannot be read, or that stopped
   // sending touches, is not asked again until the next one.
   const phoneTriedFor = useRef<string | undefined>(undefined);
+  /** The setting and the recording as they are now, for a start that settles after either changed. */
+  const followPhoneNow = useRef(followPhone);
+  followPhoneNow.current = followPhone;
+  const recordingNow = useRef(recordingId);
+  recordingNow.current = recordingId;
   useEffect(() => {
     if (!recordingId || !followPhone || !session.open || phone.active || phoneTriedFor.current === recordingId) return;
     phoneTriedFor.current = recordingId;
     api
       .phoneStart()
-      .then(setPhone)
+      .then((next) => {
+        if (recordingNow.current !== recordingId) return;
+        // Turned off while the phone was being started: stop it rather than follow it.
+        if (!followPhoneNow.current) {
+          if (next.active) void api.phoneStop().then(setPhone, () => undefined);
+          return;
+        }
+        setPhone(next);
+      })
       .catch((error: unknown) => {
         if (error instanceof ApiError && error.code === 'NO_TOUCHSCREEN') return;
         toast(`Only the screen here records this time: ${error instanceof Error ? error.message : String(error)}`, 'info');
@@ -263,6 +276,7 @@ export function App() {
       // Private windows may refuse; the choice then lasts until the page closes.
     }
     setFollowPhoneChoice(on);
+    followPhoneNow.current = on;
     if (on) phoneTriedFor.current = undefined;
     else if (phone.active) void api.phoneStop().then(setPhone, () => undefined);
   };

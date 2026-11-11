@@ -4,7 +4,7 @@ import type { DeviceSnapshot } from '@ariadne/core';
 import { describe, expect, it } from 'vitest';
 import { toLiteNode } from '../src/server/state.ts';
 import type { SnapshotNodeLite } from '../src/shared/api-types.ts';
-import { focusedField, INLINE_MIN_HEIGHT, INLINE_MIN_WIDTH, inlineBox } from '../src/ui/components/inline-field.ts';
+import { fieldKey, focusedField, INLINE_MIN_HEIGHT, INLINE_MIN_WIDTH, inlineBox } from '../src/ui/components/inline-field.ts';
 
 type SnapshotNode = DeviceSnapshot['nodes'][number];
 
@@ -36,6 +36,39 @@ describe('focusedField', () => {
   it('skips a focused field with no place on the screen', () => {
     expect(focusedField([{ focused: true, editable: true }])).toBeUndefined();
     expect(focusedField([{ focused: true, editable: true, rect: { x: 10, y: 10, width: 0, height: 40 } }])).toBeUndefined();
+  });
+});
+
+describe('fieldKey', () => {
+  const email: SnapshotNodeLite = { identifier: 'input', label: 'Email', focused: true, editable: true, rect };
+
+  it('differs between a password field and a plain field that share an identifier', () => {
+    expect(fieldKey({ ...email, password: true })).not.toBe(fieldKey(email));
+  });
+
+  it('keeps the key of the same field at another place, since a field moves when the keyboard opens', () => {
+    expect(fieldKey({ ...email, rect: { ...rect, y: 100 } })).toBe(fieldKey(email));
+  });
+
+  it('keeps the key when only the focus changes', () => {
+    expect(fieldKey({ ...email, focused: false })).toBe(fieldKey(email));
+  });
+
+  it('changes with the label', () => {
+    expect(fieldKey({ ...email, label: 'Username' })).not.toBe(fieldKey(email));
+  });
+
+  it('changes with the content description', () => {
+    expect(fieldKey({ ...email, contentDescription: 'Work email' })).not.toBe(fieldKey(email));
+  });
+
+  it('changes with the identifier and the role', () => {
+    expect(fieldKey({ ...email, identifier: 'other' })).not.toBe(fieldKey(email));
+    expect(fieldKey({ ...email, role: 'search' })).not.toBe(fieldKey(email));
+  });
+
+  it('does not run two different fields together when one value is empty', () => {
+    expect(fieldKey({ label: 'ab' })).not.toBe(fieldKey({ identifier: 'a', label: 'b' }));
   });
 });
 

@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DriverInstallRefused, type DeviceSnapshot, type MaestroRunner, type OpenOptions, type PhoneInput, type PhoneInputTools, type Point, type Rect, type XiaomiPhone } from '@ariadne/core';
 import { buildServer } from '../src/server/index.ts';
+import { PhoneCapture } from '../src/server/phone-capture.ts';
 import { checkSetup, type SetupTools } from '../src/server/setup.ts';
 import { defaultInstallIo, ToolInstaller } from '../src/server/tool-install.ts';
 import type { DeviceLike } from '../src/server/state.ts';
@@ -171,7 +172,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   for (const made of rigs) {
     await made.app.close();
-    await rm(made.dir, { recursive: true, force: true });
+    await rm(made.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
   rigs = [];
 });
@@ -183,18 +184,18 @@ async function call(r: Rig, method: 'GET' | 'POST' | 'PUT' | 'PATCH', url: strin
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor(check: () => boolean | Promise<boolean>, what: string): Promise<void> {
-  const until = Date.now() + 4000;
+async function waitFor(check: () => boolean | Promise<boolean>, what: string, timeoutMs = 4000): Promise<void> {
+  const until = Date.now() + timeoutMs;
   while (!(await check())) {
     if (Date.now() > until) throw new Error(`Timed out waiting for ${what}`);
     await sleep(10);
   }
 }
 
-/** Waits for the snapshot loop to have seen the screen a few times. */
+/** Waits for the snapshot loop to have seen the screen a few times, allowing for the slow listening pace. */
 async function settled(r: Rig, count = 3): Promise<void> {
   const target = r.device.snapshots + count;
-  await waitFor(() => r.device.snapshots >= target, 'snapshots');
+  await waitFor(() => r.device.snapshots >= target, 'snapshots', 4000 + count * 500);
 }
 
 async function currentSteps(r: Rig): Promise<Array<Record<string, any>>> {
@@ -971,6 +972,141 @@ describe('the two paces of the capture', () => {
     expect(all.map((step) => step.kind)).toEqual(['tap', 'type', 'tap']);
     expect(all.filter((step) => step.kind === 'type').map((step) => step.text)).toEqual(['hello']);
     expect(steps).toHaveLength(3);
+  });
+});
+
+describe('a finger on the phone while the screen here is acting', () => {
+  const SECRET = 'hunter2-Sup3r';
+
+  /** Delays the moment the studio tells the capture that the screen here has acted; resolves once it has. */
+  function slowAnswer(): Promise<void> {
+    const original = PhoneCapture.prototype.screenActed;
+    return new Promise<void>((resolve) => {
+      vi.spyOn(PhoneCapture.prototype, 'screenActed').mockImplementation(function (this: PhoneCapture) {
+        setTimeout(() => {
+          original.call(this);
+          resolve();
+        }, 500);
+      });
+    });
+  }
+
+  it('keeps a password typed on the phone while the screen here has not yet been answered', async () => {
+    const r = await rig();
+    r.device.nodes = appScreen([field('pw', 900, { focused: true, password: true, value: '' }), ...keyboardNodes()]);
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    // The answer to the screen here is slow to arrive, so the phone is used before screenActed() runs.
+    const acted = slowAnswer();
+    expect((await call(r, 'POST', '/api/action/tap', { x: SIGN_IN.x, y: SIGN_IN.y })).status).toBe(200);
+    r.device.nodes = appScreen([field('pw', 900, { focused: true, password: true, value: SECRET, label: SECRET }), ...keyboardNodes()]);
+    await finger(r, KEY);
+    await finger(r, KEY);
+    await sleep(150);
+    await acted;
+    await finger(r, REGISTER);
+    const steps = await waitForSteps(r, 3);
+    expect(steps.map((step) => step.kind)).toEqual(['tap', 'type', 'tap']);
+    expect(steps[1]).toMatchObject({ text: '${PASSWORD}', review: 'password' });
+    expect(JSON.stringify(steps)).not.toContain(SECRET);
+  });
+});
+
+describe('a phone start that is no longer wanted when it finishes', () => {
+  /** Makes the read of the touchscreen wait until `release()`, and says when it has begun. */
+  function slowRead(r: Rig) {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let begin: () => void = () => undefined;
+    const begun = new Promise<void>((resolve) => {
+      begin = resolve;
+    });
+    r.tools.read.mockImplementation(async () => {
+      begin();
+      await gate;
+      return INPUT;
+    });
+    return { release, begun };
+  }
+
+  it('stays off, with the touch watch ended, when a stop came first', async () => {
+    const r = await rig();
+    await openAndRecord(r);
+    const read = slowRead(r);
+    const start = call(r, 'POST', '/api/phone/start');
+    await read.begun;
+    expect((await call(r, 'POST', '/api/phone/stop')).status).toBe(200);
+    read.release();
+    expect((await start).status).toBe(200);
+    expect(await status(r)).toMatchObject({ active: false });
+    expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
+  });
+
+  it('stays off, with the touch watch ended, when the case was finished first', async () => {
+    const r = await rig();
+    await openAndRecord(r);
+    await call(r, 'POST', '/api/action/tap', { x: SIGN_IN.x, y: SIGN_IN.y });
+    const read = slowRead(r);
+    const start = call(r, 'POST', '/api/phone/start');
+    await read.begun;
+    const finish = call(r, 'POST', '/api/case/finish');
+    read.release();
+    expect((await start).status).toBe(200);
+    expect((await finish).status).toBe(200);
+    expect(await status(r)).toMatchObject({ active: false });
+    expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
+  });
+
+  it('stays off, with the touch watch ended, when the case was discarded first', async () => {
+    const r = await rig();
+    await openAndRecord(r);
+    const read = slowRead(r);
+    const start = call(r, 'POST', '/api/phone/start');
+    await read.begun;
+    const discard = call(r, 'POST', '/api/case/discard');
+    read.release();
+    expect((await start).status).toBe(200);
+    expect((await discard).status).toBe(200);
+    expect(await status(r)).toMatchObject({ active: false });
+    expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
+  });
+
+  it('stays off, with the touch watch ended, when the session was closed first', async () => {
+    const r = await rig();
+    await openAndRecord(r);
+    const read = slowRead(r);
+    const start = call(r, 'POST', '/api/phone/start');
+    await read.begun;
+    const closed = call(r, 'POST', '/api/session/close');
+    read.release();
+    await start;
+    await closed;
+    expect(await status(r)).toMatchObject({ active: false });
+    expect(r.tools.watch.mock.calls.length).toBe(r.stopped());
+  });
+
+  it('still starts when nothing got in the way of a slow read', async () => {
+    const r = await rig();
+    await openAndRecord(r);
+    const read = slowRead(r);
+    const start = call(r, 'POST', '/api/phone/start');
+    await read.begun;
+    read.release();
+    expect((await start).body).toMatchObject({ active: true });
+    expect(r.tools.watch).toHaveBeenCalledTimes(1);
+    expect(r.stopped()).toBe(0);
+  });
+});
+
+describe('closing the app after the touch stream ended by itself', () => {
+  it('waits for the stop to write the phone session\'s counts', async () => {
+    const r = await rig();
+    await startPhone(r);
+    r.endWatch();
+    await r.app.close();
+    expect(existsSync(join(r.dir, 'diagnostics', 'phone-sessions.jsonl'))).toBe(true);
   });
 });
 

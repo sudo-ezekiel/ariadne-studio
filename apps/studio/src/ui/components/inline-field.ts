@@ -21,6 +21,15 @@ export function focusedField(nodes: readonly SnapshotNodeLite[]): (SnapshotNodeL
 }
 
 /**
+ * Which field the text in the box was typed for. When the focus moves to another field the text
+ * is dropped, so it is never typed into that field, and a password never shows in a plain box.
+ * The place is left out: a field moves when the keyboard opens.
+ */
+export function fieldKey(field: SnapshotNodeLite): string {
+  return JSON.stringify([field.identifier ?? '', field.password === true, field.contentDescription ?? '', field.label ?? '', field.role ?? '']);
+}
+
+/**
  * Where the box goes on the mirror, in CSS pixels from its top left corner.
  * `screen` is the device's size (the space node rects use), `mirror` the size the
  * screen is drawn at. A field drawn too small grows around its centre, and the box

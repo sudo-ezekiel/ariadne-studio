@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
 import type { PhoneStatus, ScreenState, SnapshotNodeLite } from '../../shared/api-types.ts';
 import { RefreshIcon } from './Icons.tsx';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
-import { focusedField, inlineBox } from './inline-field.ts';
+import { fieldKey, focusedField, inlineBox } from './inline-field.ts';
 import { PhoneButtons } from './PhoneButtons.tsx';
 import { ScreenMenu, type ScreenMenuChoice } from './ScreenMenu.tsx';
 
@@ -243,6 +243,16 @@ export function Mirror(props: Props) {
   // Typing straight into the screen: only in plain tap mode, and only over a field the phone reports as focused.
   const field = screen && !screen.hidden && !inputOff && !following && !looking && !choosing ? focusedField(screen.nodes) : undefined;
   const fieldShown = field !== undefined;
+  // Text in the box belongs to the field it was typed for. Dropped before the screen is painted
+  // when that field goes, so a password never shows, or is typed, in the next one.
+  const typedFor = field ? fieldKey(field) : undefined;
+  const draftFor = useRef(typedFor);
+  useLayoutEffect(() => {
+    if (draftFor.current === typedFor) return;
+    draftFor.current = typedFor;
+    pending.current = '';
+    setTyped('');
+  }, [typedFor]);
   const hasScreen = screen !== null;
   useEffect(() => {
     const element = screenBox.current;
