@@ -562,6 +562,33 @@ describe('typing into a password field', () => {
     expect(JSON.stringify(await currentSteps(r))).not.toContain(SECRET);
   });
 
+  it('records the email, the tap and the password placeholder, and no erase, when both fields share one identifier', async () => {
+    const r = await rig();
+    const SHARED = 'RNE__Input__text-input';
+    const PASSWORD_AT: Point = { x: 500, y: 1060 };
+    const email = (focused: boolean, value: string) => field(SHARED, 800, { focused, value });
+    const password = (focused: boolean, value = '') => field(SHARED, 1000, { focused, password: true, value });
+    r.device.nodes = appScreen([email(true, ''), password(false), ...keyboardNodes()]);
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    r.device.nodes = appScreen([email(true, 'ba@example.com'), password(false), ...keyboardNodes()]);
+    await settled(r);
+    await finger(r, PASSWORD_AT);
+    r.device.nodes = appScreen([email(false, 'ba@example.com'), password(true, SECRET), ...keyboardNodes()]);
+    await settled(r);
+    await finger(r, KEY);
+    await settled(r);
+    await finger(r, KEY);
+    await settled(r);
+    await finger(r, REGISTER);
+    const steps = await waitForSteps(r, 4);
+    expect(steps.map((step) => step.kind)).toEqual(['type', 'tap', 'type', 'tap']);
+    expect(steps[0]?.text).toBe('ba@example.com');
+    expect(steps[2]).toMatchObject({ text: '${PASSWORD}', review: 'password' });
+    expect(steps.some((step) => step.kind === 'erase')).toBe(false);
+    expect(JSON.stringify(steps)).not.toContain(SECRET);
+  });
+
   it('uses the saved value whose name mentions pass for the placeholder', async () => {
     const r = await rig();
     await writeFile(join(r.dir, '.env'), 'USERNAME=maria\nADMIN_PASS=whatever\n');
@@ -747,6 +774,9 @@ describe('the lock screen while recording', () => {
   it('asks the phone at most once a second across many snapshots', async () => {
     const r = await rig();
     await startPhone(r);
+    // A touch makes the capture follow, so snapshots come back to back.
+    await finger(r, SIGN_IN);
+    await waitFor(async () => (await status(r)).following === true, 'following');
     r.tools.locked.mockClear();
     const snapshots = r.device.snapshots;
     const started = Date.now();
@@ -758,17 +788,24 @@ describe('the lock screen while recording', () => {
 });
 
 describe('the studio while the phone is the input', () => {
-  it('refuses actions from the screen with 409 USING_THE_PHONE', async () => {
+  it('lets a tap from the screen through and records its step', async () => {
     const r = await rig();
     await startPhone(r);
-    expect(await call(r, 'POST', '/api/action/tap', { x: 1, y: 1 })).toMatchObject({ status: 409, body: { error: { code: 'USING_THE_PHONE' } } });
-    expect(await call(r, 'POST', '/api/action/back')).toMatchObject({ status: 409, body: { error: { code: 'USING_THE_PHONE' } } });
+    const response = await call(r, 'POST', '/api/action/tap', { x: SIGN_IN.x, y: SIGN_IN.y });
+    expect(response.status).toBe(200);
+    expect(response.body.step).toMatchObject({ kind: 'tap', selector: { kind: 'text', value: 'Sign in' } });
+    expect(await currentSteps(r)).toMatchObject([{ index: 1, kind: 'tap' }]);
   });
 
-  it('refuses running a block with 409 USING_THE_PHONE', async () => {
+  it('lets running a block through and records it as one step', async () => {
     const r = await rig();
+    await mkdir(join(r.dir, 'blocks'), { recursive: true });
+    await writeFile(join(r.dir, 'blocks', 'second.yaml'), `appId: ${APP}\n---\n- back\n`);
     await startPhone(r);
-    expect(await call(r, 'POST', '/api/case/block', { file: 'blocks/login.yaml' })).toMatchObject({ status: 409, body: { error: { code: 'USING_THE_PHONE' } } });
+    const response = await call(r, 'POST', '/api/case/block', { file: 'blocks/second.yaml' });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.step).toMatchObject({ kind: 'block', file: 'blocks/second.yaml' });
+    expect(await currentSteps(r)).toMatchObject([{ kind: 'block', file: 'blocks/second.yaml' }]);
   });
 
   it('still allows a check on the screen', async () => {
@@ -858,6 +895,82 @@ describe('the studio while the phone is the input', () => {
   it('refuses a screen refresh without a session', async () => {
     const r = await rig();
     expect(await call(r, 'POST', '/api/screen/refresh')).toMatchObject({ status: 409, body: { error: { code: 'NO_SESSION' } } });
+  });
+});
+
+describe('the two paces of the capture', () => {
+  it('is listening, not following, right after it starts', async () => {
+    const r = await rig();
+    await openAndRecord(r);
+    expect(await call(r, 'POST', '/api/phone/start')).toMatchObject({ status: 200, body: { active: true, following: false } });
+    expect(await status(r)).toMatchObject({ active: true, following: false });
+  });
+
+  it('is off, and not following, before it starts', async () => {
+    const r = await rig();
+    expect(await status(r)).toMatchObject({ active: false, following: false });
+  });
+
+  it('follows from the first touch and counts that as a change in the revision', async () => {
+    const r = await rig();
+    await startPhone(r);
+    const before = (await status(r)).revision;
+    await finger(r, SIGN_IN);
+    await waitFor(async () => (await status(r)).following === true, 'following');
+    expect((await status(r)).revision).toBeGreaterThan(before);
+  });
+
+  it('takes snapshots more slowly while listening than while following', async () => {
+    const r = await rig();
+    await startPhone(r);
+    const listeningFrom = r.device.snapshots;
+    await sleep(1000);
+    const listening = r.device.snapshots - listeningFrom;
+    await finger(r, SIGN_IN);
+    await waitFor(async () => (await status(r)).following === true, 'following');
+    const followingFrom = r.device.snapshots;
+    await sleep(300);
+    const following = r.device.snapshots - followingFrom;
+    expect(listening).toBeLessThanOrEqual(5);
+    expect(following).toBeGreaterThan(listening);
+    expect(following).toBeGreaterThanOrEqual(6);
+  });
+
+  it('writes the text typed on the phone before a check from the screen, and listens again afterwards', async () => {
+    const r = await rig();
+    r.device.nodes = appScreen([field('f', 900, { focused: true, value: '' })]);
+    await startPhone(r);
+    await finger(r, { x: 500, y: 950 });
+    await waitForSteps(r, 1);
+    r.device.nodes = appScreen([field('f', 900, { focused: true, value: 'maria' })]);
+    await settled(r);
+    expect((await status(r)).following).toBe(true);
+    const checked = await call(r, 'POST', '/api/case/expect', { x: SIGN_IN.x, y: SIGN_IN.y });
+    expect(checked.status).toBe(200);
+    const steps = await currentSteps(r);
+    expect(steps.map((step) => step.kind)).toEqual(['tap', 'type', 'expect']);
+    expect(steps[1]?.text).toBe('maria');
+    expect((await status(r)).following).toBe(false);
+  });
+
+  it('does not write text typed from the screen a second time as the phone\'s typing', async () => {
+    const r = await rig();
+    r.device.nodes = appScreen([field('f', 900, { focused: true, value: '' })]);
+    await startPhone(r);
+    r.device.typeText = async (text: string) => {
+      r.device.nodes = appScreen([field('f', 900, { focused: true, value: text })]);
+    };
+    await finger(r, SIGN_IN);
+    await waitForSteps(r, 1);
+    expect((await call(r, 'POST', '/api/action/type', { text: 'hello' })).status).toBe(200);
+    await settled(r);
+    await finger(r, REGISTER);
+    const steps = await waitForSteps(r, 3);
+    await sleep(200);
+    const all = await currentSteps(r);
+    expect(all.map((step) => step.kind)).toEqual(['tap', 'type', 'tap']);
+    expect(all.filter((step) => step.kind === 'type').map((step) => step.text)).toEqual(['hello']);
+    expect(steps).toHaveLength(3);
   });
 });
 

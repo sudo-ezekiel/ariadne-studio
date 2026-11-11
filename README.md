@@ -61,7 +61,7 @@ It starts the studio on http://127.0.0.1:4711 and opens it in your browser.
    `com.example.claims`) and press **Connect**. The screen appears.
 2. In the **Record** tab, name the case and press **Start recording**. The app restarts, so
    the recording begins where a run will begin.
-3. Use the app: click in the screen here, or press **Use the phone** and use your fingers.
+3. Use the app: click in the screen here, or use the phone itself with your fingers.
 4. Toggle **Check** and click what must be visible, then toggle it off.
 5. Press **Finish recording**, then **Save case**.
 6. Open the case in the **Cases** tab and press **Run**. Each step shows passed or failed,
@@ -97,7 +97,7 @@ is where it goes.
 |---|---|---|
 | Android emulator | Used for development and the smoke tests | Nothing extra |
 | POCO F5 Pro, HyperOS 3 | Tested with real fingers | Install via USB, USB debugging (Security settings), **Prepare this phone** |
-| Samsung Galaxy A16, One UI 6.1 | Tested over Samsung's Remote Test Lab: Connect, recording on the screen here and Run. **Use the phone** cannot work on a remote phone | Nothing extra there; on your own phone, look at **Auto Blocker** if commands fail |
+| Samsung Galaxy A16, One UI 6.1 | Tested over Samsung's Remote Test Lab: Connect, recording on the screen here and Run. Recording on the phone itself cannot work on a remote phone | Nothing extra there; on your own phone, look at **Auto Blocker** if commands fail |
 | OPPO, Realme, OnePlus, vivo, iQOO, Huawei, Honor | Not tested | Maker switches, from other tools' docs and user reports |
 | Google Pixel | Not tested | No extra switches known |
 | Motorola, Nothing, Tecno, Infinix | Not tested | Nothing known either way |
@@ -106,10 +106,10 @@ is where it goes.
 
 - Android only. No iOS.
 - The desktop app is tested end to end on Linux. On real Windows, Connect, recording and Run have
-  worked on one computer and one phone; typing, gestures and **Use the phone** are not tried there
+  worked on one computer and one phone; typing, gestures and recording on the phone itself are not tried there
   yet. There is no macOS build yet.
 - One device at a time. Run blocks the studio until Maestro finishes, with a limit of 5 minutes.
-- **Use the phone** needs a phone you can touch. Gesture navigation is unproven on a real
+- Recording on the phone itself needs a phone you can touch. Gesture navigation is unproven on a real
   phone, and other phones report touches differently, so expect some to need work.
 - A tap on a value that changes, such as a calculated result, fails on a later run.
 - Screenshots and run videos keep whatever the screen showed. Keep `runs/` out of version

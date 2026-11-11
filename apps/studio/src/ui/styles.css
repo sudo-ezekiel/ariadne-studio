@@ -764,6 +764,15 @@ button.link-on-dark:hover:not(:disabled) {
   gap: 8px;
 }
 
+/* Said in words beside Finish recording, in the thread's colour: no chip, no background. */
+.stage-following {
+  margin-right: 6px;
+  color: var(--thread-strong);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Takes the column's width and never sets it, so the panels stay put when the words change. */
 .phone-banner {
   align-self: stretch;
@@ -1579,6 +1588,21 @@ li.step.step-tail:hover {
   background-color: transparent;
 }
 
+/* Wait, Check and Wait until stay in reach at the foot of the panel, however long the recording gets. */
+/* It reaches down over the panel's 16 px bottom padding, so no step shows through underneath. */
+li.step.step-tray {
+  position: sticky;
+  bottom: -16px;
+  z-index: 1;
+  padding-bottom: 24px;
+  border-top: 1px solid var(--line-2);
+  background-color: var(--panel);
+}
+
+li.step.step-tray:hover {
+  background-color: var(--panel);
+}
+
 .stack-tail {
   grid-column: 2 / -1;
   color: var(--ink-3);
@@ -1643,8 +1667,7 @@ li.step.step-tail:hover {
 }
 
 .tray-hint {
-  flex: 1;
-  min-width: 180px;
+  flex: 1 0 100%;
   color: var(--ink-2);
   font-size: 12px;
 }
@@ -2043,6 +2066,12 @@ button.palette-add {
 
 .thumb-replay {
   border-color: var(--sea);
+}
+
+.thumb-waiting {
+  width: 29px;
+  background: var(--panel-2);
+  border-color: var(--line-2);
 }
 
 .shots {

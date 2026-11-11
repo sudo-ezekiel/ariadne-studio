@@ -69,7 +69,7 @@ Click the elements in the screen. Each click is sent to the device and listed as
 
 ## Add a check
 
-Toggle **Check**, under the screen. The outline turns green and dashed. Click **Dentist** in the list. This records that the event is visible, without touching the device. Toggle **Check** off.
+Toggle **Check**, at the end of the steps in the Record tab. The outline turns green and dashed. Click **Dentist** in the list. This records that the event is visible, without touching the device. Toggle **Check** off.
 
 ## Finish
 

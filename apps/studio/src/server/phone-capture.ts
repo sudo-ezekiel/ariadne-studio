@@ -1,9 +1,15 @@
 // Recording from a finger on the phone. The mirror resolves a click before it
 // presses, but a finger has already pressed by the time the studio hears of
-// it, so while this runs the studio snapshots the screen constantly and reads
-// each touch against the last snapshot from before it. What the touch meant is
-// decided in @ariadne/core's phone-steps; this file owns the loop and the
-// recorder calls.
+// it, so the studio keeps snapshots of the screen and reads each touch against
+// the last one from before it. What the touch meant is decided in @ariadne/core's
+// phone-steps; this file owns the loop and the recorder calls.
+//
+// It runs for the whole of a recording, in one of two paces. Listening: touches
+// are read and a snapshot is taken now and then, so the first touch on the phone
+// has a recent screen to be read against. Following: from that first touch on,
+// snapshots come back to back. Anything done through the screen here goes back
+// to listening, after writing what was typed on the phone, so the steps keep the
+// order they happened in.
 //
 // getevent is effectively a keylogger: a touch on the on-screen keyboard is a
 // key press. Touches are never logged or stored, keyboard ones are dropped once
@@ -42,8 +48,12 @@ import type { PhonePrepareResponse, PhoneStatus } from '../shared/api-types.ts';
 import { HttpError, MAX_SWIPE_MS, MIN_SWIPE_MS, captureInto, captureScratch, phoneLocked, projectEnv, requireCase, requireSession } from './common.ts';
 import { enqueue, type ServerState } from './state.ts';
 
-/** Pause between snapshots; a snapshot itself takes about 100 ms on a phone. */
+/** Pause between snapshots while following; a snapshot itself takes about 100 ms on a phone. */
 const SNAPSHOT_GAP_MS = 20;
+/** Pause between snapshots while listening: the newest is then well inside STALE_SNAPSHOT_MS. */
+const LISTEN_GAP_MS = 400;
+/** Following goes back to listening once the phone has been left alone this long. */
+const FOLLOW_IDLE_MS = 15_000;
 /** Snapshots kept to read touches against. */
 const HISTORY = 40;
 /** How long a touch waits for a snapshot that began after it... */
@@ -104,6 +114,13 @@ export class PhoneCapture {
   private viewport: Viewport | undefined;
   private rotation: Rotation = 0;
   private stopped = false;
+  /** Snapshots back to back, because the tester is using the phone. */
+  private following = false;
+  private lastTouchAt = 0;
+  /** The screen here is acting on the phone: what it types is not the tester's. */
+  private screenActing = false;
+  /** Ends the pause between two snapshots early, when a touch begins. */
+  private wake: (() => void) | undefined;
   private paused = false;
   private cameBack = false;
   private locked = false;
@@ -148,6 +165,7 @@ export class PhoneCapture {
   status(): PhoneStatus {
     return {
       active: true,
+      following: this.following,
       paused: this.paused,
       revision: this.revision,
       ...(this.notice ? { notice: { id: this.noticeCount, text: this.notice } } : {}),
@@ -157,6 +175,7 @@ export class PhoneCapture {
   /** Ends the capture: finishes what is in hand, then leaves the screen current for the end checks. */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.wake?.();
     this.stopWatching();
     await this.loop;
     await this.gestures;
@@ -197,6 +216,7 @@ export class PhoneCapture {
 
   private onLine(line: string): void {
     const gesture = this.reader.read(line, Date.now());
+    if (this.reader.touching || gesture) this.touched();
     if (!gesture) return;
     this.lastUpAt = gesture.upAt;
     this.gestures = this.gestures
@@ -204,9 +224,57 @@ export class PhoneCapture {
       .catch((error: unknown) => console.error(`[studio] could not record a touch: ${describeDeviceError(error).message}`));
   }
 
+  /** A finger is on the phone: follow it. */
+  private touched(): void {
+    this.lastTouchAt = Date.now();
+    this.screenActing = false;
+    if (this.following) return;
+    this.following = true;
+    this.revision += 1;
+    this.wake?.();
+  }
+
+  /** Waits `ms`, or less when a touch begins. */
+  private rest(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(done, ms);
+      function done() {
+        clearTimeout(timer);
+        resolve();
+      }
+      this.wake = done;
+    });
+  }
+
+  /**
+   * The screen here is about to act on the phone. What was typed on the phone
+   * is written first, so the steps keep their order, and the pace drops back.
+   */
+  async yieldToScreen(): Promise<void> {
+    this.screenActing = true;
+    await this.gestures;
+    const last = this.history.at(-1);
+    if (this.following && last && !last.outside) this.noteField(last);
+    await this.flushTyping();
+    this.cameBack = false;
+    if (!this.following) return;
+    this.following = false;
+    this.revision += 1;
+  }
+
+  /** The screen here has acted. Text it typed into a field is already a step, so the field is followed afresh. */
+  screenActed(): void {
+    this.screenActing = false;
+    this.typing = undefined;
+  }
+
   private async watchScreen(): Promise<void> {
     let failures = 0;
     while (!this.stopped) {
+      if (this.following && !this.reader.touching && Date.now() - this.lastTouchAt > FOLLOW_IDLE_MS) {
+        this.following = false;
+        this.revision += 1;
+      }
       try {
         await this.see();
         failures = 0;
@@ -219,7 +287,7 @@ export class PhoneCapture {
           return;
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_GAP_MS));
+      await this.rest(this.following ? SNAPSHOT_GAP_MS : LISTEN_GAP_MS);
     }
   }
 
@@ -244,7 +312,7 @@ export class PhoneCapture {
     const screen: PhoneScreen = { nodes: snapshot.nodes, viewport, startedAt, endedAt, ...(snapshot.keyboard ? { keyboard: snapshot.keyboard } : {}) };
     const app = foregroundApp(screen);
     this.trackApp(app, await this.lockScreenUp());
-    if (!this.paused) this.noteField(screen);
+    if (!this.paused && !this.screenActing) this.noteField(screen);
     this.history.push({ ...screen, ...(app ? { app } : {}), outside: this.paused });
     if (this.history.length > HISTORY) this.history.shift();
   }
@@ -493,7 +561,7 @@ export async function stopPhoneCapture(state: ServerState): Promise<void> {
 
 function phoneStatus(state: ServerState): PhoneStatus {
   if (state.phone) return state.phone.status();
-  return { active: false, paused: false, revision: 0, ...(state.phoneError ? { error: state.phoneError } : {}) };
+  return { active: false, following: false, paused: false, revision: 0, ...(state.phoneError ? { error: state.phoneError } : {}) };
 }
 
 /** Puts Maestro's driver on the phone, saying why when it does not go on. */

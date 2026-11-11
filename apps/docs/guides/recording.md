@@ -24,13 +24,13 @@ The screen takes the gestures a finger would make, and each one is a step. Hover
 
 The mouse wheel does nothing over the screen, so scrolling the page never records a step.
 
-## Use the phone
+## Use the phone itself
 
-You can do the steps on the phone itself instead of on the screen here. While recording, click **Use the phone** in the bar above the screen, then use the app with your own fingers. Steps appear in the Record tab as you go, and the screen here catches up after each one.
+While you record, you can also do the steps on the phone itself, with your own fingers. There is nothing to switch on: touch the phone and the bar above the screen says **Following the phone**. Steps appear in the Record tab as you go, and the screen here catches up after each one. Click the screen here, or use any control under it, and the studio carries on from there. Text you typed on the phone becomes its step first, so the steps stay in the order you did them.
 
-Tap, press and hold, swipe, the on-screen keyboard, and Back and Home all record. Everything else about the case stays the same: the steps, the screenshots and the Maestro flow are the ones you would get from the screen here.
+Tap, press and hold, swipe, the on-screen keyboard, and Back and Home all record. Everything else about the case stays the same: the steps, the screenshots and the Maestro flow are the ones you would get from the screen here. **Check** is done on the screen here, as always.
 
-**Check** still works on the screen here: turn it on and click what must be visible. Run a setup block and the other controls under the screen wait until you click **Stop using the phone**. **Finish recording** stops it for you.
+Ariadne reads the phone's touchscreen only while a recording is on, and reads what a field says, never which keys you pressed. To record from the screen here only, turn off **Record what I do on the phone itself** in Settings (the gear). The choice is kept on this computer, not in the project.
 
 Touches show where your finger went, not what you meant, so some steps come with a note saying why they need a look:
 
@@ -94,7 +94,7 @@ Three steps record something about time and the screen, and none of them touches
 - **Wait until** gives the screen up to 20 seconds to show something. The run goes on as soon as it shows, and fails on this step if it never does.
 - **Wait** pauses the run for a fixed number of seconds, whatever the screen shows. It never fails.
 
-**Check** and **Wait until** sit beside the text field under the screen, because you record them by clicking the screen. **Wait** is in the steps list, see [Put a Wait between two steps](#put-a-wait-between-two-steps).
+All three sit at the end of the steps in the Record tab. Press **Check** or **Wait until**, then click something on the screen; they record what is there now, so they go at the end. **Wait** can also go between two steps, see [Put a Wait between two steps](#put-a-wait-between-two-steps). Right-clicking the screen offers **Check** too.
 
 Use **Wait until** where a page takes a moment to load, for example a website the app has just opened: click the button you are about to tap, and the run waits for it instead of guessing a number of seconds. If it never comes, the run stops on the Wait until, which says what it waited for, instead of on the tap after it. Use **Check** for what the case is meant to prove.
 

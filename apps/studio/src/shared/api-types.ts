@@ -360,7 +360,10 @@ export type ToolInstallStatus = {
 
 /** Recording from a finger on the phone. `revision` changes whenever steps or the screen have. */
 export type PhoneStatus = {
+  /** The phone's touchscreen is being read: for the whole of a recording, unless turned off. */
   active: boolean;
+  /** The tester is using the phone, so its screen is followed closely. */
+  following: boolean;
   /** The tester left the app, so touches are not being recorded until it is back. */
   paused: boolean;
   revision: number;

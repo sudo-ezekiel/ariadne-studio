@@ -202,7 +202,7 @@ async function calendar() {
     await tapMirror(page, studio, 'event_location');
     await typeOnDevice(page, 'Athens');
     await tapMirror(page, studio, 'save');
-    await page.click('.mirror-controls button', 'Check');
+    await page.click('.tray button', 'Check');
     await delay(300);
     await tapMirror(page, studio, 'Dentist', { exact: true });
     await finishRecording(page);
@@ -242,7 +242,7 @@ async function calendar() {
     await delay(500);
     await page.goto(BASE, 1200);
     await tapMirror(page, studio, 'Dentist', { exact: true });
-    await page.click('.mirror-controls button', 'Check');
+    await page.click('.tray button', 'Check');
     await delay(300);
     await tapMirror(page, studio, 'event_title');
     await page.moveTo(1000, 760, 200);
@@ -548,7 +548,7 @@ async function first() {
     await tapMirror(page, studio, 'fab_event_label');
     await typeOnDevice(page, 'Dentist');
     await tapMirror(page, studio, 'save');
-    await page.click('.mirror-controls button', 'Check');
+    await page.click('.tray button', 'Check');
     await delay(300);
     await hoverNode(page, studio, 'Dentist', { exact: true });
     await page.shot(join(DOCS, 'first-case-recording.png'));
@@ -577,13 +577,13 @@ async function first() {
     await page.type('3');
     await page.click('.seconds-field button[type=submit]');
     await delay(600);
-    await page.click('.mirror-controls button', 'Wait until');
+    await page.click('.tray button', 'Wait until');
     await delay(300);
     await tapMirror(page, studio, 'Check-up', { exact: true });
     await page.waitFor(`document.querySelector('.seconds-field')`, { what: 'the seconds of the wait until' });
     await page.click('.seconds-field button', 'Cancel');
     await delay(300);
-    await page.click('.mirror-controls button', 'Check');
+    await page.click('.tray button', 'Check');
     await delay(300);
     await tapMirror(page, studio, 'Check-up', { exact: true });
     await page.moveTo(1000, 960, 150);

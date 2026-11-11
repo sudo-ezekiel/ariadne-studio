@@ -239,6 +239,9 @@ function readLink(body: unknown): string {
   return url;
 }
 
+/** Routes besides /api/action/ that add a step through the screen here: a block run now, a check, a wait. */
+const SCREEN_STEP_ROUTES = ['/api/case/block', '/api/case/expect', '/api/case/wait-for', '/api/case/wait'];
+
 /** Zoom in and Zoom out pinch around the middle of the screen by these factors. */
 const ZOOM_IN_SCALE = 1.5;
 const ZOOM_OUT_SCALE = 0.67;
@@ -463,10 +466,15 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     throw new HttpError(409, 'SUITE_RUNNING', 'Run all is running. Wait for it to finish, or stop it.');
   });
 
-  // While the tester is using the phone, the phone is the input; only a check goes through the screen here.
+  // The phone and the screen here are both ways in. Before the screen here adds a step, what was
+  // typed on the phone becomes its step, and the phone is followed afresh after it.
+  const actsOnScreen = (request: { method: string; url: string }) =>
+    request.method === 'POST' && (request.url.startsWith('/api/action/') || SCREEN_STEP_ROUTES.some((route) => request.url.startsWith(route)));
   app.addHook('preHandler', async (request) => {
-    if (!state.phone || !(request.url.startsWith('/api/action/') || request.url.startsWith('/api/case/block'))) return;
-    throw new HttpError(409, 'USING_THE_PHONE', 'You are recording from the phone. Press Stop using the phone to use the screen here.');
+    if (state.phone && actsOnScreen(request)) await state.phone.yieldToScreen();
+  });
+  app.addHook('onResponse', async (request) => {
+    if (state.phone && actsOnScreen(request)) state.phone.screenActed();
   });
 
   app.get('/api/project', async () => projectInfo(state));

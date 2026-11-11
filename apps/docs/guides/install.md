@@ -51,7 +51,7 @@ None are code signed yet, so macOS Gatekeeper and Windows SmartScreen warn on fi
 
 The Linux AppImage is tested end to end.
 
-The Windows build has been tried on one real Windows 11 computer with a POCO F5 Pro over USB: installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and **Use the phone** have not been tried on Windows yet, so reports are welcome.
+The Windows build has been tried on one real Windows 11 computer with a POCO F5 Pro over USB: installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and recording on the phone itself have not been tried on Windows yet, so reports are welcome.
 
 The macOS build is configured but has not been built or tried.
 

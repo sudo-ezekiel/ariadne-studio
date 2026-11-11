@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
-import { DEFAULT_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
+import type { PhoneStatus, ScreenState, SnapshotNodeLite } from '../../shared/api-types.ts';
 import { RefreshIcon } from './Icons.tsx';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
@@ -18,9 +18,8 @@ type Props = {
   caseActive: boolean;
   /** The case being recorded, for the bar above the screen. */
   recording: { name: string; steps: number } | null;
-  /** Recording from a finger on the phone: this screen follows along and only Check works here. */
+  /** The phone's own touchscreen: read while recording, and followed while the tester uses it. */
   phone: PhoneStatus;
-  onTogglePhone: () => void;
   /** A real phone may be asking about an install: while connecting, or while Maestro's driver goes on for a run. */
   phonePrompt: 'connect' | 'run' | null;
   /** The end-check picker is open, so the recording is about to be saved. */
@@ -41,9 +40,7 @@ type Props = {
   onChoose: (point: Point) => void;
   onTap: (point: Point) => void;
   onExpect: (point: Point) => void;
-  onToggleExpect: () => void;
   onWaitUntil: (point: Point) => void;
-  onToggleWaitUntil: () => void;
   /** Settles when the text has been typed (or refused), so a click made meanwhile can follow it. */
   onType: (text: string) => Promise<unknown>;
   onBack: () => void;
@@ -142,16 +139,11 @@ function StageBar(props: Props) {
           <span className="hint">Choose the end checks on the right, then Save case.</span>
         ) : (
           <span className="stage-actions">
-            <button
-              type="button"
-              className={phone.active ? 'toggle-on' : ''}
-              aria-pressed={phone.active}
-              onClick={props.onTogglePhone}
-              disabled={busy}
-              title={phone.active ? 'Go back to using the screen here' : 'Do the steps on the phone itself, with your own fingers'}
-            >
-              {phone.active ? 'Stop using the phone' : 'Use the phone'}
-            </button>
+            {phone.following && (
+              <span className="stage-following" role="status" title="Steps come from what you do on the phone. Click the screen here to carry on from the studio.">
+                Following the phone
+              </span>
+            )}
             <button type="button" className="primary" onClick={props.onFinish} disabled={busy}>
               Finish recording
             </button>
@@ -226,9 +218,9 @@ export function Mirror(props: Props) {
   const { screen, busy, highlight, sessionOpen, caseActive, expectMode, waitUntilMode, choosing } = props;
   /** Check and Wait until both read an element off the screen and press nothing. */
   const looking = expectMode || waitUntilMode;
-  const usingPhone = props.phone.active;
-  /** Everything but Check waits while the phone is the input. */
-  const inputOff = !sessionOpen || busy || usingPhone;
+  /** The tester is using the phone itself. A click here still works: the studio takes over from the phone. */
+  const following = props.phone.following;
+  const inputOff = !sessionOpen || busy;
   const [hover, setHover] = useState<SnapshotNodeLite | undefined>();
   const [text, setText] = useState('');
   const [link, setLink] = useState<string | null>(null);
@@ -249,7 +241,7 @@ export function Mirror(props: Props) {
   const fieldInput = useRef<HTMLInputElement>(null);
 
   // Typing straight into the screen: only in plain tap mode, and only over a field the phone reports as focused.
-  const field = screen && !screen.hidden && !inputOff && !looking && !choosing ? focusedField(screen.nodes) : undefined;
+  const field = screen && !screen.hidden && !inputOff && !following && !looking && !choosing ? focusedField(screen.nodes) : undefined;
   const fieldShown = field !== undefined;
   const hasScreen = screen !== null;
   useEffect(() => {
@@ -308,7 +300,7 @@ export function Mirror(props: Props) {
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     // Text waiting in the box goes first. Its own busy state must not swallow this press.
     void sendTyped();
-    if ((busy && !sending.current) || !screen || event.button !== 0 || (usingPhone && !looking)) return;
+    if ((busy && !sending.current) || !screen || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     press.current = {
       pointerId: event.pointerId,
@@ -395,11 +387,9 @@ export function Mirror(props: Props) {
         </p>
       )}
       {screen?.elsewhere && <ElsewhereNote elsewhere={screen.elsewhere} appId={props.appId} />}
-      {usingPhone && (
-        <p className={`phone-banner ${props.phone.paused ? 'phone-banner-paused' : ''}`} role="status">
-          {props.phone.paused
-            ? 'Paused: you left the app. Open it again to carry on recording.'
-            : 'Use the phone now. Steps appear on the right as you go, and this screen catches up after each one.'}
+      {following && props.phone.paused && (
+        <p className="phone-banner phone-banner-paused" role="status">
+          Paused: you left the app on the phone. Open it again to carry on recording.
         </p>
       )}
       <div className={`stage ${props.recording ? 'stage-live' : ''}`}>
@@ -418,7 +408,7 @@ export function Mirror(props: Props) {
               onContextMenu={(event) => {
                 event.preventDefault();
                 cancelPress();
-                if ((busy && !sending.current) || usingPhone || choosing) return;
+                if ((busy && !sending.current) || choosing) return;
                 setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen) });
               }}
             >
@@ -494,31 +484,6 @@ export function Mirror(props: Props) {
           />
           <button type="submit" disabled={inputOff || !text}>
             Type
-          </button>
-          <span className="toolbar-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className={expectMode ? 'toggle-on' : ''}
-            aria-pressed={expectMode}
-            onClick={props.onToggleExpect}
-            disabled={!sessionOpen || !caseActive || busy}
-            title={caseActive ? 'Record that this is on the screen. The run fails if it is missing.' : 'Start a case first'}
-          >
-            Check
-          </button>
-          <button
-            type="button"
-            className={waitUntilMode ? 'toggle-on' : ''}
-            aria-pressed={waitUntilMode}
-            onClick={props.onToggleWaitUntil}
-            disabled={!sessionOpen || !caseActive || busy}
-            title={
-              caseActive
-                ? `Click something the run should wait for. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear; the run fails if it never does.`
-                : 'Start a case first'
-            }
-          >
-            Wait until
           </button>
         </form>
         <div className="mirror-controls">

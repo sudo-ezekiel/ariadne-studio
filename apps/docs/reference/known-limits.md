@@ -10,7 +10,7 @@ What is not done, and what behaves in a way you might not expect.
 ## Platforms
 
 - Android only.
-- The desktop app is tested end to end on Linux. On one real Windows 11 computer with a POCO F5 Pro over USB, installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and **Use the phone** have not been tried on Windows yet.
+- The desktop app is tested end to end on Linux. On one real Windows 11 computer with a POCO F5 Pro over USB, installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and recording on the phone itself have not been tried on Windows yet.
 - The macOS build is configured but not built or tried.
 - On one Windows computer, only one account whose user name Java cannot spell can use **Set up this computer**, because those tools live in one folder locked to that account. If PowerShell is blocked, Ariadne cannot check that folder and does not use it.
 - On Windows, a project folder with letters the system code page cannot spell, such as a Greek user name on English Windows, runs fine. A folder with such letters inside the project, such as a flows folder of your own, stops Maestro at once: its Java receives that part of the path as question marks.
@@ -22,7 +22,7 @@ What is not done, and what behaves in a way you might not expect.
 
 ## Other apps and websites
 
-- The screen in the studio is a new picture every few seconds, not video. It stops looking during an action, a run, the end check picker and **Use the phone**, and while the window is hidden. **Refresh** looks at once.
+- The screen in the studio is a new picture every few seconds, not video. It stops looking during an action, a run, the end check picker and while it follows the phone, and while the window is hidden. **Refresh** looks at once.
 - A lit lock screen is found by asking Android. A phone that has never answered counts as unlocked, so its lock screen would show here. The POCO F5 Pro and the Android 16 emulator both answer.
 - A step that needs the camera, such as a selfie or a photo of a document, cannot be replayed.
 - A one-time code or a link made for one session is different on every run, so a step that depends on it fails on the next run.

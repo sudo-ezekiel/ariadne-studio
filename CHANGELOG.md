@@ -9,7 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Wait until**, beside Check under the screen: click something on the screen, and a run waits up
+- **Wait until**, beside Check: click something on the screen, and a run waits up
   to 20 seconds for it to appear, and fails on that step if it never does. Use it before a tap on a
   page that is still loading instead of guessing a number of seconds. The block form offers it too.
 - **Remove step** while recording, from a step's menu or with Delete, with **Undo** in the message
@@ -35,6 +35,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A step's result reads as a word in its colour, with a tick for Passed and a cross for Failed, and
   "flaky", "failing" and "muted" are plain words: no more pills. While recording, only the bar
   above the screen says so, and the Set up a device dialog's headings are no longer in capitals.
+- **Check** and **Wait until** moved from under the screen to the end of the steps, beside the
+  **Wait** tile, so everything that adds a step without tapping is in one place. Right-clicking the
+  screen still offers Check.
+- No more **Use the phone** button. While recording, touch the phone and the studio follows it
+  (the bar says **Following the phone**); click the screen here and it carries on from there,
+  writing text typed on the phone as its step first. **Record what I do on the phone itself** in
+  Settings turns this off on this computer.
+
+### Fixed
+
+- Recording on the phone itself: a password typed into a field that shares its id with the field
+  before it, as every React Native Elements input does, became "erase" steps and no `${PASSWORD}`,
+  so the block or case failed on its run.
+- A step recorded from the phone shows an empty frame until its screenshot is taken, instead of a
+  broken picture.
 
 ## [0.1.2] - 2026-11-08
 

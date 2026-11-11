@@ -45,9 +45,9 @@ Two helpers are installed on every phone, automatically: agent-device's helper o
 
 Xiaomi, Redmi and POCO phones ask before every install, and need the extra steps in [Xiaomi, Redmi and POCO phones](/guides/install#xiaomi-redmi-and-poco-phones). For other makers, see [Phone makers](/guides/install#phone-makers).
 
-## Record with Use the phone
+## Record on the phone itself
 
-In the **Record** tab, name the case `Phone test` and press **Start recording**. Then press **Use the phone** in the bar above the screen, and use the app with your own fingers. Steps appear in the Record tab as you go, and the screen here catches up about a second after each one.
+In the **Record** tab, name the case `Phone test` and press **Start recording**. Then use the app on the phone with your own fingers. The bar above the screen says **Following the phone** from your first touch. Steps appear in the Record tab as you go, and the screen here catches up about a second after each one.
 
 Work through the list, and note anything that looks wrong. Skip what your app does not have.
 
@@ -70,7 +70,7 @@ On a Samsung phone, also note two things:
 
 ## Finish recording and Run
 
-1. Press **Finish recording**, which stops Use the phone as well, then **Save case**.
+1. Press **Finish recording**, then **Save case**.
 2. A password step needs a value on a run. Delete the step in the **Cases** tab, or add your made-up password to the project's `.env` file under the name the step shows, for example `PASSWORD=made-up-password`.
 3. Open the case in the **Cases** tab and press **Run**. Watch the phone again, because Maestro's driver installs now.
 
