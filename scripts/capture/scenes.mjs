@@ -96,7 +96,7 @@ async function startRecording(page, name) {
   await delay(200);
   await page.click('.record-button');
   await page.settle();
-  await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
+  await page.waitFor(`document.querySelector('.stage-state-word')`, { what: 'the recording to start', timeoutMs: 120_000 });
 }
 
 async function finishRecording(page, { pickerShot } = {}) {
@@ -384,7 +384,7 @@ async function blocks() {
     step('recording from the block');
     await page.click('.record-button');
     await page.settle();
-    await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
+    await page.waitFor(`document.querySelector('.stage-state-word')`, { what: 'the recording to start', timeoutMs: 120_000 });
     await delay(1500);
     await tapMirror(page, studio, 'Forms', { exact: true });
     await tapMirror(page, studio, 'button-Active');
@@ -439,7 +439,7 @@ async function existing() {
     await delay(400);
     await page.click('.record-button');
     await page.settle();
-    await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
+    await page.waitFor(`document.querySelector('.stage-state-word')`, { what: 'the recording to start', timeoutMs: 120_000 });
     await delay(1500);
     await tapMirror(page, studio, 'Forms', { exact: true });
     await finishRecording(page, { pickerShot: DARK ? undefined : join(SITE, 'img/end-checks.png') });
@@ -489,7 +489,7 @@ async function anki() {
     await delay(400);
     await page.click('.record-button');
     await page.settle();
-    await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
+    await page.waitFor(`document.querySelector('.stage-state-word')`, { what: 'the recording to start', timeoutMs: 120_000 });
     await delay(1500);
     await tapMirror(page, studio, 'fab_main');
     await delay(800);
@@ -542,7 +542,7 @@ async function first() {
     step('recording, with Check on');
     await page.click('.record-button');
     await page.settle();
-    await page.waitFor(`document.querySelector('.rec')`, { what: 'the recording to start', timeoutMs: 120_000 });
+    await page.waitFor(`document.querySelector('.stage-state-word')`, { what: 'the recording to start', timeoutMs: 120_000 });
     await delay(1500);
     await tapMirror(page, studio, 'calendar_fab');
     await tapMirror(page, studio, 'fab_event_label');
