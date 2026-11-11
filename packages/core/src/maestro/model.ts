@@ -45,9 +45,9 @@ export type MaestroStep =
    */
   | { kind: 'wait'; seconds: number }
   /**
-   * Gives the screen up to `seconds` to show the element, then carries on
-   * either way: an extendedWaitUntil on an id or text selector with
-   * `optional`, so running out never fails the flow.
+   * Gives the screen up to `seconds` to show the element: an extendedWaitUntil
+   * on an id or text selector. The run goes on as soon as it shows, and fails
+   * on this step if it never does.
    */
   | { kind: 'waitUntilVisible'; selector: MaestroSelector; seconds: number }
   /**

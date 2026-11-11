@@ -242,13 +242,7 @@ function Recording({
 
   return (
     <>
-      <h2>
-        {currentCase.name}
-        <span className="rec">
-          <span className="rec-dot" aria-hidden="true" />
-          Recording
-        </span>
-      </h2>
+      <h2>{currentCase.name}</h2>
       <div className="case-meta">
         {currentCase.forBlock ? 'Block' : currentCase.id} / {currentCase.appId} on {currentCase.deviceId}
       </div>

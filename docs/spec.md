@@ -899,25 +899,35 @@ wait instead of checking, and a Wait that can be dragged in and does not look li
   until the case is saved. Steps kept from a saved case during an edit cannot be removed
   (`KEPT_STEP`). Finish deletes the screenshots of steps still removed.
 - A Wait can go between any two steps while recording, because it does nothing on the phone: the
-  Wait tile at the end of the thread drags into place, and Add, the row menu and the toolbar give
-  the same result by click (`POST /api/case/wait` with `after`; `PATCH /api/case/steps/:index`
-  changes the seconds). A block still goes only at the end, because it runs on the phone at once.
+  Wait tile at the end of the thread drags into place, and its Add and the row menu give the same
+  result by click (`POST /api/case/wait` with `after`; `PATCH /api/case/steps/:index` changes the
+  seconds). A block still goes only at the end, because it runs on the phone at once. The toolbar
+  under the screen no longer has a Wait: it holds what is recorded by clicking the screen, and a
+  wait is not.
 - Saved cases get **Add a wait after this step**, **Add a wait before step 1** and **Change the
   seconds** with no recording (`POST /api/cases/:id/steps`, `seconds` on the step patch). They
   mark older runs as before the edit, like Delete step.
 - **Wait until** is a new step, recorded from the screen like Check (toolbar toggle, one click, then
-  the mode turns itself off): `extendedWaitUntil: { visible: <selector>, timeout, optional: true }`.
-  It never fails a run on its own; the owner may still choose to make it fail after the timeout
-  (one key). The parser reads back only this form. During recording and Try, agent-device does not
-  replay it; the studio polls the screen every 500 ms until the element shows or the time runs out.
-  The block form offers it too ("Wait until", under More steps).
-- Toasts lost their side stripe and gained an optional action (Undo). Panel section titles are
-  15 px sentence case instead of small uppercase labels.
+  the mode turns itself off): `extendedWaitUntil: { visible: <selector>, timeout }`. It fails the
+  run on its own row when the element never shows, so the red lands on the step that explains it
+  rather than on the tap after it, and its expected result reads "X appears within N seconds". The
+  fixed Wait is the step that never fails. The parser reads back only this form; one with
+  `optional: true` stays Maestro's to run. During recording and Try, agent-device does not replay
+  it; the studio polls the screen every 500 ms and stops the replay with "Waited N seconds for X and
+  it never appeared." The block form offers it too ("Wait until", under More steps).
+- Toasts lost their side stripe and gained an optional action (Undo). Section titles are sentence
+  case everywhere, dialogs included, instead of small uppercase labels.
+- Results are words in their colour with no pill: a tick and Passed in green, a cross and Failed in
+  red, Not run in grey; "muted", "flaky" and "failing" are plain coloured words. While recording,
+  the bar above the screen says Recording beside its dot and stays untinted, since the ochre frame
+  round the screen says it already; nothing is added beside the case title.
 - Proven on emulator-5560 against Android Settings: a live recording with a block, a Wait dragged
   between steps 1 and 2 and set to 5 seconds, Remove and Undo, Delete on a focused row, a Wait until
   recorded by clicking the screen, and two Maestro runs of a saved case with a wait before step 1,
-  a Wait until that found its element (62 ms) and one that never did (waited 4 s, passed). Not tried
-  on a real phone or on Windows.
+  a Wait until that found its element (62 ms) and one that never did (waited 4 s, passed, from when
+  it was optional). Once it was made strict, on 2026-11-11 against Fossify Calendar: a run where the
+  event was there passed, and one where it was gone failed on the Wait until row after 5.2 s with
+  the tap after it not run. Not tried on a real phone or on Windows.
 
 ## 19. Later
 

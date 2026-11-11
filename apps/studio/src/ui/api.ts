@@ -99,7 +99,6 @@ export const api = {
   scroll: (direction: ScrollDirection) => request<ActionResponse>('POST', '/api/action/scroll', { direction }),
   relaunch: () => request<ActionResponse>('POST', '/api/action/relaunch'),
   openLink: (url: string) => request<ActionResponse>('POST', '/api/action/open-link', { url }),
-  wait: (seconds: number) => request<ActionResponse>('POST', '/api/case/wait', { seconds }),
   hideKeyboard: () => request<ActionResponse>('POST', '/api/action/hide-keyboard'),
   longPress: (x: number, y: number) => request<ActionResponse>('POST', '/api/action/long-press', { x, y }),
   doubleTap: (x: number, y: number) => request<ActionResponse>('POST', '/api/action/double-tap', { x, y }),

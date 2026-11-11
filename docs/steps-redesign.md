@@ -31,15 +31,17 @@ one word, and the height of the row.
    as a card shape with a nub. Reason: the icon is the recognisable bit; the nub-on-a-card is the
    generic bit.
 6. Wait is a first-class thing in the step list: a draggable "Wait" tile in a tray under the steps
-   that drops between any two steps, plus "Add a wait after this step" in every row menu, plus the
-   existing Wait button in the toolbar. Reason: today the Wait exists only as a toolbar button under
-   the phone, which is why the owner asked for it.
+   that drops between any two steps, plus "Add a wait after this step" in every row menu. Reason:
+   today the Wait exists only as a toolbar button under the phone, which is why the owner asked for
+   it. (Decided 2026-11-11: the toolbar button goes, see section 10.)
 7. Wait until is in scope, as a second timing step recorded from the screen like Check: click an
-   element, the step waits up to 20 seconds for it, then carries on either way. Reason: a fixed wait
+   element, the step waits up to 20 seconds for it. Reason: a fixed wait
    is a guess (the POCO note in api-types.ts says 8 s failed and 16 s worked); waiting for the thing
    you are about to tap is what the owner means by "wait instead of expect".
-8. Wait until never fails on its own (Maestro `optional: true`). Reason: the owner asked to wait
-   instead of expecting; a wait that fails is a Check, and Check already exists.
+8. Wait until fails the run on its own row when the element never shows (no `optional`). Reason:
+   an optional one shows Passed right above the tap that then fails, which a BA cannot make sense
+   of; the strict one puts the red on the row that explains itself. The fixed Wait is the step
+   that never fails. (Decided 2026-11-11; the first version had `optional: true`.)
 9. A step can be removed while recording from its row menu or with the Delete key, with no confirm
    dialog and an 8-second Undo. Reason: mis-taps are frequent and the removal is reversible, so undo
    is the confirm. Saved cases keep their confirm dialog, because that deletion is permanent.
@@ -282,26 +284,26 @@ reworded in the build list.
 One sentence each; these are also the button tooltips.
 
 - Check: records that something is on the screen now; the run fails if it is missing.
-- Wait until: gives the screen up to 20 seconds to show something, then carries on either way.
+- Wait until: gives the screen up to 20 seconds to show something; the run fails if it never does.
 - Wait: pauses the run for a fixed number of seconds, whatever the screen shows.
 
 Maestro. Wait stays `extendedWaitUntil: { visible: "ariadne-wait", timeout, optional: true,
 label }` (unchanged). Wait until writes `extendedWaitUntil: { visible: { text: "Welcome" },
-timeout: 20000, optional: true }`. The parser reads the `ariadne-wait` form as a wait, an
-`optional: true` form with an id or text selector as a wait until, and still refuses any other
-`extendedWaitUntil` (a hand-written strict wait stays Maestro's to run, as today).
+timeout: 20000 }`. The parser reads the `ariadne-wait` form as a wait, a form with only an id or
+text selector and a timeout as a wait until, and still refuses any other `extendedWaitUntil` (an
+optional one on a real element stays Maestro's to run).
 
 Defaults: both start at `DEFAULT_WAIT_SECONDS` (20) and are capped at `MAX_WAIT_SECONDS` (120).
 
 Where each is recorded: Check and Wait until from the screen (toolbar toggle, then click an
-element; nothing is tapped). Wait from the tray, the row menu, or the toolbar button. Wait until is
+element; nothing is tapped). Wait from the tray or the row menu. Wait until is
 not draggable: it needs an element, and the element is on the phone, so it is recorded where the
 BA is looking. In a saved case, a Wait until is added with "Add steps after this one" like any step
 that needs the screen.
 
-Toolbar: the three sit together after the separator, in this order: Check, Wait until, Wait. Scroll
-down and Scroll up move to the second row. If the first row no longer fits 600 px with the 140 px
-text field, the whole group moves to the second row instead; the order is what matters.
+Toolbar: Check and Wait until sit together after the separator. Scroll down and Scroll up move to
+the second row. (The first version also had Wait there; it went on 2026-11-11, because the toolbar
+holds what is recorded by clicking the screen.)
 
 ## 6. Interactions
 
@@ -353,9 +355,8 @@ calls `PATCH /api/case/steps/:index { seconds }`; Escape or Cancel keeps 20. Doi
 20. The BA never has a half-made row.
 
 Click and keyboard paths to the same result: "Add a wait after this step" in any row menu (inserts
-after that step and opens the field), Add on the tray (appends, opens the field), the toolbar Wait
-button (appends with its own seconds form, unchanged), and "Add a wait before step 1" on the start
-row's menu.
+after that step and opens the field), Add on the tray (appends, opens the field), and "Add a wait
+before step 1" on the start row's menu.
 
 The block end slot: drawn only while a block is dragged (the insertion rule after the last row
 with the caption "Run it now, as the next step"). At rest there is no dashed box; the folded
@@ -420,8 +421,7 @@ Every new or changed string. Sentence case, no engine words, no exclamation mark
 | Wait until kind label | wait until |
 | Toolbar button | Wait until |
 | Toolbar title, Check | Record that this is on the screen. The run fails if it is missing. |
-| Toolbar title, Wait until | Click something the run should wait for. It gets up to 20 seconds to appear, then the run carries on either way. |
-| Toolbar title, Wait | Pause the run for a fixed number of seconds, whatever the screen shows. Nothing happens on the phone now. |
+| Toolbar title, Wait until | Click something the run should wait for. It gets up to 20 seconds to appear; the run fails if it never does. |
 | Mirror caption in Wait until mode | Wait until mode: click what the run should wait for |
 | Block end slot caption while dragging | Run it now, as the next step |
 | Stack end at rest, empty | Drag a setup block here to run it first, such as a log in, or press Add on one below. |
@@ -467,12 +467,12 @@ until a new step is pushed, so typed text never merges into a step the BA did no
 
 Core model for Wait until: `CaseStep` gains `{ kind: 'waitFor'; selector; point; node?; seconds }`;
 `MaestroStep` gains `{ kind: 'waitUntilVisible'; selector; timeoutMs }`; `emit.ts`, `parse.ts`
-(section 5), `describe.ts` (`describeStep`, `describeMaestroStep`, `stepExpected` returns empty),
+(section 5), `describe.ts` (`describeStep`, `describeMaestroStep`, `stepExpected` reads "X appears within N seconds"),
 `recorder.ts` `stepToMaestro`, `flow-layout.ts` `scrollTargets` (a wait until with an id or text is
 a scroll target like a check), `device-replay.ts` (`agentDeviceReplays` false, `DirectAction {
 kind: 'waitFor'; selector; seconds }`), `apps/studio/src/server/common.ts` (the direct action polls
 `freshLatest` every 500 ms until a node's text or id equals the unescaped selector value, or the
-time runs out, then continues either way). Grep `case 'wait'` and `'expect'` across
+time runs out, then fails with "Waited N seconds for X and it never appeared."). Grep `case 'wait'` and `'expect'` across
 `packages/core/src`, `apps/studio/src/server` and `apps/studio/src/shared` for every switch that
 needs the new kind; `shared/block-check.ts` and `ui/components/format.ts` are two of them.
 
@@ -550,17 +550,17 @@ Stage C, Wait until:
 
 Run `pnpm typecheck` and `pnpm test` after each stage.
 
-## 10. For the owner to decide
+## 10. Decided 2026-11-11
 
-1. Wait until never fails (decision 8). The other reading is "fail if it never appears within N
-   seconds", which gives a better error message in the evidence pack and makes it a Check with
-   patience. Say which; the YAML differs by one `optional` key.
-2. The toolbar Wait button: keep it beside Check and Wait until (as designed) or drop it now that
-   the tray is under the steps. Two paths to the same thing is normal in this codebase; one fewer
-   button is also fine.
-3. Removing a just-recorded step uses Undo instead of a confirm dialog, a stated exception to brand
-   principle 6. Say if you want the dialog instead.
-4. The uppercase section labels in the Composer ("BEFORE RECORDING", "SETUP BLOCKS") come from
-   brand section 4 and match your list of tells from the landing page. If you want them gone, the
-   change is one rule (13 px, weight 600, sentence case) and one line in brand.md; it is not in this
-   build list.
+The owner left these to a second design pass, which decided:
+
+1. Wait until fails the run when the element never shows (decision 8 above). The fixed Wait is the
+   step that never fails.
+2. The toolbar Wait button goes. The toolbar holds what is recorded by clicking the screen; the
+   Wait tile and the row menu are the one place for a wait.
+3. Remove step keeps Undo and no confirm (brand principle 6 keeps its one exception).
+4. Section titles stay sentence case, and the Set up a device dialog's uppercase headings follow.
+5. Results and states are words, never pills: a tick and Passed in green, a cross and Failed in
+   red, Not run in grey; "muted", "flaky" and "failing" as plain coloured words. While recording,
+   the bar above the screen says Recording beside its dot and is not tinted, and nothing is added
+   beside the case title.

@@ -5,7 +5,7 @@ import { LOOKS_DIFFERENT_BELOW } from '@ariadne/core/similarity';
 import type { BlockSummary, CaseDetailResponse, EditRequest, StepPatch, StepResultView, StepView } from '../../shared/api-types.ts';
 import { api } from '../api.ts';
 import { BlockSteps } from './Blocks.tsx';
-import { PuzzleIcon } from './Icons.tsx';
+import { CheckIcon, CrossIcon, PuzzleIcon } from './Icons.tsx';
 import { MarkCell } from './Mark.tsx';
 import { RowMenu } from './RowMenu.tsx';
 import { markOfStep, type Mark } from './step-marks.ts';
@@ -58,9 +58,18 @@ export function kindLabel(kind: StepView['kind']): string {
   return KIND_LABELS[kind] ?? kind;
 }
 
+const RESULT_WORDS: Record<StepResultView['status'], string> = { passed: 'Passed', failed: 'Failed', 'not-run': 'Not run' };
+
+/** A step's result as a word in its colour; the tick and the cross say it to anyone who cannot tell red from green. */
 function Badge({ result }: { result: StepResultView | undefined }) {
   if (!result) return <span className="badge" />;
-  return <span className={`badge badge-${result.status}`}>{result.status}</span>;
+  return (
+    <span className={`badge badge-${result.status}`}>
+      {result.status === 'passed' && <CheckIcon size={12} />}
+      {result.status === 'failed' && <CrossIcon size={12} />}
+      {RESULT_WORDS[result.status]}
+    </span>
+  );
 }
 
 function Similarity({ result }: { result: StepResultView | undefined }) {

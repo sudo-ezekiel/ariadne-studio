@@ -27,12 +27,14 @@ function isWaitForm(arg: unknown): arg is { timeout: number } {
 
 /**
  * What a Wait until step writes, and nothing else: an id or text selector
- * under `visible`, a timeout, and `optional` so running out never fails.
+ * under `visible` and a timeout, with no `optional`, so running out fails the
+ * run on this step. An optional one would pass and leave the failure to a
+ * later step, so it stays Maestro's to run.
  */
 function waitUntilVisibleForm(arg: unknown, where: string): MaestroStep | undefined {
-  if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout', 'optional'].includes(key))) return undefined;
-  const { visible, timeout, optional } = arg;
-  if (!isRecord(visible) || optional !== true || typeof timeout !== 'number' || timeout <= 0 || timeout > LONGEST_TIMER_MS) return undefined;
+  if (!isRecord(arg) || Object.keys(arg).some((key) => !['visible', 'timeout'].includes(key))) return undefined;
+  const { visible, timeout } = arg;
+  if (!isRecord(visible) || typeof timeout !== 'number' || timeout <= 0 || timeout > LONGEST_TIMER_MS) return undefined;
   let selector: MaestroSelector;
   try {
     selector = parseSelector(visible, `extendedWaitUntil.visible at ${where}`);

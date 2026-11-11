@@ -240,8 +240,15 @@ describe('describeMaestroStep', () => {
     const welcome: MaestroSelector = { kind: 'text', value: 'Welcome' };
     const step: CaseStep = { index: 1, kind: 'waitFor', selector: welcome, point: { x: 1, y: 1 }, seconds: 20, at: 'x' };
     expect(describeStep(step)).toBe('Wait up to 20 seconds for "Welcome" to appear');
-    expect(stepExpected(step)).toBe('');
     expect(describeMaestroStep({ kind: 'waitUntilVisible', selector: welcome, seconds: 1 })).toBe('Wait up to 1 second for "Welcome" to appear');
+  });
+
+  it('expects a wait until to see its element within the seconds, in the singular for one', () => {
+    const welcome: MaestroSelector = { kind: 'text', value: 'Welcome' };
+    const step: CaseStep = { index: 1, kind: 'waitFor', selector: welcome, point: { x: 1, y: 1 }, seconds: 20, at: 'x' };
+    expect(stepExpected(step)).toBe('"Welcome" appears within 20 seconds');
+    expect(stepExpected({ ...step, seconds: 1 })).toBe('"Welcome" appears within 1 second');
+    expect(stepExpected({ ...step, note: ' Mine ' })).toBe('Mine');
   });
 
   it('describes a launch with and without clearing the app data', () => {

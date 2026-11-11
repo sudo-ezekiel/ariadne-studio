@@ -8,6 +8,7 @@ import {
   SYSTEM_UI,
   blackPicture,
   caseToFlow,
+  elementName,
   expectationCandidates,
   foregroundApp,
   looksLikeHomeApp,
@@ -314,15 +315,18 @@ function pause(ms: number): Promise<void> {
 const WAIT_FOR_POLL_MS = 500;
 
 /**
- * Looks at the screen until an element matches `selector` or `ms` have gone
- * by, then carries on either way, as Maestro's optional extendedWaitUntil does.
+ * Looks at the screen until an element matches `selector`, and fails when `ms`
+ * have gone by without one, as Maestro's extendedWaitUntil does.
  */
 async function waitForElement(state: ServerState, selector: MaestroSelector, ms: number): Promise<void> {
   const deadline = Date.now() + ms;
   for (;;) {
     if (selectorOnScreen((await state.session.snapshot()).nodes, selector)) return;
     const left = deadline - Date.now();
-    if (left <= 0) return;
+    if (left <= 0) {
+      const seconds = ms / 1000;
+      throw new Error(`Waited ${seconds} ${seconds === 1 ? 'second' : 'seconds'} for ${elementName(selector)} and it never appeared.`);
+    }
     await pause(Math.min(WAIT_FOR_POLL_MS, left));
   }
 }

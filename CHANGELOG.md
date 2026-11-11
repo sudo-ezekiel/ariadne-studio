@@ -9,9 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Wait until**, beside Check and Wait under the screen: click something on the screen, and a run
-  waits up to 20 seconds for it to appear, then carries on either way. Use it before a tap on a page
-  that is still loading instead of guessing a number of seconds. The block form offers it too.
+- **Wait until**, beside Check under the screen: click something on the screen, and a run waits up
+  to 20 seconds for it to appear, and fails on that step if it never does. Use it before a tap on a
+  page that is still loading instead of guessing a number of seconds. The block form offers it too.
 - **Remove step** while recording, from a step's menu or with Delete, with **Undo** in the message
   after it. A note above **Finish recording** says when a removed step had acted on the phone.
 - A **Wait** tile at the end of the steps: drag it between any two steps, or press **Add**. Every
@@ -26,6 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   coloured edge are gone from the steps, the setup blocks, the block form and the messages.
 - A saved case numbers its rows by step, so step 3 in the list is the step 3 its menu talks about.
 - Refresh under the screen is an icon at the end of the second row.
+- Wait left the controls under the screen; the Wait tile at the end of the steps and the row menu
+  add one where you want it.
+- A step's result reads as a word in its colour, with a tick for Passed and a cross for Failed, and
+  "flaky", "failing" and "muted" are plain words: no more pills. While recording, only the bar
+  above the screen says so, and the Set up a device dialog's headings are no longer in capitals.
 
 ## [0.1.2] - 2026-11-08
 

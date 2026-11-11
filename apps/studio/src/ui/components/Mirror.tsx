@@ -1,7 +1,7 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
-import { DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
+import { DEFAULT_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
 import { RefreshIcon } from './Icons.tsx';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
@@ -50,7 +50,6 @@ type Props = {
   onRefresh: () => void;
   onHideKeyboard: () => void;
   onOpenLink: (url: string) => void;
-  onWait: (seconds: number) => void;
   onLongPress: (point: Point) => void;
   onDoubleTap: (point: Point) => void;
   /** A drag across the screen, in viewport pixels, and how long it took. */
@@ -130,7 +129,7 @@ function StageBar(props: Props) {
   const { recording, sessionOpen, busy, picking, suiteRunning, phone } = props;
   if (recording) {
     return (
-      <div className="stage-bar stage-bar-live">
+      <div className="stage-bar">
         <span className="stage-state">
           <span className="rec-dot rec-dot-lg" aria-hidden="true" />
           <span className="stage-state-word">Recording</span>
@@ -231,8 +230,6 @@ export function Mirror(props: Props) {
   const [hover, setHover] = useState<SnapshotNodeLite | undefined>();
   const [text, setText] = useState('');
   const [link, setLink] = useState<string | null>(null);
-  const [wait, setWait] = useState<string | null>(null);
-  const waitValid = Number.isInteger(Number(wait)) && Number(wait) >= 1 && Number(wait) <= MAX_WAIT_SECONDS;
   const press = useRef<Press | null>(null);
   /** The drag being drawn, in viewport pixels. */
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
@@ -414,61 +411,12 @@ export function Mirror(props: Props) {
             disabled={!sessionOpen || !caseActive || busy}
             title={
               caseActive
-                ? `Click something the run should wait for. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear, then the run carries on either way.`
+                ? `Click something the run should wait for. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear; the run fails if it never does.`
                 : 'Start a case first'
             }
           >
             Wait until
           </button>
-          {wait === null || !caseActive ? (
-            <button
-              type="button"
-              onClick={() => {
-                setLink(null);
-                setWait(String(DEFAULT_WAIT_SECONDS));
-              }}
-              disabled={!sessionOpen || !caseActive || busy}
-              title={caseActive ? 'Pause the run for a fixed number of seconds, whatever the screen shows. Nothing happens on the phone now.' : 'Start a case first'}
-            >
-              Wait
-            </button>
-          ) : (
-            // Not a form of its own: it sits inside the typing form, so Enter is handled here.
-            <span className="inline-form wait-form">
-              <input
-                autoFocus
-                type="number"
-                min={1}
-                max={MAX_WAIT_SECONDS}
-                value={wait}
-                onChange={(event) => setWait(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') setWait(null);
-                  if (event.key !== 'Enter') return;
-                  event.preventDefault();
-                  if (!waitValid) return;
-                  props.onWait(Number(wait));
-                  setWait(null);
-                }}
-                aria-label="Seconds to wait"
-                disabled={!sessionOpen || busy}
-              />
-              <span>seconds</span>
-              <button
-                type="button"
-                disabled={!sessionOpen || busy || !waitValid}
-                onClick={() => {
-                  props.onWait(Number(wait));
-                  setWait(null);
-                }}
-              >
-                Add
-              </button>
-              <button type="button" onClick={() => setWait(null)}>
-                Cancel
-              </button>
-            </span>
-          )}
         </form>
         <div className="mirror-controls">
           <button type="button" onClick={props.onRelaunch} disabled={inputOff} title="Close the app and start it again">
@@ -480,10 +428,7 @@ export function Mirror(props: Props) {
           {link === null ? (
             <button
               type="button"
-              onClick={() => {
-                setWait(null);
-                setLink('');
-              }}
+              onClick={() => setLink('')}
               disabled={inputOff}
               title="Open a web link or an app deep link"
             >

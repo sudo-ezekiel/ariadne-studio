@@ -739,11 +739,6 @@ button.link-on-dark:hover:not(:disabled) {
   background: var(--panel);
 }
 
-.stage-bar-live {
-  border-color: color-mix(in srgb, var(--thread-strong) 50%, transparent);
-  background: var(--thread-soft);
-}
-
 .stage-actions {
   display: inline-flex;
   flex: none;
@@ -816,10 +811,8 @@ button.link-on-dark:hover:not(:disabled) {
 
 .stage-state-word {
   color: var(--thread-strong);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .stage-state-name {
@@ -913,14 +906,6 @@ button.toolbar-refresh {
 .inline-form input {
   flex: 1;
   min-width: 0;
-}
-
-.wait-form {
-  align-items: center;
-}
-
-.wait-form input {
-  flex: 0 0 64px;
 }
 
 /* Case panel */
@@ -1062,22 +1047,6 @@ button.toolbar-refresh {
 
 .empty {
   color: var(--ink-2);
-}
-
-.rec {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 10px;
-  background: var(--thread-soft);
-  color: var(--thread-strong);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .rec-dot {
@@ -2077,50 +2046,43 @@ button.palette-add {
   margin-top: 6px;
 }
 
-/* Badges, tags and history dots */
+/* Results and tags: words in the colour that already means something, no pills */
 
 .badge {
+  display: inline-flex;
   justify-self: start;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 11px;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  line-height: 16px;
 }
 
 .badge-passed {
-  background: var(--pass-soft);
   color: var(--pass);
 }
 
 .badge-failed {
-  background: var(--fail-soft);
   color: var(--fail);
 }
 
 .badge-not-run {
-  background: var(--panel-2);
-  color: var(--ink-2);
+  color: var(--ink-3);
+  font-weight: 400;
 }
 
 .tag {
-  margin-left: 6px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: var(--panel-2);
-  color: var(--ink-2);
-  font-size: 11px;
+  margin-left: 8px;
+  color: var(--ink-3);
+  font-size: 12px;
   font-weight: 600;
 }
 
 .tag-flaky {
-  background: var(--warn-soft);
   color: var(--warn);
 }
 
 .tag-failed {
-  background: var(--fail-soft);
   color: var(--fail);
 }
 
@@ -2275,13 +2237,10 @@ button.palette-add {
   background: var(--pass-soft);
 }
 
-/* A question, so a heading rather than an uppercase section label. */
+/* A question inside the picker box, so smaller and closer than a section title. */
 .case-panel .picker h3 {
   margin: 0 0 4px;
-  color: var(--ink);
   font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .picker-list {
@@ -2607,11 +2566,9 @@ dialog.setup-dialog::backdrop {
 
 .dialog-body h3 {
   margin: 20px 0 8px;
-  color: var(--ink-2);
-  font-size: 12px;
+  color: var(--ink);
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .lede {

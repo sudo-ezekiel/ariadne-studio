@@ -171,6 +171,7 @@ export function stepTitle(step: CaseStep, scrollTarget?: MaestroSelector): strin
 export function stepExpected(step: CaseStep): string {
   if (step.note?.trim()) return step.note.trim();
   if (step.kind === 'expect') return `${targetName(step.selector, step.node)} is visible`;
+  if (step.kind === 'waitFor') return `${targetName(step.selector, step.node)} appears within ${step.seconds} ${step.seconds === 1 ? 'second' : 'seconds'}`;
   return '';
 }
 

@@ -671,7 +671,7 @@ describe('Recorder removing and inserting steps', () => {
     expect(recorder.toCase().steps.map((step) => (step.kind === 'type' ? step.text : step.kind))).toEqual(['hel', 'back', 'wait', 'lo!', 'more']);
   });
 
-  it('records a wait until that becomes an optional extendedWaitUntil, and a scroll before it scrolls to it', () => {
+  it('records a wait until that becomes a strict extendedWaitUntil, and a scroll before it scrolls to it', () => {
     const recorder = started();
     const nodes = settingsHome();
     recorder.recordScroll('down');

@@ -105,8 +105,11 @@ step. Everything else is neutral.
 The system sans (`system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`), no web
 fonts, because the studio runs offline. Base 14 px, line height 1.45. Headings 18 / 15 /
 13 px at weight 600; section titles in the side panel ("Before recording", "Setup blocks")
-are 15 px, sentence case, in `--ink`. No uppercase labels with letter-spacing in front of
-text: the owner reads them as template.
+are 15 px, sentence case, in `--ink`; headings inside dialogs are 13 px, sentence case. No
+uppercase labels with letter-spacing anywhere in the studio, dialogs included: the owner
+reads them as template. Results and states are words, never pills: "Passed", "Failed",
+"Not run", "flaky", "failing", "muted" in the colour that already means something, with no
+background.
 Meta and captions 12 px. Selectors, ids and YAML in the system mono
 (`ui-monospace, "SF Mono", Menlo, Consolas, monospace`) at 12 px.
 
@@ -142,9 +145,9 @@ the code and the Maestro files still call things; the right column is what a per
 | Getting a Xiaomi phone ready for Run | Prepare this phone | fix, patch, unlock |
 | Recording that something is visible | check; Check mode (the toggle is "Check"); end checks | Expect, expectation, assert |
 | Making a run pause at a point in a case | Wait; rows read "Wait 20 seconds"; the tile under the steps is "Wait" | Sleep, delay, pause step |
-| Giving the screen time to show something | Wait until; rows read "Wait up to 20 seconds for "Welcome" to appear" | waitFor, extendedWaitUntil, poll, retry |
+| Giving the screen time to show something | Wait until; rows read "Wait up to 20 seconds for "Welcome" to appear"; it fails on its own row if the thing never shows | waitFor, extendedWaitUntil, poll, retry |
 | Taking a step out of a recording | Remove step (Undo in the message after); Delete step on a saved case | undo step, drop, discard step |
-| Running a saved case with Maestro | Run; Run all; "Last run passed"; "Not run yet" | Replay |
+| Running a saved case with Maestro | Run; Run all; "Last run passed"; "Not run yet"; a step's result is "Passed", "Failed" or "Not run" | Replay, PASSED, NOT-RUN |
 | The document of one Run all for whoever accepts a release | Evidence pack; its title is "Test results report" | acceptance certificate, audit trail |
 | A case's requirement, user story or scenario code | reference; "Add a reference" | requirement id, ticket, tag |
 | A Maestro file that brings the app to a state | setup block (the Record tab lists them under "Setup blocks" and stacks the chosen ones under "Before recording"; the Blocks tab writes them); "block" in developer docs | precondition, fixture, subflow |
@@ -183,19 +186,23 @@ colours them: green for `check` and `end`, violet for `block`, `--ink-3` for the
    what it did in words, the selector in small mono, the screenshot. The mark says the kind:
    a numbered ring for an action, a green ring for a check, a violet square for a block, no
    ring and a dotted thread for a wait, a filled green dot for an end check. The result
-   column is the only addition after a run. docs/steps-redesign.md has the details.
+   column is the only addition after a run: a tick and Passed in green, a cross and Failed
+   in red, Not run in grey, so a result never rests on colour alone.
+   docs/steps-redesign.md has the details.
 3. Highlight by meaning. Ochre for the thread, green for checks and
    passes, red for failures, amber for doubts. Nothing else is coloured.
 4. State is always visible. The status pill in the top bar says connected, busy or idle
    (the top bar holds only the name, that pill, the theme switch and the Settings gear;
    which device and app the studio is on sits in Device, above the Record and Cases tabs);
-   a recording case shows a pulsing ochre dot; a running suite says which case it is on.
+   a recording shows the word Recording beside a pulsing ochre dot in the bar above the
+   screen, and nothing beside the case title; a running suite says which case it is on.
 5. Empty states tell you the next click ("Connect a device to see its screen here").
 6. Destructive actions are outlined red, never filled, and always confirm, with one
    exception: removing a step from a recording in progress offers Undo instead, because it
    happens after every mis-tap and nothing is lost until Finish.
 7. Recording is never hidden. The bar above the screen always holds the record button
    (Start recording, then Finish recording), and a recording frames the screen in ochre.
+   The bar itself stays plain: the frame carries the colour.
 8. Blocks are marked, not boxed. A setup block wears a violet square with the puzzle glyph
    wherever it appears (the library, the Before recording stack, a case being recorded,
    a saved case), never a card, so a block is never mistaken for a recorded step. A wait

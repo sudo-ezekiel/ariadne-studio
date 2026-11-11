@@ -88,13 +88,15 @@ The controls under the screen add these steps:
 
 ## Check, Wait until and Wait
 
-Three controls beside the text field record something about time and the screen, and none of them touches the phone:
+Three steps record something about time and the screen, and none of them touches the phone:
 
 - **Check** records that something is on the screen now. The run fails if it is missing.
-- **Wait until** gives the screen up to 20 seconds to show something, then the run carries on either way.
-- **Wait** pauses the run for a fixed number of seconds, whatever the screen shows.
+- **Wait until** gives the screen up to 20 seconds to show something. The run goes on as soon as it shows, and fails on this step if it never does.
+- **Wait** pauses the run for a fixed number of seconds, whatever the screen shows. It never fails.
 
-Use **Wait until** where a page takes a moment to load, for example a website the app has just opened: click the button you are about to tap, and the run waits for it instead of guessing a number of seconds. Use **Check** for what the case is meant to prove.
+**Check** and **Wait until** sit beside the text field under the screen, because you record them by clicking the screen. **Wait** is in the steps list, see [Put a Wait between two steps](#put-a-wait-between-two-steps).
+
+Use **Wait until** where a page takes a moment to load, for example a website the app has just opened: click the button you are about to tap, and the run waits for it instead of guessing a number of seconds. If it never comes, the run stops on the Wait until, which says what it waited for, instead of on the tap after it. Use **Check** for what the case is meant to prove.
 
 Toggle **Check**, and a click records a check for that element. The outline turns green and dashed. Toggle it off to go back to tapping.
 
@@ -102,7 +104,7 @@ Toggle **Wait until**, and the next click records a wait for that element; the m
 
 Elements with neither a name nor an id are refused: "Nothing with a name or id here. Click on a text or a control." In Check and Wait until modes, holds and drags do nothing.
 
-**Wait** is a fixed pause of 1 to 120 seconds. Press it in the controls, or drag the **Wait** tile from the end of the steps to any place between two steps, see below. See also [Known limits](/reference/known-limits#a-tap-on-a-page-that-is-still-loading).
+**Wait** is a fixed pause of 1 to 120 seconds. Drag the **Wait** tile from the end of the steps to any place between two steps, or press **Add** beside it, see below. See also [Known limits](/reference/known-limits#a-tap-on-a-page-that-is-still-loading).
 
 ## The steps while you record
 

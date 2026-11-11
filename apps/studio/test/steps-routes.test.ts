@@ -257,10 +257,11 @@ describe('steps while recording', () => {
     expect((await call('POST', '/api/case/wait-for', { x: 900, y: 100 })).body.error?.code).toBe('NO_ELEMENT');
     await call('POST', '/api/case/finish', { picks: [] });
     const flow = await readFile(join(dir, 'flows', `${body.caseId}.yaml`), 'utf8');
-    expect(flow).toContain('- extendedWaitUntil:\n    visible:\n      text: "Welcome"\n    timeout: 20000\n    optional: true\n');
+    expect(flow).toContain('- extendedWaitUntil:\n    visible:\n      text: "Welcome"\n    timeout: 20000\n');
+    expect(flow).not.toContain('optional: true');
   });
 
-  it('replays a wait until by looking at the screen, at once when the element is there and until the time runs out when not', async () => {
+  it('replays a wait until by looking at the screen, at once when the element is there and fails with a message once the time runs out when not', async () => {
     const { body } = await call<CaseStartResponse>('POST', '/api/case/start', { name: 'Welcome' });
     await call('POST', '/api/case/wait-for', { x: 200, y: 1100, seconds: 1 });
     await call('POST', '/api/action/back');
@@ -274,7 +275,9 @@ describe('steps while recording', () => {
     phone.empty = true;
     before = phone.snapshots;
     const started = Date.now();
-    expect((await call('POST', `/api/cases/${body.caseId}/edit`, { mode: 'insert', after: 1 })).status).toBe(200);
+    const failed = await call('POST', `/api/cases/${body.caseId}/edit`, { mode: 'insert', after: 1 });
+    expect(failed.status).toBe(502);
+    expect(failed.body.error?.message).toContain('Waited 1 second for "Welcome" and it never appeared.');
     expect(Date.now() - started).toBeGreaterThanOrEqual(950);
     expect(phone.snapshots - before).toBeGreaterThanOrEqual(3);
   });
