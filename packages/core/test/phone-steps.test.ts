@@ -381,8 +381,21 @@ describe('focusedField', () => {
     const field = focusedField([
       { focused: true, editable: true, password: true, identifier: 'login:id/password', value: secret, text: secret, label: secret },
     ]);
-    expect(field).toEqual({ key: 'login:id/password', password: true, value: '' });
+    expect(field).toEqual({ key: 'login:id/password (password)', password: true, value: '' });
     expect(JSON.stringify(field)).not.toContain(secret);
+  });
+
+  it('keys a password field apart from a plain field with the same identifier', () => {
+    const plain = focusedField([{ focused: true, editable: true, identifier: 'RNE__Input__text-input', value: 'ba@example.com' }]);
+    const password = focusedField([{ focused: true, editable: true, password: true, identifier: 'RNE__Input__text-input' }]);
+    expect(plain?.key).toBe('RNE__Input__text-input');
+    expect(password?.key).not.toBe(plain?.key);
+  });
+
+  it('keys two plain fields with the same identifier the same', () => {
+    const first = focusedField([{ focused: true, editable: true, identifier: 'RNE__Input__text-input', value: 'a' }]);
+    const second = focusedField([{ focused: true, editable: true, identifier: 'RNE__Input__text-input', value: 'b' }]);
+    expect(first?.key).toBe(second?.key);
   });
 
   it('reads an ordinary field\'s value, then its text, then its label', () => {

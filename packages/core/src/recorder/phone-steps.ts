@@ -172,7 +172,10 @@ export function focusedField(nodes: readonly PhoneNode[]): FocusedField | undefi
   const field = nodes.find((node) => node.focused === true && (node.editable === true || /EditText/.test(node.type ?? '')));
   if (!field) return undefined;
   const key = field.identifier ?? field.type ?? 'field';
-  if (field.password === true) return { key, password: true, value: '' };
+  // Fields often share an id (every React Native Elements input does), so a
+  // password field must never pass for the field before it: its text cannot be
+  // read, and the email typed there would look erased.
+  if (field.password === true) return { key: `${key} (password)`, password: true, value: '' };
   const value = field.hintShowing ? '' : (field.value ?? field.text ?? field.label ?? '');
   return { key, password: false, value };
 }
