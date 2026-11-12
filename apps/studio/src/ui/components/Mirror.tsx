@@ -59,7 +59,8 @@ type Props = {
 };
 
 /** A press on the screen while the pointer is down: where it started and how far it got. */
-type Press = { pointerId: number; client: Point; point: Point; startedAt: number; maxDistance: number };
+/** `typing` is the text sent from the box before the press, which it waits for. */
+type Press = { pointerId: number; client: Point; point: Point; startedAt: number; maxDistance: number; typing: Promise<boolean> | null };
 
 function toViewport(event: MouseEvent<HTMLElement>, screen: ScreenState): Point {
   const box = event.currentTarget.getBoundingClientRect();
@@ -227,7 +228,7 @@ export function Mirror(props: Props) {
   const press = useRef<Press | null>(null);
   /** The drag being drawn, in viewport pixels. */
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
-  const [menu, setMenu] = useState<{ at: Point; point: Point } | null>(null);
+  const [menu, setMenu] = useState<{ at: Point; point: Point; typing: Promise<boolean> | null } | null>(null);
   const screenBox = useRef<HTMLDivElement>(null);
   /** How big the screen is drawn here, in CSS pixels, to place the text box over a field. */
   const [drawn, setDrawn] = useState<{ width: number; height: number } | null>(null);
@@ -276,9 +277,8 @@ export function Mirror(props: Props) {
     pending.current = '';
     setTyped('');
     const typing = props.onType(value).then((typed) => {
-      // Refused, as an unsaved password is: the text goes back in the box, shown again only over its own field.
-      if (!typed && !pending.current) {
-        draftFor.current = forField;
+      // Refused, as an unsaved password is: the text goes back in the box, unless its field has gone meanwhile.
+      if (!typed && !pending.current && forField !== undefined && draftFor.current === forField) {
         pending.current = value;
         setTyped(value);
       }
@@ -292,11 +292,11 @@ export function Mirror(props: Props) {
     return typing;
   };
   /**
-   * Runs a press once text sent from the box has reached the device, so the steps read type, then the
-   * press. Not when the text was refused: the press was meant for a screen with that text in it.
+   * Runs a press once `typing`, the text sent from the box when it began, has reached the device, so
+   * the steps read type, then the press. Not when the text was refused, even if that was before the
+   * press ended: the press was meant for a screen with that text in it.
    */
-  const afterTyping = (action: () => void) => {
-    const typing = sending.current;
+  const afterTyping = (typing: Promise<boolean> | null, action: () => void) => {
     if (typing) void typing.then((typed) => typed && action());
     else action();
   };
@@ -330,6 +330,7 @@ export function Mirror(props: Props) {
       point: toViewport(event, screen),
       startedAt: event.timeStamp,
       maxDistance: 0,
+      typing: sending.current,
     };
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -346,7 +347,7 @@ export function Mirror(props: Props) {
     const durationMs = event.timeStamp - current.startedAt;
     const gesture = classifyPointer({ durationMs, maxDistancePx: current.maxDistance });
     const to = toViewport(event, screen);
-    afterTyping(() => {
+    afterTyping(current.typing, () => {
       if (choosing) {
         if (gesture === 'tap') props.onChoose(current.point);
       } else if (waitUntilMode) {
@@ -365,10 +366,10 @@ export function Mirror(props: Props) {
     setDrag(null);
   };
   const chooseFromMenu = (choice: ScreenMenuChoice) => {
-    const point = menu?.point;
+    if (!menu) return;
+    const { point, typing } = menu;
     setMenu(null);
-    if (!point) return;
-    afterTyping(() => {
+    afterTyping(typing, () => {
       if (choice === 'tap') {
         focusAfter.current = true;
         props.onTap(point);
@@ -431,7 +432,7 @@ export function Mirror(props: Props) {
                 event.preventDefault();
                 cancelPress();
                 if ((busy && !sending.current) || choosing) return;
-                setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen) });
+                setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen), typing: sending.current });
               }}
             >
               <img src={screen.imageUrl} alt="Device screen" draggable={false} />

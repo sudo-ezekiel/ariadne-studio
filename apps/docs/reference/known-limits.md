@@ -37,6 +37,8 @@ What is not done, and what behaves in a way you might not expect.
 - Two quick taps on the same spot record as two taps, never as a double tap: a calculator's `7`, `7` looks the same as a double tap. Use the right click menu on the screen here for a real double tap.
 - A flick records as a swipe at its speed, up to the limits of a swipe on the screen here, and the list may scroll a different distance on replay.
 - The phone's screen is not mirrored live while you use it: the screen here updates about a second after each step.
+- Use the phone and the screen here one at a time. Text typed on the phone while a step from the screen here is still running can be left out, when the same field still has focus as that step ends: the field's text does not say who typed which letters.
+- A tap on the phone within a moment of a quick step from the screen here can be read against the screen from before that step, and name the wrong element. Most such taps are marked for review, but not all. Wait a second after using the screen here before touching the phone.
 
 ## Scrolling and swiping
 

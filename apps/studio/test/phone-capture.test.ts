@@ -1229,6 +1229,68 @@ describe('a finger on the phone while the screen here is acting', () => {
     expect(steps.map((step) => step.kind)).toEqual(['tap', 'expect', 'type', 'tap']);
     expect(steps[2]?.text).toBe('abc');
   });
+
+  /**
+   * Holds the answer to a request to `url`, once its handler has run, until `send()`, so the hand-off
+   * it began is not over. Unlike holdAnswers(), any other request is answered as usual. Set up
+   * before the first request: Fastify takes no hooks once it has started.
+   */
+  function holdResponse(r: Rig, url: string): { reached: Promise<void>; send: () => void } {
+    let reach: () => void = () => undefined;
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve;
+    });
+    let send: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      send = resolve;
+    });
+    r.app.addHook('onSend', async (request, _reply, payload) => {
+      if (request.url === url) {
+        reach();
+        await gate;
+      }
+      return payload;
+    });
+    return { reached, send };
+  }
+
+  it('keeps what the phone typed while an action from the screen here was unanswered, when a cross-site action is refused before a second one begins', async () => {
+    const r = await rig();
+    const tapAnswer = holdResponse(r, '/api/action/tap');
+    const checkAnswer = holdResponse(r, '/api/case/expect');
+    r.device.nodes = typingScreen('');
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    const tapped = call(r, 'POST', '/api/action/tap', { x: SIGN_IN.x, y: SIGN_IN.y });
+    await tapAnswer.reached;
+    // The phone types while the tap is unanswered, and is not seen again until the check has handed off.
+    const release = holdSnapshots(r.device);
+    r.device.nodes = typingScreen('abc');
+    await finger(r, KEY);
+    // Another site's page asks for an action: the origin guard refuses it before it reaches the phone.
+    const back = vi.spyOn(r.device, 'back');
+    const refused = await r.app.inject({ method: 'POST', url: '/api/action/back', headers: { 'sec-fetch-site': 'cross-site' } });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: { code: 'NOT_THIS_COMPUTER' } });
+    expect(back).not.toHaveBeenCalled();
+    const handOff = watchYield();
+    const checked = call(r, 'POST', '/api/case/expect', { x: SIGN_IN.x, y: SIGN_IN.y });
+    await handOff.done;
+    release();
+    await checkAnswer.reached;
+    await settled(r);
+    tapAnswer.send();
+    expect((await tapped).status).toBe(200);
+    checkAnswer.send();
+    expect((await checked).status).toBe(200);
+    await settled(r);
+    await finger(r, REGISTER);
+    await waitForSteps(r, 3);
+    await call(r, 'POST', '/api/phone/stop');
+    const steps = await currentSteps(r);
+    expect(steps.map((step) => step.kind)).toEqual(['tap', 'expect', 'type', 'tap']);
+    expect(steps[2]?.text).toBe('abc');
+  });
 });
 
 describe('a phone start that is no longer wanted when it finishes', () => {

@@ -355,7 +355,9 @@ export function App() {
   /** Settles with whether the text was typed; a refusal has been shown already. */
   const type = (text: string) =>
     run('Typing', async () => {
-      await applyAction(await api.type(text));
+      const response = await api.type(text);
+      // The text is on the device by now: a case that fails to load again is shown, and does not undo that.
+      await run('Typing', () => applyAction(response));
       return true;
     }).then((typed) => typed === true);
   const back = () => run('Going back', async () => applyAction(await api.back()));

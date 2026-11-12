@@ -84,7 +84,7 @@ import {
 import { registerEvidenceRoutes } from './evidence.ts';
 import { registerExportRoutes } from './exports.ts';
 import { registerFileRoutes } from './files.ts';
-import { registerPhoneRoutes, stopPhoneCapture } from './phone-capture.ts';
+import { registerPhoneRoutes, stopPhoneCapture, type PhoneCapture } from './phone-capture.ts';
 import { registerReplayRoutes, runPrefixWithMaestro } from './replay.ts';
 import {
   currentCaseView,
@@ -482,11 +482,17 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
   // typed on the phone becomes its step, and the phone is followed afresh after it.
   const actsOnScreen = (request: { method: string; url: string }) =>
     request.method === 'POST' && (request.url.startsWith('/api/action/') || SCREEN_STEP_ROUTES.some((route) => request.url.startsWith(route)));
+  // Only a request the phone yielded to hands it back, and to the same capture: one refused
+  // before that, or answered after the capture was replaced, must not end another's hand-off.
+  const yielded = new WeakMap<object, PhoneCapture>();
   app.addHook('preHandler', async (request) => {
-    if (state.phone && actsOnScreen(request)) await state.phone.yieldToScreen();
+    const phone = state.phone;
+    if (!phone || !actsOnScreen(request)) return;
+    yielded.set(request, phone);
+    await phone.yieldToScreen();
   });
   app.addHook('onResponse', async (request) => {
-    if (state.phone && actsOnScreen(request)) state.phone.screenActed();
+    yielded.get(request)?.screenActed();
   });
 
   app.get('/api/project', async () => projectInfo(state));
