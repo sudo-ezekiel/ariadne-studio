@@ -1,9 +1,15 @@
 // Recording from a finger on the phone. The mirror resolves a click before it
 // presses, but a finger has already pressed by the time the studio hears of
-// it, so while this runs the studio snapshots the screen constantly and reads
-// each touch against the last snapshot from before it. What the touch meant is
-// decided in @ariadne/core's phone-steps; this file owns the loop and the
-// recorder calls.
+// it, so the studio keeps snapshots of the screen and reads each touch against
+// the last one from before it. What the touch meant is decided in @ariadne/core's
+// phone-steps; this file owns the loop and the recorder calls.
+//
+// It runs for the whole of a recording, in one of two paces. Listening: touches
+// are read and a snapshot is taken now and then, so the first touch on the phone
+// has a recent screen to be read against. Following: from that first touch on,
+// snapshots come back to back. Anything done through the screen here goes back
+// to listening, after writing what was typed on the phone, so the steps keep the
+// order they happened in.
 //
 // getevent is effectively a keylogger: a touch on the on-screen keyboard is a
 // key press. Touches are never logged or stored, keyboard ones are dropped once
@@ -42,8 +48,12 @@ import type { PhonePrepareResponse, PhoneStatus } from '../shared/api-types.ts';
 import { HttpError, MAX_SWIPE_MS, MIN_SWIPE_MS, captureInto, captureScratch, phoneLocked, projectEnv, requireCase, requireSession } from './common.ts';
 import { enqueue, type ServerState } from './state.ts';
 
-/** Pause between snapshots; a snapshot itself takes about 100 ms on a phone. */
+/** Pause between snapshots while following; a snapshot itself takes about 100 ms on a phone. */
 const SNAPSHOT_GAP_MS = 20;
+/** Pause between snapshots while listening: the newest is then well inside STALE_SNAPSHOT_MS. */
+const LISTEN_GAP_MS = 400;
+/** Following goes back to listening once the phone has been left alone this long. */
+const FOLLOW_IDLE_MS = 15_000;
 /** Snapshots kept to read touches against. */
 const HISTORY = 40;
 /** How long a touch waits for a snapshot that began after it... */
@@ -104,6 +114,17 @@ export class PhoneCapture {
   private viewport: Viewport | undefined;
   private rotation: Rotation = 0;
   private stopped = false;
+  /** Snapshots back to back, because the tester is using the phone. */
+  private following = false;
+  private lastTouchAt = 0;
+  /** Requests from the screen here that are acting on the phone: what they type is not the tester's. */
+  private screenActions = 0;
+  /** A finger on the phone since the screen here began acting: what it types is the tester's. */
+  private phoneTookOver = false;
+  /** When the screen here last finished acting. A snapshot begun before then shows a field's text from before it. */
+  private settledAt = 0;
+  /** Ends the pause between two snapshots early, when a touch begins. */
+  private wake: (() => void) | undefined;
   private paused = false;
   private cameBack = false;
   private locked = false;
@@ -148,6 +169,7 @@ export class PhoneCapture {
   status(): PhoneStatus {
     return {
       active: true,
+      following: this.following,
       paused: this.paused,
       revision: this.revision,
       ...(this.notice ? { notice: { id: this.noticeCount, text: this.notice } } : {}),
@@ -157,6 +179,7 @@ export class PhoneCapture {
   /** Ends the capture: finishes what is in hand, then leaves the screen current for the end checks. */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.wake?.();
     this.stopWatching();
     await this.loop;
     await this.gestures;
@@ -197,6 +220,7 @@ export class PhoneCapture {
 
   private onLine(line: string): void {
     const gesture = this.reader.read(line, Date.now());
+    if (this.reader.touching || gesture) this.touched();
     if (!gesture) return;
     this.lastUpAt = gesture.upAt;
     this.gestures = this.gestures
@@ -204,9 +228,85 @@ export class PhoneCapture {
       .catch((error: unknown) => console.error(`[studio] could not record a touch: ${describeDeviceError(error).message}`));
   }
 
+  /** A finger is on the phone: follow it. */
+  private touched(): void {
+    this.lastTouchAt = Date.now();
+    if (this.screenActions > 0) this.phoneTookOver = true;
+    if (this.following) return;
+    this.following = true;
+    this.revision += 1;
+    this.wake?.();
+  }
+
+  /** Waits `ms`, or less when a touch begins. Not at all once stopping, so a stop is not held up. */
+  private rest(ms: number): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(done, ms);
+      function done() {
+        clearTimeout(timer);
+        resolve();
+      }
+      this.wake = done;
+    });
+  }
+
+  /**
+   * The screen here is about to act on the phone. What was done on the phone,
+   * touches made while this waits included, is written first, so the steps keep
+   * their order, and the pace drops back unless a finger touched the phone meanwhile.
+   */
+  async yieldToScreen(): Promise<void> {
+    // Overlapping requests share one hand-off: a finger since the first of them still counts.
+    if (this.screenActions === 0) this.phoneTookOver = false;
+    this.screenActions += 1;
+    let gestures: Promise<void>;
+    do {
+      gestures = this.gestures;
+      await gestures;
+    } while (gestures !== this.gestures);
+    const last = this.history.at(-1);
+    if (this.following && last && !last.outside) this.noteField(last);
+    await this.flushTyping();
+    this.cameBack = false;
+    if (!this.following || this.phoneTookOver) return;
+    this.following = false;
+    this.revision += 1;
+  }
+
+  /**
+   * The screen here has acted, and `nodes` is the screen it left, read in the device queue before
+   * any later snapshot. Text it put in a field is already its step, so typing on the phone counts
+   * from the text the field has now. Text typed on the phone while it acted is part of that text.
+   */
+  screenSettled(nodes: DeviceSnapshot['nodes']): void {
+    this.settledAt = Date.now();
+    const typing = this.typing;
+    // A password is counted in key presses on the phone, never read from the field.
+    if (!typing || typing.password) return;
+    const field = focusedField(nodes);
+    if (field?.key === typing.key) typing.start = typing.value = field.value;
+  }
+
+  /**
+   * The screen here has acted. Text it typed into a field is already a step, so the field is
+   * followed afresh, unless a finger on the phone took over meanwhile: what that typed is kept.
+   */
+  screenActed(): void {
+    if (this.screenActions === 0) return;
+    this.screenActions -= 1;
+    if (this.screenActions > 0) return;
+    if (!this.phoneTookOver) this.typing = undefined;
+    this.phoneTookOver = false;
+  }
+
   private async watchScreen(): Promise<void> {
     let failures = 0;
     while (!this.stopped) {
+      if (this.following && !this.reader.touching && Date.now() - this.lastTouchAt > FOLLOW_IDLE_MS) {
+        this.following = false;
+        this.revision += 1;
+      }
       try {
         await this.see();
         failures = 0;
@@ -219,7 +319,7 @@ export class PhoneCapture {
           return;
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_GAP_MS));
+      await this.rest(this.following ? SNAPSHOT_GAP_MS : LISTEN_GAP_MS);
     }
   }
 
@@ -244,7 +344,7 @@ export class PhoneCapture {
     const screen: PhoneScreen = { nodes: snapshot.nodes, viewport, startedAt, endedAt, ...(snapshot.keyboard ? { keyboard: snapshot.keyboard } : {}) };
     const app = foregroundApp(screen);
     this.trackApp(app, await this.lockScreenUp());
-    if (!this.paused) this.noteField(screen);
+    if (!this.paused && (this.screenActions === 0 || this.phoneTookOver)) this.noteField(screen);
     this.history.push({ ...screen, ...(app ? { app } : {}), outside: this.paused });
     if (this.history.length > HISTORY) this.history.shift();
   }
@@ -411,9 +511,11 @@ export class PhoneCapture {
    * Follows the focused field. It runs on every snapshot, so `start` is the
    * text from before typing began and text that arrives without key presses
    * (a paste, autofill) still counts. Text not written yet keeps its place when
-   * focus moves on; the next gesture writes it.
+   * focus moves on; the next gesture writes it. A snapshot from before the screen here last acted
+   * is passed over: it would take back what that action typed, or count it as typed on the phone.
    */
   private noteField(screen: PhoneScreen): void {
+    if (screen.startedAt <= this.settledAt) return;
     const field = focusedField(screen.nodes);
     if (!field) return;
     const typing = this.typing;
@@ -483,17 +585,32 @@ export class PhoneCapture {
   }
 }
 
-/** Stops recording from the phone, if it is on. Never call this inside enqueue: it waits for queued work. */
+/**
+ * Stops recording from the phone, if it is on, and waits for a stop already under way, as when the
+ * phone stopped by itself. Never call this inside enqueue: it waits for queued work.
+ */
 export async function stopPhoneCapture(state: ServerState): Promise<void> {
+  state.phoneStarting = undefined;
   const capture = state.phone;
-  if (!capture) return;
+  if (!capture) return state.phoneStopping;
   state.phone = undefined;
-  await capture.stop();
+  const earlier = state.phoneStopping;
+  const stopping = capture.stop();
+  // Whoever waits later only waits, for this stop and any still under way, as when the phone
+  // stopped by itself and a later capture was stopped too. A failure is the first caller's to report.
+  const stopped: Promise<void> = stopping
+    .catch(() => undefined)
+    .then(() => earlier)
+    .finally(() => {
+      if (state.phoneStopping === stopped) state.phoneStopping = undefined;
+    });
+  state.phoneStopping = stopped;
+  await stopping;
 }
 
 function phoneStatus(state: ServerState): PhoneStatus {
   if (state.phone) return state.phone.status();
-  return { active: false, paused: false, revision: 0, ...(state.phoneError ? { error: state.phoneError } : {}) };
+  return { active: false, following: false, paused: false, revision: 0, ...(state.phoneError ? { error: state.phoneError } : {}) };
 }
 
 /** Puts Maestro's driver on the phone, saying why when it does not go on. */
@@ -519,17 +636,33 @@ export function registerPhoneRoutes(app: FastifyInstance, state: ServerState): v
 
   app.post('/api/phone/start', async (): Promise<PhoneStatus> => {
     requireSession(state);
-    requireCase(state);
+    const recorder = requireCase(state);
     if (state.phone) return phoneStatus(state);
     state.phoneError = undefined;
-    return enqueue(state, async () => {
+    const start = Symbol('phone start');
+    state.phoneStarting = start;
+    // A stop, the end of the recording or another start while this one waited makes it unwanted.
+    const wanted = () => state.phoneStarting === start && state.recorder === recorder && recorder.active && state.session.isOpen;
+    const capture = await enqueue(state, async () => {
+      if (!wanted()) return undefined;
       const input = await state.phoneTools.read(state.session.deviceId!);
       if (!input) throw new HttpError(409, 'NO_TOUCHSCREEN', 'Ariadne cannot read the touchscreen of this device, so record on the screen here instead.');
-      const capture = new PhoneCapture(state, input);
-      await capture.start();
-      state.phone = capture;
-      return phoneStatus(state);
+      const started = new PhoneCapture(state, input);
+      await started.start();
+      return started;
+    }).catch((error: unknown) => {
+      if (state.phoneStarting === start) state.phoneStarting = undefined;
+      throw error;
     });
+    const stillWanted = wanted();
+    if (state.phoneStarting === start) state.phoneStarting = undefined;
+    if (!capture) return phoneStatus(state);
+    if (!stillWanted) {
+      await capture.stop();
+      return phoneStatus(state);
+    }
+    state.phone = capture;
+    return phoneStatus(state);
   });
 
   app.post('/api/phone/stop', async (): Promise<PhoneStatus> => {

@@ -10,7 +10,7 @@ What is not done, and what behaves in a way you might not expect.
 ## Platforms
 
 - Android only.
-- The desktop app is tested end to end on Linux. On one real Windows 11 computer with a POCO F5 Pro over USB, installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and **Use the phone** have not been tried on Windows yet.
+- The desktop app is tested end to end on Linux. On one real Windows 11 computer with a POCO F5 Pro over USB, installing, connecting, recording taps and checks, and running a case with Maestro all worked. Typing, gestures and recording on the phone itself have not been tried on Windows yet.
 - The macOS build is configured but not built or tried.
 - On one Windows computer, only one account whose user name Java cannot spell can use **Set up this computer**, because those tools live in one folder locked to that account. If PowerShell is blocked, Ariadne cannot check that folder and does not use it.
 - On Windows, a project folder with letters the system code page cannot spell, such as a Greek user name on English Windows, runs fine. A folder with such letters inside the project, such as a flows folder of your own, stops Maestro at once: its Java receives that part of the path as question marks.
@@ -22,7 +22,7 @@ What is not done, and what behaves in a way you might not expect.
 
 ## Other apps and websites
 
-- The screen in the studio is a new picture every few seconds, not video. It stops looking during an action, a run, the end check picker and **Use the phone**, and while the window is hidden. **Refresh** looks at once.
+- The screen in the studio is a new picture every few seconds, not video. It stops looking during an action, a run, the end check picker and while it follows the phone, and while the window is hidden. **Refresh** looks at once.
 - A lit lock screen is found by asking Android. A phone that has never answered counts as unlocked, so its lock screen would show here. The POCO F5 Pro and the Android 16 emulator both answer.
 - A step that needs the camera, such as a selfie or a photo of a document, cannot be replayed.
 - A one-time code or a link made for one session is different on every run, so a step that depends on it fails on the next run.
@@ -37,6 +37,8 @@ What is not done, and what behaves in a way you might not expect.
 - Two quick taps on the same spot record as two taps, never as a double tap: a calculator's `7`, `7` looks the same as a double tap. Use the right click menu on the screen here for a real double tap.
 - A flick records as a swipe at its speed, up to the limits of a swipe on the screen here, and the list may scroll a different distance on replay.
 - The phone's screen is not mirrored live while you use it: the screen here updates about a second after each step.
+- Use the phone and the screen here one at a time. Text typed on the phone while a step from the screen here is still running can be left out, when the same field still has focus as that step ends: the field's text does not say who typed which letters.
+- A tap on the phone within a moment of a quick step from the screen here can be read against the screen from before that step, and name the wrong element. Most such taps are marked for review, but not all. Wait a second after using the screen here before touching the phone.
 
 ## Scrolling and swiping
 

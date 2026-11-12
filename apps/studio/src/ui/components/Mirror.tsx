@@ -1,10 +1,11 @@
-import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { resolveNodeAt, type Point, type Rect } from '@ariadne/core/hit-test';
 import type { PhoneKey, ScreenOrientation, ScrollDirection } from '@ariadne/core/types';
-import { DEFAULT_WAIT_SECONDS, type PhoneStatus, type ScreenState, type SnapshotNodeLite } from '../../shared/api-types.ts';
+import type { PhoneStatus, ScreenState, SnapshotNodeLite } from '../../shared/api-types.ts';
 import { RefreshIcon } from './Icons.tsx';
 import { count } from './format.ts';
 import { classifyPointer, distance, DRAG_PX } from './gestures.ts';
+import { fieldKey, focusedField, inlineBox } from './inline-field.ts';
 import { PhoneButtons } from './PhoneButtons.tsx';
 import { ScreenMenu, type ScreenMenuChoice } from './ScreenMenu.tsx';
 
@@ -17,9 +18,8 @@ type Props = {
   caseActive: boolean;
   /** The case being recorded, for the bar above the screen. */
   recording: { name: string; steps: number } | null;
-  /** Recording from a finger on the phone: this screen follows along and only Check works here. */
+  /** The phone's own touchscreen: read while recording, and followed while the tester uses it. */
   phone: PhoneStatus;
-  onTogglePhone: () => void;
   /** A real phone may be asking about an install: while connecting, or while Maestro's driver goes on for a run. */
   phonePrompt: 'connect' | 'run' | null;
   /** The end-check picker is open, so the recording is about to be saved. */
@@ -40,10 +40,9 @@ type Props = {
   onChoose: (point: Point) => void;
   onTap: (point: Point) => void;
   onExpect: (point: Point) => void;
-  onToggleExpect: () => void;
   onWaitUntil: (point: Point) => void;
-  onToggleWaitUntil: () => void;
-  onType: (text: string) => void;
+  /** Settles with whether the text was typed, so a click made meanwhile follows it only then. */
+  onType: (text: string) => Promise<boolean>;
   onBack: () => void;
   onScroll: (direction: ScrollDirection) => void;
   onRelaunch: () => void;
@@ -60,7 +59,8 @@ type Props = {
 };
 
 /** A press on the screen while the pointer is down: where it started and how far it got. */
-type Press = { pointerId: number; client: Point; point: Point; startedAt: number; maxDistance: number };
+/** `typing` is the text sent from the box before the press, which it waits for. */
+type Press = { pointerId: number; client: Point; point: Point; startedAt: number; maxDistance: number; typing: Promise<boolean> | null };
 
 function toViewport(event: MouseEvent<HTMLElement>, screen: ScreenState): Point {
   const box = event.currentTarget.getBoundingClientRect();
@@ -140,16 +140,11 @@ function StageBar(props: Props) {
           <span className="hint">Choose the end checks on the right, then Save case.</span>
         ) : (
           <span className="stage-actions">
-            <button
-              type="button"
-              className={phone.active ? 'toggle-on' : ''}
-              aria-pressed={phone.active}
-              onClick={props.onTogglePhone}
-              disabled={busy}
-              title={phone.active ? 'Go back to using the screen here' : 'Do the steps on the phone itself, with your own fingers'}
-            >
-              {phone.active ? 'Stop using the phone' : 'Use the phone'}
-            </button>
+            {phone.following && (
+              <span className="stage-following" role="status" title="Steps come from what you do on the phone. Click the screen here to carry on from the studio.">
+                Following the phone
+              </span>
+            )}
             <button type="button" className="primary" onClick={props.onFinish} disabled={busy}>
               Finish recording
             </button>
@@ -224,22 +219,110 @@ export function Mirror(props: Props) {
   const { screen, busy, highlight, sessionOpen, caseActive, expectMode, waitUntilMode, choosing } = props;
   /** Check and Wait until both read an element off the screen and press nothing. */
   const looking = expectMode || waitUntilMode;
-  const usingPhone = props.phone.active;
-  /** Everything but Check waits while the phone is the input. */
-  const inputOff = !sessionOpen || busy || usingPhone;
+  /** The tester is using the phone itself. A click here still works: the studio takes over from the phone. */
+  const following = props.phone.following;
+  const inputOff = !sessionOpen || busy;
   const [hover, setHover] = useState<SnapshotNodeLite | undefined>();
   const [text, setText] = useState('');
   const [link, setLink] = useState<string | null>(null);
   const press = useRef<Press | null>(null);
   /** The drag being drawn, in viewport pixels. */
   const [drag, setDrag] = useState<{ from: Point; to: Point } | null>(null);
-  const [menu, setMenu] = useState<{ at: Point; point: Point } | null>(null);
+  const [menu, setMenu] = useState<{ at: Point; point: Point; typing: Promise<boolean> | null } | null>(null);
+  const screenBox = useRef<HTMLDivElement>(null);
+  /** How big the screen is drawn here, in CSS pixels, to place the text box over a field. */
+  const [drawn, setDrawn] = useState<{ width: number; height: number } | null>(null);
+  /** What is in the text box over the focused field; a ref too, for handlers that run before a render. */
+  const [typed, setTyped] = useState('');
+  const pending = useRef('');
+  /** The text being sent from the box, until the device has it. A click made meanwhile waits for it. */
+  const sending = useRef<Promise<boolean> | null>(null);
+  /** The last thing done here was a tap on the screen (or Enter in the box), so a focused field may take the keyboard. */
+  const focusAfter = useRef(false);
+  const fieldInput = useRef<HTMLInputElement>(null);
+
+  // Typing straight into the screen: only in plain tap mode, and only over a field the phone reports as focused.
+  const field = screen && !screen.hidden && !inputOff && !following && !looking && !choosing ? focusedField(screen.nodes) : undefined;
+  const fieldShown = field !== undefined;
+  // Text in the box belongs to the field it was typed for. Dropped before the screen is painted
+  // when that field goes, so a password never shows, or is typed, in the next one.
+  const typedFor = screen && field ? fieldKey(screen.nodes, field) : undefined;
+  const draftFor = useRef(typedFor);
+  useLayoutEffect(() => {
+    if (draftFor.current === typedFor) return;
+    draftFor.current = typedFor;
+    pending.current = '';
+    setTyped('');
+  }, [typedFor]);
+  const hasScreen = screen !== null;
+  useEffect(() => {
+    const element = screenBox.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setDrawn({ width: element.clientWidth, height: element.clientHeight }));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasScreen]);
+  // Take the keyboard only after a tap here made a field focused; never on a refresh, so other inputs keep it.
+  useEffect(() => {
+    if (busy) return;
+    if (focusAfter.current && fieldShown) fieldInput.current?.focus();
+    focusAfter.current = false;
+  }, [busy, fieldShown]);
+
+  /** Sends what is in the box as one Type step. Returns undefined when there is nothing to send. */
+  const sendTyped = (): Promise<boolean> | undefined => {
+    const value = pending.current;
+    if (!value) return undefined;
+    const forField = draftFor.current;
+    pending.current = '';
+    setTyped('');
+    const typing = props.onType(value).then((typed) => {
+      // Refused, as an unsaved password is: the text goes back in the box, unless its field has gone meanwhile.
+      if (!typed && !pending.current && forField !== undefined && draftFor.current === forField) {
+        pending.current = value;
+        setTyped(value);
+      }
+      return typed;
+    });
+    sending.current = typing;
+    const done = () => {
+      if (sending.current === typing) sending.current = null;
+    };
+    typing.then(done, done);
+    return typing;
+  };
+  /**
+   * Runs a press once `typing`, the text sent from the box when it began, has reached the device, so
+   * the steps read type, then the press. Not when the text was refused, even if that was before the
+   * press ended: the press was meant for a screen with that text in it.
+   */
+  const afterTyping = (typing: Promise<boolean> | null, action: () => void) => {
+    if (typing) void typing.then((typed) => typed && action());
+    else action();
+  };
+  const onFieldKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (pending.current) focusAfter.current = true;
+      void sendTyped();
+    } else if (event.key === 'Tab') {
+      void sendTyped();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      pending.current = '';
+      setTyped('');
+      event.currentTarget.blur();
+    }
+  };
 
   // A press becomes a tap, a long press or a swipe when it ends (classifyPointer).
   // Check mode keeps priority: a tap records a check, holds and drags do nothing.
   // The mouse wheel is left alone, so scrolling the page never records a step.
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (busy || !screen || event.button !== 0 || (usingPhone && !looking)) return;
+    // Text waiting in the box goes first. Its own busy state must not swallow this press.
+    void sendTyped();
+    if ((busy && !sending.current) || !screen || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     press.current = {
       pointerId: event.pointerId,
@@ -247,6 +330,7 @@ export function Mirror(props: Props) {
       point: toViewport(event, screen),
       startedAt: event.timeStamp,
       maxDistance: 0,
+      typing: sending.current,
     };
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -259,36 +343,45 @@ export function Mirror(props: Props) {
     const current = press.current;
     press.current = null;
     setDrag(null);
-    if (!current || !screen || busy || event.pointerId !== current.pointerId) return;
+    if (!current || !screen || (busy && !sending.current) || event.pointerId !== current.pointerId) return;
     const durationMs = event.timeStamp - current.startedAt;
     const gesture = classifyPointer({ durationMs, maxDistancePx: current.maxDistance });
-    if (choosing) {
-      if (gesture === 'tap') props.onChoose(current.point);
-    } else if (waitUntilMode) {
-      if (gesture === 'tap') props.onWaitUntil(current.point);
-    } else if (expectMode) {
-      if (gesture === 'tap') props.onExpect(current.point);
-    } else if (gesture === 'tap') props.onTap(current.point);
-    else if (gesture === 'hold') props.onLongPress(current.point);
-    else props.onSwipe(current.point, toViewport(event, screen), durationMs);
+    const to = toViewport(event, screen);
+    afterTyping(current.typing, () => {
+      if (choosing) {
+        if (gesture === 'tap') props.onChoose(current.point);
+      } else if (waitUntilMode) {
+        if (gesture === 'tap') props.onWaitUntil(current.point);
+      } else if (expectMode) {
+        if (gesture === 'tap') props.onExpect(current.point);
+      } else if (gesture === 'tap') {
+        focusAfter.current = true;
+        props.onTap(current.point);
+      } else if (gesture === 'hold') props.onLongPress(current.point);
+      else props.onSwipe(current.point, to, durationMs);
+    });
   };
   const cancelPress = () => {
     press.current = null;
     setDrag(null);
   };
   const chooseFromMenu = (choice: ScreenMenuChoice) => {
-    const point = menu?.point;
+    if (!menu) return;
+    const { point, typing } = menu;
     setMenu(null);
-    if (!point) return;
-    if (choice === 'tap') props.onTap(point);
-    else if (choice === 'doubleTap') props.onDoubleTap(point);
-    else if (choice === 'longPress') props.onLongPress(point);
-    else props.onExpect(point);
+    afterTyping(typing, () => {
+      if (choice === 'tap') {
+        focusAfter.current = true;
+        props.onTap(point);
+      } else if (choice === 'doubleTap') props.onDoubleTap(point);
+      else if (choice === 'longPress') props.onLongPress(point);
+      else props.onExpect(point);
+    });
   };
 
   const submitText = () => {
     if (!text) return;
-    props.onType(text);
+    void props.onType(text);
     setText('');
   };
 
@@ -317,17 +410,16 @@ export function Mirror(props: Props) {
         </p>
       )}
       {screen?.elsewhere && <ElsewhereNote elsewhere={screen.elsewhere} appId={props.appId} />}
-      {usingPhone && (
-        <p className={`phone-banner ${props.phone.paused ? 'phone-banner-paused' : ''}`} role="status">
-          {props.phone.paused
-            ? 'Paused: you left the app. Open it again to carry on recording.'
-            : 'Use the phone now. Steps appear on the right as you go, and this screen catches up after each one.'}
+      {following && props.phone.paused && (
+        <p className="phone-banner phone-banner-paused" role="status">
+          Paused: you left the app on the phone. Open it again to carry on recording.
         </p>
       )}
       <div className={`stage ${props.recording ? 'stage-live' : ''}`}>
         <div className="mirror-frame">
           {screen ? (
             <div
+              ref={screenBox}
               className={`screen ${busy ? 'screen-busy' : ''} ${looking ? 'screen-expect' : ''} ${choosing ? 'screen-choose' : ''} ${screen.width > screen.height ? 'screen-landscape' : ''}`}
               style={{ aspectRatio: `${screen.width} / ${screen.height}`, ['--screen-ratio' as string]: screen.width / screen.height }}
               onMouseMove={(event) => setHover(resolveNodeAt(screen.nodes, toViewport(event, screen)))}
@@ -339,8 +431,8 @@ export function Mirror(props: Props) {
               onContextMenu={(event) => {
                 event.preventDefault();
                 cancelPress();
-                if (busy || usingPhone || choosing) return;
-                setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen) });
+                if ((busy && !sending.current) || choosing) return;
+                setMenu({ at: { x: event.clientX, y: event.clientY }, point: toViewport(event, screen), typing: sending.current });
               }}
             >
               <img src={screen.imageUrl} alt="Device screen" draggable={false} />
@@ -354,6 +446,30 @@ export function Mirror(props: Props) {
                   <line x1={drag.from.x} y1={drag.from.y} x2={drag.to.x} y2={drag.to.y} />
                   <circle cx={drag.from.x} cy={drag.from.y} r="1" />
                 </svg>
+              )}
+              {field && drawn && (
+                <input
+                  ref={fieldInput}
+                  className="field-input"
+                  type={field.password ? 'password' : 'text'}
+                  style={inlineBox(screen, drawn, field.rect)}
+                  value={typed}
+                  onChange={(event) => {
+                    pending.current = event.target.value;
+                    setTyped(event.target.value);
+                  }}
+                  onKeyDown={onFieldKey}
+                  onBlur={() => void sendTyped()}
+                  // A press in the box is typing, not a tap on the phone; the right-click menu is the browser's, for Paste.
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerUp={(event) => event.stopPropagation()}
+                  onContextMenu={(event) => event.stopPropagation()}
+                  placeholder={(!field.password && (field.label ?? field.contentDescription)) || 'Type, then Enter'}
+                  title="Enter types this into the field on the phone. Escape leaves it."
+                  aria-label="Type into the field on the phone"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               )}
             </div>
           ) : (
@@ -391,31 +507,6 @@ export function Mirror(props: Props) {
           />
           <button type="submit" disabled={inputOff || !text}>
             Type
-          </button>
-          <span className="toolbar-sep" aria-hidden="true" />
-          <button
-            type="button"
-            className={expectMode ? 'toggle-on' : ''}
-            aria-pressed={expectMode}
-            onClick={props.onToggleExpect}
-            disabled={!sessionOpen || !caseActive || busy}
-            title={caseActive ? 'Record that this is on the screen. The run fails if it is missing.' : 'Start a case first'}
-          >
-            Check
-          </button>
-          <button
-            type="button"
-            className={waitUntilMode ? 'toggle-on' : ''}
-            aria-pressed={waitUntilMode}
-            onClick={props.onToggleWaitUntil}
-            disabled={!sessionOpen || !caseActive || busy}
-            title={
-              caseActive
-                ? `Click something the run should wait for. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear; the run fails if it never does.`
-                : 'Start a case first'
-            }
-          >
-            Wait until
           </button>
         </form>
         <div className="mirror-controls">

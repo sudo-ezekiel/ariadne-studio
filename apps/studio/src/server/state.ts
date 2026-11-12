@@ -114,6 +114,10 @@ export type ServerState = {
   lockAnswered?: string;
   /** Recording from a finger on the phone, while that is on. */
   phone?: PhoneCapture;
+  /** The start of recording from the phone that is under way; a stop clears it, so the start is not kept. */
+  phoneStarting?: symbol;
+  /** The stop of recording from the phone that is under way, so closing waits for its last writes. */
+  phoneStopping?: Promise<void>;
   /** Why recording from the phone stopped by itself. */
   phoneError?: string;
   /** The end of the studio's log, when it is running for real. */
@@ -157,6 +161,10 @@ export function toLiteNode(node: LiteSource): SnapshotNodeLite {
   if (node.rect) lite.rect = { ...node.rect };
   if (node.hittable !== undefined) lite.hittable = node.hittable;
   if (node.systemBar) lite.systemBar = node.systemBar;
+  // Flags only, so the screen can offer a text box over the focused field; never its value.
+  if (node.focused === true) lite.focused = true;
+  if (node.editable === true) lite.editable = true;
+  if (node.password === true) lite.password = true;
   return lite;
 }
 

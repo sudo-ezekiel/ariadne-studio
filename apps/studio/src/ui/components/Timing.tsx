@@ -73,10 +73,24 @@ type TrayProps = {
   /** Adds a wait after the last step. */
   onAdd: () => void;
   onDragging: (dragging: boolean) => void;
+  /** Check or Wait until is on, so the next click on the screen records one. */
+  looking: 'check' | 'waitUntil' | null;
+  onToggleCheck: () => void;
+  onToggleWaitUntil: () => void;
 };
 
-/** The Wait tile at the end of the thread: drag it between two steps, or press Add. */
-export function WaitTray({ disabled, onAdd, onDragging }: TrayProps) {
+const TRAY_HINT = {
+  none: 'Drag Wait between two steps, or press Add. For Check or Wait until, press it, then click something on the screen.',
+  check: 'Click what must be visible on the screen. Press Check again to go back to tapping.',
+  waitUntil: `Click what the run should wait for on the screen. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear.`,
+};
+
+/**
+ * The end of the thread, where steps that tap nothing are added: the Wait tile,
+ * dragged between two steps or added with Add, and Check and Wait until, which
+ * read an element off the screen now and so always go at the end.
+ */
+export function StepTray({ disabled, onAdd, onDragging, looking, onToggleCheck, onToggleWaitUntil }: TrayProps) {
   return (
     <div className="tray">
       <span
@@ -95,10 +109,31 @@ export function WaitTray({ disabled, onAdd, onDragging }: TrayProps) {
         <WaitIcon size={14} />
         Wait
       </span>
-      <span className="tray-hint">Drag it between two steps, or press Add to put it at the end. A run pauses there; nothing happens on the phone now.</span>
-      <button type="button" onClick={onAdd} disabled={disabled}>
+      <button type="button" onClick={onAdd} disabled={disabled} title="A pause after the last step. A run waits there; nothing happens on the phone now.">
         Add
       </button>
+      <span className="toolbar-sep" aria-hidden="true" />
+      <button
+        type="button"
+        className={looking === 'check' ? 'toggle-on' : ''}
+        aria-pressed={looking === 'check'}
+        onClick={onToggleCheck}
+        disabled={disabled}
+        title="Record that something is on the screen. The run fails if it is missing."
+      >
+        Check
+      </button>
+      <button
+        type="button"
+        className={looking === 'waitUntil' ? 'toggle-on' : ''}
+        aria-pressed={looking === 'waitUntil'}
+        onClick={onToggleWaitUntil}
+        disabled={disabled}
+        title={`Click something the run should wait for. It gets up to ${DEFAULT_WAIT_SECONDS} seconds to appear; the run fails if it never does.`}
+      >
+        Wait until
+      </button>
+      <span className="tray-hint">{TRAY_HINT[looking ?? 'none']}</span>
     </div>
   );
 }

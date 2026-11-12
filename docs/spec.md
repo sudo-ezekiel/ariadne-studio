@@ -364,7 +364,12 @@ Functional and legible beats pretty. Layout:
   cursor using the lite nodes (pure client-side hit test, same rules as the server; share
   the function from core if the bundling is simple, otherwise copy it and note that).
   Below the mirror: a text field plus a Type button (POSTs `/api/action/type`), and a Back
-  button.
+  button. Since 2026-11-11 the mirror also draws a real `<input>` over the node that is
+  `focused` and `editable` (or `password`, then `type="password"`), in plain tap mode only.
+  `toLiteNode` passes those three flags, never a value. It takes focus only after a tap on the
+  mirror; Enter or Tab sends it through the same Type call, Escape clears it, and a mirror
+  click with text pending sends the text before the click. The text field below stays for
+  fields the snapshot does not report.
 - Right: case panel. When no case is active: a name field and Start case. When active: the
   case name, the live step list (one row per step: index, kind, selector shown as
   `id: ...` or `text: ...` or `point`, thumbnail of the step screenshot), Finish case and
@@ -695,8 +700,22 @@ case recorded through the studio, launchApp included, ran 17 of 17 steps with Ma
 no end checks. The same day a longer case stopped at a calculated value (below).
 
 The mirror resolves a click before it presses. A finger has already pressed by the time
-the studio hears of it, so while **Use the phone** is on the studio snapshots the screen
-constantly and reads each touch against the last snapshot finished before it.
+the studio hears of it, so the studio keeps snapshots of the screen and reads each touch
+against the last snapshot finished before it.
+
+Since 2026-11-11 there is no **Use the phone** button. The UI starts the capture for every
+recording (`POST /api/phone/start`, once per recording) unless **Record what I do on the
+phone itself** is off in Settings, a choice kept in the browser, not the project. The
+capture runs at two paces. Listening (`following: false`): touches are read and a snapshot
+is taken every 400 ms, so the first touch has a screen well inside the 1 s staleness limit.
+Following: the first touch switches to snapshots back to back, the bar says **Following the
+phone**, and 15 s without a touch drops back. Anything that adds a step through the screen
+here (`/api/action/*`, a block run now, Check, Wait until, Wait) first calls `yieldToScreen`:
+gestures in hand finish, text typed on the phone becomes its step, the pace drops to
+listening. After it, `screenActed` forgets the followed field, so text the studio typed is
+not written again as phone typing. Not fixed: a new capture cannot know the panel's last
+position (`getevent -pl` reports 0 for the MT axes), and the kernel does not resend a value
+that has not changed, so a first touch at exactly the last touch's raw X or Y reads as 0.
 
 - `device/touch.ts` (pure): finds the touchscreen in `getevent -pl`, scales raw
   coordinates through the display rotation, turns `getevent -lt` lines into gestures.

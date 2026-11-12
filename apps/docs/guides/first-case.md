@@ -38,7 +38,7 @@ No device in the list? **Device setup** explains what is missing.
 Fossify Calendar asks two questions the first time you save an event, and never again on that device. A step that answers them would fail on every later run, so answer them now, before recording. Nothing is recorded until you press Start recording.
 
 1. Click the **+** button at the bottom right of the screen, then click **Event**.
-2. Click **Title**. Type anything in the **Text to type** box under the screen and press **Type**.
+2. Click **Title**. A text box appears over the field: type anything and press Enter.
 3. Click the save icon at the top right.
 4. A dialog titled "Disclaimer" appears. Click **OK**.
 5. Android asks "Allow Calendar to send you notifications?". Click **Allow**.
@@ -62,14 +62,14 @@ Click **Start recording**, under the stack or in the bar above the screen. The a
 Click the elements in the screen. Each click is sent to the device and listed as a step with its selector and a thumbnail. Hovering outlines the element a click would hit.
 
 1. Click **+**, then **Event**. The title field already has focus.
-2. Type `Dentist` in the **Text to type** box and press **Type**.
+2. Type `Dentist` in the text box over the title field and press Enter. If the box is not there, click the field first. A field that never shows a box takes text from the **Text to type** box under the screen and its **Type** button.
 3. Click the save icon at the top right. The event list comes back with Dentist in it.
 
 ![Check mode on while recording, with Dentist outlined in the event list and four steps listed](/shots/first-case-recording.png)
 
 ## Add a check
 
-Toggle **Check**, under the screen. The outline turns green and dashed. Click **Dentist** in the list. This records that the event is visible, without touching the device. Toggle **Check** off.
+Toggle **Check**, at the end of the steps in the Record tab. The outline turns green and dashed. Click **Dentist** in the list. This records that the event is visible, without touching the device. Toggle **Check** off.
 
 ## Finish
 

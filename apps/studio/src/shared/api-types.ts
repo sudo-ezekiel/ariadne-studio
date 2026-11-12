@@ -31,6 +31,12 @@ export type SnapshotNodeLite = {
   rect?: Rect;
   hittable?: boolean;
   systemBar?: 'status' | 'navigation';
+  /** The field has the device's focus: the screen draws a text box over it. Present only when true. */
+  focused?: boolean;
+  /** Takes text. Present only when true. */
+  editable?: boolean;
+  /** A password field, so the text box over it hides what is typed. Present only when true; never the field's value. */
+  password?: boolean;
 };
 
 export type ScreenState = {
@@ -354,7 +360,10 @@ export type ToolInstallStatus = {
 
 /** Recording from a finger on the phone. `revision` changes whenever steps or the screen have. */
 export type PhoneStatus = {
+  /** The phone's touchscreen is being read: for the whole of a recording, unless turned off. */
   active: boolean;
+  /** The tester is using the phone, so its screen is followed closely. */
+  following: boolean;
   /** The tester left the app, so touches are not being recorded until it is back. */
   paused: boolean;
   revision: number;

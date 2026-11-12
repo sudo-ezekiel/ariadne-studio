@@ -25,7 +25,7 @@ import { MarkCell } from './Mark.tsx';
 import { RowMenu } from './RowMenu.tsx';
 import { caseTree, SavedCases } from './SavedCases.tsx';
 import { markOfStep } from './step-marks.ts';
-import { SecondsField, WaitTray, carriesWait } from './Timing.tsx';
+import { SecondsField, StepTray, carriesWait } from './Timing.tsx';
 import { count, isFragile, stepSelector, stepText } from './format.ts';
 
 export type PanelTab = 'record' | 'cases' | 'blocks' | 'file';
@@ -53,8 +53,12 @@ type Props = {
   suite: SuiteView | null;
   busy: boolean;
   sessionOpen: boolean;
-  /** Recording from a finger on the phone. */
+  /** The phone's own touchscreen is read too, so steps can come from the phone. */
   usingPhone: boolean;
+  /** Check or Wait until is on: the next click on the screen records one. */
+  looking: 'check' | 'waitUntil' | null;
+  onToggleCheck: () => void;
+  onToggleWaitUntil: () => void;
   /** Starts recording the draft, or asks for its name first. */
   onRecord: () => void;
   /** Runs a setup block now, as the next step of the case being recorded, with the values set on it. */
@@ -162,11 +166,7 @@ function LiveRow({ step, scrollTarget, appId, kept, busy, blockName, block, chan
         {step.kind === 'block' && <BlockSteps block={block} number={step.index} />}
       </span>
       <span className="step-shot">
-        {step.screenshotUrl && !timing && (
-          <a href={step.screenshotUrl} target="_blank" rel="noreferrer">
-            <img className="thumb" src={step.screenshotUrl} alt={`Screen after step ${step.index}`} />
-          </a>
-        )}
+        {step.screenshotUrl && !timing && <Thumb url={step.screenshotUrl} index={step.index} />}
       </span>
       <RowMenu>
         {kept ? (
@@ -199,7 +199,23 @@ function Recording({
   project,
   liveActions,
   ...props
-}: Pick<Props, 'picking' | 'busy' | 'usingPhone' | 'project' | 'onFinish' | 'onSavePicks' | 'onCancelPick' | 'onDiscard' | 'onRunBlock' | 'onAddTestUser' | 'liveActions'> & {
+}: Pick<
+  Props,
+  | 'picking'
+  | 'busy'
+  | 'usingPhone'
+  | 'project'
+  | 'onFinish'
+  | 'onSavePicks'
+  | 'onCancelPick'
+  | 'onDiscard'
+  | 'onRunBlock'
+  | 'onAddTestUser'
+  | 'liveActions'
+  | 'looking'
+  | 'onToggleCheck'
+  | 'onToggleWaitUntil'
+> & {
   currentCase: CurrentCaseView;
 }) {
   const [dragging, setDragging] = useState<'block' | 'wait' | null>(null);
@@ -273,7 +289,7 @@ function Recording({
         {steps.length === 0 && (
           <li className={`step step-empty ${dropAt === 0 ? 'drop-before' : ''}`} onDragOver={(event) => overFixed(event, 0)}>
             <MarkCell mark="wait" />
-            <span className="step-detail">{usingPhone ? 'Use the phone. The first step appears here.' : 'Click the screen to record the first step.'}</span>
+            <span className="step-detail">{usingPhone ? 'Click the screen here, or use the phone itself. The first step appears here.' : 'Click the screen to record the first step.'}</span>
           </li>
         )}
         {steps.map((step, position) => (
@@ -304,7 +320,14 @@ function Recording({
         {!picking && (
           <li className="step step-tail step-tray" onDragOver={(event) => overFixed(event, steps.length)}>
             <MarkCell mark="wait" />
-            <WaitTray disabled={busy} onAdd={() => insertWait(steps.length)} onDragging={(on) => setDragging(on ? 'wait' : null)} />
+            <StepTray
+              disabled={busy}
+              onAdd={() => insertWait(steps.length)}
+              onDragging={(on) => setDragging(on ? 'wait' : null)}
+              looking={props.looking}
+              onToggleCheck={props.onToggleCheck}
+              onToggleWaitUntil={props.onToggleWaitUntil}
+            />
           </li>
         )}
       </ol>
@@ -499,6 +522,9 @@ export function CasePanel(props: Props) {
         project={project}
         picking={props.picking}
         usingPhone={props.usingPhone}
+        looking={props.looking}
+        onToggleCheck={props.onToggleCheck}
+        onToggleWaitUntil={props.onToggleWaitUntil}
         busy={busy}
         onFinish={props.onFinish}
         onSavePicks={props.onSavePicks}
@@ -610,5 +636,20 @@ export function CasePanel(props: Props) {
         {body}
       </div>
     </aside>
+  );
+}
+
+/**
+ * A step's screenshot. One from a touch on the phone is taken a moment after
+ * its step, once the screen has settled, so until then the frame stays empty
+ * rather than showing a broken picture. A new URL comes with the next refresh.
+ */
+function Thumb({ url, index }: { url: string; index: number }) {
+  const [missing, setMissing] = useState<string | null>(null);
+  if (missing === url) return <span className="thumb thumb-waiting" role="img" aria-label={`Screen after step ${index}, not taken yet`} />;
+  return (
+    <a href={url} target="_blank" rel="noreferrer">
+      <img className="thumb" src={url} alt={`Screen after step ${index}`} onError={() => setMissing(url)} />
+    </a>
   );
 }

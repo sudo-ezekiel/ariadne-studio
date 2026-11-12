@@ -39,7 +39,17 @@ const PHONE_POLL_MS = 600;
 const LIVE_SCREEN_MS = 1500;
 /** A phone that stopped answering, as when it is unplugged, is not worth asking as often. */
 const LIVE_SCREEN_FAILED_MS = 10_000;
-const PHONE_OFF: PhoneStatus = { active: false, paused: false, revision: 0 };
+const PHONE_OFF: PhoneStatus = { active: false, following: false, paused: false, revision: 0 };
+/** Whether a recording also reads the phone's own touchscreen. A choice for this computer, not the project. */
+const FOLLOW_PHONE_KEY = 'ariadne-follow-phone';
+
+function readFollowPhone(): boolean {
+  try {
+    return localStorage.getItem(FOLLOW_PHONE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
 
 export function App() {
   const [project, setProject] = useState<ProjectInfo | null>(null);
@@ -68,6 +78,7 @@ export function App() {
   const [nameFocus, setNameFocus] = useState(0);
   const [setupOpen, setSetupOpen] = useState(false);
   const [phone, setPhone] = useState<PhoneStatus>(PHONE_OFF);
+  const [followPhone, setFollowPhoneChoice] = useState(readFollowPhone);
   const [openedFile, setOpenedFile] = useState<FileContent | null>(null);
   const [filesOpen, toggleFiles] = useFilesOpen();
   const { choice: themeChoice, theme, setChoice: setThemeChoice } = useTheme();
@@ -182,7 +193,7 @@ export function App() {
   // The phone changes without telling anyone: an app hands over to a website, a person closes
   // it, it goes to sleep. So the screen here keeps looking. It stops for anything that needs
   // the device, or that reads what is on screen, and while nobody can see this window.
-  const liveScreen = session.open && busy === null && picking === null && !phone.active && !suiteRunning;
+  const liveScreen = session.open && busy === null && picking === null && !phone.following && !suiteRunning;
   useEffect(() => {
     if (!liveScreen) return;
     let alive = true;
@@ -229,12 +240,43 @@ export function App() {
     return () => clearInterval(timer);
   }, [phoneActive, toast]);
 
-  const togglePhone = () =>
-    run(phone.active ? 'Stopping' : 'Getting ready', async () => {
-      setPhone(phone.active ? await api.phoneStop() : await api.phoneStart());
-      setCurrentCase(await api.currentCase());
-      setScreen(await api.screen().catch(() => null));
-    });
+  // A recording reads the phone's own touchscreen too, so the phone works as well as the screen here,
+  // with no switch between them. Once per recording: a phone that cannot be read, or that stopped
+  // sending touches, is not asked again until the next one.
+  const phoneTriedFor = useRef<string | undefined>(undefined);
+  /** The setting and the recording as they are now, for a start that settles after either changed. */
+  const followPhoneNow = useRef(followPhone);
+  followPhoneNow.current = followPhone;
+  const recordingNow = useRef(recordingId);
+  recordingNow.current = recordingId;
+  useEffect(() => {
+    if (!recordingId || !followPhone || !session.open || phone.active || phoneTriedFor.current === recordingId) return;
+    phoneTriedFor.current = recordingId;
+    api
+      .phoneStart()
+      .then((next) => {
+        // Turned off while the phone was being started: turning it off told the server, which ended this start.
+        if (recordingNow.current !== recordingId || !followPhoneNow.current) return;
+        setPhone(next);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.code === 'NO_TOUCHSCREEN') return;
+        toast(`Only the screen here records this time: ${error instanceof Error ? error.message : String(error)}`, 'info');
+      });
+  }, [recordingId, followPhone, session.open, phone.active, toast]);
+
+  const setFollowPhone = (on: boolean) => {
+    try {
+      localStorage.setItem(FOLLOW_PHONE_KEY, on ? 'on' : 'off');
+    } catch {
+      // Private windows may refuse; the choice then lasts until the page closes.
+    }
+    setFollowPhoneChoice(on);
+    followPhoneNow.current = on;
+    // Off is always sent, even before the phone is on: the server then drops a start still under way.
+    if (on) phoneTriedFor.current = undefined;
+    else void api.phoneStop().then(setPhone, () => undefined);
+  };
 
   // Closing a file goes back to the tab that was showing before it.
   const lastTab = useRef<PanelTab>('record');
@@ -310,7 +352,14 @@ export function App() {
 
   const tap = (point: Point) => run('Tapping', async () => applyAction(await api.tap(point.x, point.y)));
   const refreshScreen = () => run('Refreshing', async () => setScreen(await api.refreshScreen()));
-  const type = (text: string) => run('Typing', async () => applyAction(await api.type(text)));
+  /** Settles with whether the text was typed; a refusal has been shown already. */
+  const type = (text: string) =>
+    run('Typing', async () => {
+      const response = await api.type(text);
+      // The text is on the device by now: a case that fails to load again is shown, and does not undo that.
+      await run('Typing', () => applyAction(response));
+      return true;
+    }).then((typed) => typed === true);
   const back = () => run('Going back', async () => applyAction(await api.back()));
   const scroll = (direction: ScrollDirection) => run('Scrolling', async () => applyAction(await api.scroll(direction)));
   const expectAt = (point: Point) => run('Recording check', async () => applyAction(await api.expect(point.x, point.y)));
@@ -651,6 +700,8 @@ export function App() {
         onRunVideo={setRunVideo}
         evidencePack={project?.evidencePack ?? false}
         onEvidencePack={setEvidencePack}
+        followPhone={followPhone}
+        onFollowPhone={setFollowPhone}
       />
       <main className="workspace">
         <Mirror
@@ -662,7 +713,6 @@ export function App() {
           recording={currentCase ? { name: currentCase.name, steps: currentCase.steps.length } : null}
           phone={phone}
           phonePrompt={phonePrompt}
-          onTogglePhone={() => void togglePhone()}
           picking={picking !== null}
           suiteRunning={suiteRunning}
           devicesFound={devices.length > 0}
@@ -676,16 +726,8 @@ export function App() {
           onChoose={(point) => void pickElement(point)}
           onTap={(point) => void tap(point)}
           onExpect={(point) => void expectAt(point)}
-          onToggleExpect={() => {
-            setWaitUntilMode(false);
-            setExpectMode((current) => !current);
-          }}
           onWaitUntil={(point) => void waitUntilAt(point)}
-          onToggleWaitUntil={() => {
-            setExpectMode(false);
-            setWaitUntilMode((current) => !current);
-          }}
-          onType={(text) => void type(text)}
+          onType={(text) => type(text)}
           onBack={() => void back()}
           onScroll={(direction) => void scroll(direction)}
           onRelaunch={() => void relaunch()}
@@ -732,6 +774,15 @@ export function App() {
             busy={busy !== null || suiteRunning}
             sessionOpen={session.open}
             usingPhone={phone.active}
+            looking={expectMode ? 'check' : waitUntilMode ? 'waitUntil' : null}
+            onToggleCheck={() => {
+              setWaitUntilMode(false);
+              setExpectMode((current) => !current);
+            }}
+            onToggleWaitUntil={() => {
+              setExpectMode(false);
+              setWaitUntilMode((current) => !current);
+            }}
             onRecord={record}
             onRunBlock={(file, values) => void runBlock(file, values)}
             onAddTestUser={addTestUser}

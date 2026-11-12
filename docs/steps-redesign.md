@@ -305,6 +305,12 @@ Toolbar: Check and Wait until sit together after the separator. Scroll down and 
 the second row. (The first version also had Wait there; it went on 2026-11-11, because the toolbar
 holds what is recorded by clicking the screen.)
 
+Later on 2026-11-11 the owner asked for Check and Wait until to sit where Wait is. They left the
+toolbar for the tray at the end of the thread (`StepTray` in `Timing.tsx`): the Wait tile and Add,
+a separator, then Check and Wait until as toggles, and one hint line under them that says what the
+next click on the screen does while either is on. They stay at the end, unlike Wait, because they
+read the screen as it is now. The screen's right-click menu still offers Check.
+
 ## 6. Interactions
 
 ### 6.1 Remove a step while recording

@@ -57,13 +57,13 @@ Android and some phone makers stop an app opening another app from the backgroun
 
 The phone refuses input sent over USB. On Xiaomi, Redmi and POCO phones turn on USB debugging (Security settings); on OPPO, Realme and OnePlus phones turn on Disable permission monitoring. See [Phone makers](/guides/install#phone-makers).
 
-### "Ariadne cannot read the touchscreen of this device"
+### Touches on the phone do not become steps
 
-**Use the phone** needs to read the phone's touchscreen through `adb`, and this device does not show one. Record on the screen here instead.
+Ariadne reads the phone's touchscreen through `adb`. Some devices do not show one, a phone in a remote test lab never gets real touches, and **Record what I do on the phone itself** in Settings may be off. Record on the screen here instead.
 
-### Use the phone stopped by itself
+### The phone stopped being followed by itself
 
-The phone was unplugged, or it locked and the screen could not be read for a few seconds. Turn on Stay awake in Developer options, check the cable, and click **Use the phone** again. The steps so far are kept.
+The phone was unplugged, or it locked and the screen could not be read for a few seconds. Turn on Stay awake in Developer options and check the cable. The steps so far are kept, and the screen here still records; the phone is read again from the next recording.
 
 ### "The connection to the device dropped during the run"
 

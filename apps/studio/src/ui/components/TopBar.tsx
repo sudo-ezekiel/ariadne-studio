@@ -18,6 +18,8 @@ type Props = {
   onRunVideo: (on: boolean) => void;
   evidencePack: boolean;
   onEvidencePack: (on: boolean) => void;
+  followPhone: boolean;
+  onFollowPhone: (on: boolean) => void;
 };
 
 const THEME_CHOICES: { value: ThemeChoice; label: string }[] = [
@@ -36,7 +38,12 @@ function SettingsMenu({
   onRunVideo,
   evidencePack,
   onEvidencePack,
-}: Pick<Props, 'themeChoice' | 'onThemeChoice' | 'onOpenSetup' | 'runVideo' | 'videoHasSteps' | 'onRunVideo' | 'evidencePack' | 'onEvidencePack'>) {
+  followPhone,
+  onFollowPhone,
+}: Pick<
+  Props,
+  'themeChoice' | 'onThemeChoice' | 'onOpenSetup' | 'runVideo' | 'videoHasSteps' | 'onRunVideo' | 'evidencePack' | 'onEvidencePack' | 'followPhone' | 'onFollowPhone'
+>) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
@@ -96,6 +103,13 @@ function SettingsMenu({
             <span>
               Offer an evidence pack after Run all
               <span className="menu-item-hint">A test results report to print or save as PDF, for whoever accepts the release.</span>
+            </span>
+          </label>
+          <label className="menu-check">
+            <input type="checkbox" checked={followPhone} onChange={(event) => onFollowPhone(event.target.checked)} />
+            <span>
+              Record what I do on the phone itself
+              <span className="menu-item-hint">While you record, taps and typing on the phone become steps too. Ariadne reads what a field says, never which keys you pressed.</span>
             </span>
           </label>
           <div className="menu-section" role="group" aria-label="Appearance">
@@ -168,6 +182,8 @@ export function TopBar(props: Props) {
         onRunVideo={props.onRunVideo}
         evidencePack={props.evidencePack}
         onEvidencePack={props.onEvidencePack}
+        followPhone={props.followPhone}
+        onFollowPhone={props.onFollowPhone}
       />
     </header>
   );

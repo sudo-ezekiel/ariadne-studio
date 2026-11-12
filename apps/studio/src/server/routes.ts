@@ -84,7 +84,7 @@ import {
 import { registerEvidenceRoutes } from './evidence.ts';
 import { registerExportRoutes } from './exports.ts';
 import { registerFileRoutes } from './files.ts';
-import { registerPhoneRoutes, stopPhoneCapture } from './phone-capture.ts';
+import { registerPhoneRoutes, stopPhoneCapture, type PhoneCapture } from './phone-capture.ts';
 import { registerReplayRoutes, runPrefixWithMaestro } from './replay.ts';
 import {
   currentCaseView,
@@ -239,6 +239,9 @@ function readLink(body: unknown): string {
   return url;
 }
 
+/** Routes besides /api/action/ that add a step through the screen here: a block run now, a check, a wait. */
+const SCREEN_STEP_ROUTES = ['/api/case/block', '/api/case/expect', '/api/case/wait-for', '/api/case/wait'];
+
 /** Zoom in and Zoom out pinch around the middle of the screen by these factors. */
 const ZOOM_IN_SCALE = 1.5;
 const ZOOM_OUT_SCALE = 0.67;
@@ -324,6 +327,16 @@ async function projectInfo(state: ServerState): Promise<ProjectInfo> {
   };
 }
 
+/**
+ * The field that has focus is a password field. While the phone is recorded too, a finger on it may
+ * have moved the focus since the screen here last looked, so the phone is asked again: a password
+ * must not be recorded as plain text because the screen here was out of date.
+ */
+async function typingIntoPassword(state: ServerState): Promise<boolean> {
+  const nodes = state.phone ? (await state.session.snapshot()).nodes : state.latest?.nodes;
+  return nodes !== undefined && focusedPasswordField(nodes);
+}
+
 /** The latest snapshot, re-taken (without a screenshot) when it is too old to trust. */
 async function freshLatest(state: ServerState): Promise<Latest> {
   let latest = state.latest;
@@ -389,8 +402,10 @@ async function recordedAction(
     step = record(recorder, evidence.relative);
     screenshotPath = evidence.absolute;
   }
-  const screen = toScreenState(await captureInto(state, screenshotPath));
-  return { ...(step ? { step: toStepView(step) } : {}), screen };
+  const latest = await captureInto(state, screenshotPath);
+  // What this put in a field is its step; typing on the phone counts from the screen it left.
+  state.phone?.screenSettled(latest.nodes);
+  return { ...(step ? { step: toStepView(step) } : {}), screen: toScreenState(latest) };
 }
 
 /**
@@ -463,10 +478,21 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
     throw new HttpError(409, 'SUITE_RUNNING', 'Run all is running. Wait for it to finish, or stop it.');
   });
 
-  // While the tester is using the phone, the phone is the input; only a check goes through the screen here.
+  // The phone and the screen here are both ways in. Before the screen here adds a step, what was
+  // typed on the phone becomes its step, and the phone is followed afresh after it.
+  const actsOnScreen = (request: { method: string; url: string }) =>
+    request.method === 'POST' && (request.url.startsWith('/api/action/') || SCREEN_STEP_ROUTES.some((route) => request.url.startsWith(route)));
+  // Only a request the phone yielded to hands it back, and to the same capture: one refused
+  // before that, or answered after the capture was replaced, must not end another's hand-off.
+  const yielded = new WeakMap<object, PhoneCapture>();
   app.addHook('preHandler', async (request) => {
-    if (!state.phone || !(request.url.startsWith('/api/action/') || request.url.startsWith('/api/case/block'))) return;
-    throw new HttpError(409, 'USING_THE_PHONE', 'You are recording from the phone. Press Stop using the phone to use the screen here.');
+    const phone = state.phone;
+    if (!phone || !actsOnScreen(request)) return;
+    yielded.set(request, phone);
+    await phone.yieldToScreen();
+  });
+  app.addHook('onResponse', async (request) => {
+    yielded.get(request)?.screenActed();
   });
 
   app.get('/api/project', async () => projectInfo(state));
@@ -598,7 +624,7 @@ export function registerRoutes(app: FastifyInstance, state: ServerState): void {
           .find((candidate) => env[candidate] === text);
         if (key) {
           recordedText = `\${${key}}`;
-        } else if (state.latest && focusedPasswordField(state.latest.nodes)) {
+        } else if (await typingIntoPassword(state)) {
           // A block only needs the setting's name: each case gives it the value.
           if (state.recordingBlock) {
             recordedText = reference(passwordSetting(Object.keys(env)));
