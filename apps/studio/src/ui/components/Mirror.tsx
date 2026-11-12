@@ -41,8 +41,8 @@ type Props = {
   onTap: (point: Point) => void;
   onExpect: (point: Point) => void;
   onWaitUntil: (point: Point) => void;
-  /** Settles when the text has been typed (or refused), so a click made meanwhile can follow it. */
-  onType: (text: string) => Promise<unknown>;
+  /** Settles with whether the text was typed, so a click made meanwhile follows it only then. */
+  onType: (text: string) => Promise<boolean>;
   onBack: () => void;
   onScroll: (direction: ScrollDirection) => void;
   onRelaunch: () => void;
@@ -235,7 +235,7 @@ export function Mirror(props: Props) {
   const [typed, setTyped] = useState('');
   const pending = useRef('');
   /** The text being sent from the box, until the device has it. A click made meanwhile waits for it. */
-  const sending = useRef<Promise<unknown> | null>(null);
+  const sending = useRef<Promise<boolean> | null>(null);
   /** The last thing done here was a tap on the screen (or Enter in the box), so a focused field may take the keyboard. */
   const focusAfter = useRef(false);
   const fieldInput = useRef<HTMLInputElement>(null);
@@ -269,12 +269,21 @@ export function Mirror(props: Props) {
   }, [busy, fieldShown]);
 
   /** Sends what is in the box as one Type step. Returns undefined when there is nothing to send. */
-  const sendTyped = (): Promise<unknown> | undefined => {
+  const sendTyped = (): Promise<boolean> | undefined => {
     const value = pending.current;
     if (!value) return undefined;
+    const forField = draftFor.current;
     pending.current = '';
     setTyped('');
-    const typing = props.onType(value);
+    const typing = props.onType(value).then((typed) => {
+      // Refused, as an unsaved password is: the text goes back in the box, shown again only over its own field.
+      if (!typed && !pending.current) {
+        draftFor.current = forField;
+        pending.current = value;
+        setTyped(value);
+      }
+      return typed;
+    });
     sending.current = typing;
     const done = () => {
       if (sending.current === typing) sending.current = null;
@@ -282,10 +291,13 @@ export function Mirror(props: Props) {
     typing.then(done, done);
     return typing;
   };
-  /** Runs a press once text sent from the box has reached the device, so the steps read type, then the press. */
+  /**
+   * Runs a press once text sent from the box has reached the device, so the steps read type, then the
+   * press. Not when the text was refused: the press was meant for a screen with that text in it.
+   */
   const afterTyping = (action: () => void) => {
     const typing = sending.current;
-    if (typing) void typing.then(action, action);
+    if (typing) void typing.then((typed) => typed && action());
     else action();
   };
   const onFieldKey = (event: KeyboardEvent<HTMLInputElement>) => {

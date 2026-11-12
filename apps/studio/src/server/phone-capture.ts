@@ -252,14 +252,19 @@ export class PhoneCapture {
   }
 
   /**
-   * The screen here is about to act on the phone. What was typed on the phone
-   * is written first, so the steps keep their order, and the pace drops back
-   * unless a finger touched the phone meanwhile.
+   * The screen here is about to act on the phone. What was done on the phone,
+   * touches made while this waits included, is written first, so the steps keep
+   * their order, and the pace drops back unless a finger touched the phone meanwhile.
    */
   async yieldToScreen(): Promise<void> {
+    // Overlapping requests share one hand-off: a finger since the first of them still counts.
+    if (this.screenActions === 0) this.phoneTookOver = false;
     this.screenActions += 1;
-    this.phoneTookOver = false;
-    await this.gestures;
+    let gestures: Promise<void>;
+    do {
+      gestures = this.gestures;
+      await gestures;
+    } while (gestures !== this.gestures);
     const last = this.history.at(-1);
     if (this.following && last && !last.outside) this.noteField(last);
     await this.flushTyping();

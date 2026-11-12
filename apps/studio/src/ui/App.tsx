@@ -352,7 +352,12 @@ export function App() {
 
   const tap = (point: Point) => run('Tapping', async () => applyAction(await api.tap(point.x, point.y)));
   const refreshScreen = () => run('Refreshing', async () => setScreen(await api.refreshScreen()));
-  const type = (text: string) => run('Typing', async () => applyAction(await api.type(text)));
+  /** Settles with whether the text was typed; a refusal has been shown already. */
+  const type = (text: string) =>
+    run('Typing', async () => {
+      await applyAction(await api.type(text));
+      return true;
+    }).then((typed) => typed === true);
   const back = () => run('Going back', async () => applyAction(await api.back()));
   const scroll = (direction: ScrollDirection) => run('Scrolling', async () => applyAction(await api.scroll(direction)));
   const expectAt = (point: Point) => run('Recording check', async () => applyAction(await api.expect(point.x, point.y)));

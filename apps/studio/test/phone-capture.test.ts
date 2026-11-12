@@ -1150,6 +1150,85 @@ describe('a finger on the phone while the screen here is acting', () => {
     expect((await checked).status).toBe(200);
     expect((await status(r)).following).toBe(true);
   });
+
+  /** Says when the next hand-off to the screen here begins, and when it is done. */
+  function watchYield(): { entered: Promise<void>; done: Promise<void> } {
+    const original = PhoneCapture.prototype.yieldToScreen;
+    let enter: () => void = () => undefined;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    let finish: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    vi.spyOn(PhoneCapture.prototype, 'yieldToScreen').mockImplementation(function (this: PhoneCapture) {
+      enter();
+      return original.call(this).then(finish);
+    });
+    return { entered, done };
+  }
+
+  /** Holds every answer to the screen here until the returned function is called. */
+  function holdAnswers(): () => void {
+    const original = PhoneCapture.prototype.screenActed;
+    let holding = true;
+    const held: PhoneCapture[] = [];
+    vi.spyOn(PhoneCapture.prototype, 'screenActed').mockImplementation(function (this: PhoneCapture) {
+      if (holding) held.push(this);
+      else original.call(this);
+    });
+    return () => {
+      holding = false;
+      for (const capture of held.splice(0)) original.call(capture);
+    };
+  }
+
+  it('writes a touch made while the screen here waits on an earlier touch before the screen\'s own step', async () => {
+    const r = await rig();
+    await startPhone(r);
+    const handOff = watchYield();
+    // No snapshot from after either touch comes, so each is still being read until release().
+    const release = holdSnapshots(r.device);
+    await finger(r, SIGN_IN);
+    const back = call(r, 'POST', '/api/action/back');
+    await handOff.entered;
+    await finger(r, REGISTER);
+    // The touch on Sign in is still being read: its step is not written yet.
+    expect(await currentSteps(r)).toHaveLength(0);
+    await waitForSteps(r, 1);
+    release();
+    expect((await back).status).toBe(200);
+    const steps = await waitForSteps(r, 3);
+    expect(steps.map((step) => (step.kind === 'tap' ? step.selector.value : step.kind))).toEqual(['Sign in', 'Register', 'back']);
+  });
+
+  it('keeps what the phone typed while one action from the screen here was unanswered when a second one begins', async () => {
+    const r = await rig();
+    r.device.nodes = typingScreen('');
+    r.device.keyboard = KEYBOARD;
+    await startPhone(r);
+    const answer = holdAnswers();
+    expect((await call(r, 'POST', '/api/action/tap', { x: SIGN_IN.x, y: SIGN_IN.y })).status).toBe(200);
+    // The phone types before the first action is answered, and is not seen again until the second has handed off.
+    const release = holdSnapshots(r.device);
+    r.device.nodes = typingScreen('abc');
+    await finger(r, KEY);
+    const handOff = watchYield();
+    const checked = call(r, 'POST', '/api/case/expect', { x: SIGN_IN.x, y: SIGN_IN.y });
+    await handOff.done;
+    release();
+    expect((await checked).status).toBe(200);
+    await settled(r);
+    answer();
+    await settled(r);
+    await finger(r, REGISTER);
+    await waitForSteps(r, 3);
+    await call(r, 'POST', '/api/phone/stop');
+    const steps = await currentSteps(r);
+    expect(steps.map((step) => step.kind)).toEqual(['tap', 'expect', 'type', 'tap']);
+    expect(steps[2]?.text).toBe('abc');
+  });
 });
 
 describe('a phone start that is no longer wanted when it finishes', () => {
