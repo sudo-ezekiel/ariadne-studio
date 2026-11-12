@@ -242,11 +242,13 @@ export function Mirror(props: Props) {
   const fieldInput = useRef<HTMLInputElement>(null);
 
   // Typing straight into the screen: only in plain tap mode, and only over a field the phone reports as focused.
-  const field = screen && !screen.hidden && !inputOff && !following && !looking && !choosing ? focusedField(screen.nodes) : undefined;
+  // While busy the box is hidden, but the field keeps focus, so text sent from the box still has a field to come back to.
+  const focused = screen && !screen.hidden && sessionOpen && !following && !looking && !choosing ? focusedField(screen.nodes) : undefined;
+  const field = busy ? undefined : focused;
   const fieldShown = field !== undefined;
   // Text in the box belongs to the field it was typed for. Dropped before the screen is painted
   // when that field goes, so a password never shows, or is typed, in the next one.
-  const typedFor = screen && field ? fieldKey(screen.nodes, field) : undefined;
+  const typedFor = screen && focused ? fieldKey(screen.nodes, focused) : undefined;
   const draftFor = useRef(typedFor);
   useLayoutEffect(() => {
     if (draftFor.current === typedFor) return;
