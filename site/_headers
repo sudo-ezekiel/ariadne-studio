@@ -1,0 +1,12 @@
+# Cache rules for Cloudflare Workers static assets. This file is read by the host and not served.
+# Fonts and the docs' build output never change under the same name (the docs' files carry a
+# content hash). Pictures and videos may be redrawn under the same name, so they keep a day.
+# Everything else, the HTML and the landing page's CSS and JS, revalidates as by default.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/docs/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/img/*
+  Cache-Control: public, max-age=86400
+/media/*
+  Cache-Control: public, max-age=86400

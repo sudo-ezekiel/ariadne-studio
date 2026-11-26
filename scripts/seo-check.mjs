@@ -25,6 +25,40 @@ const attr = (html, pattern) => pattern.exec(html)?.[1];
 const decode = (text) => text.replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"');
 const plain = (html) => decode(html.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
 
+// The file the host serves for a path, the way html_handling auto-trailing-slash does:
+// x/ is x/index.html, x is x.html or x/index.html, and a real file is itself.
+const isFile = (path) => existsSync(path) && statSync(path).isFile();
+function fileFor(pathname) {
+  const path = join(site, pathname);
+  if (relative(site, path).startsWith('..')) return undefined;
+  if (pathname.endsWith('/')) return isFile(join(path, 'index.html')) ? join(path, 'index.html') : undefined;
+  return [path, `${path}.html`, join(path, 'index.html')].find(isFile);
+}
+const ids = new Map();
+const idsIn = (file) => {
+  if (!ids.has(file)) ids.set(file, new Set([...readFileSync(file, 'utf8').matchAll(/\sid="([^"]*)"/g)].map((match) => decode(match[1]))));
+  return ids.get(file);
+};
+const origin = new URL(domain).origin;
+
+// Every link into the site reaches a page, and its #fragment an element on that page.
+function checkLinks(file, html, where) {
+  const markup = html.replace(/<(template|script)\b[\s\S]*?<\/\1>/g, '');
+  for (const [, raw] of markup.matchAll(/<a\b[^>]*?\shref="([^"]*)"/g)) {
+    const href = decode(raw);
+    if (/^[a-z][a-z\d+.-]*:/i.test(href) && !/^https?:/i.test(href)) continue;
+    const target = new URL(href, addressOf(file));
+    if (target.origin !== origin) continue;
+    const page = fileFor(decodeURIComponent(target.pathname));
+    if (!page) {
+      problem(where, `link ${href} has no page`);
+      continue;
+    }
+    const id = decodeURIComponent(target.hash.slice(1));
+    if (id && !idsIn(page).has(id)) problem(where, `link ${href}: no id "${id}" in ${relative(site, page)}`);
+  }
+}
+
 const titles = new Map();
 const descriptions = new Map();
 const pages = pagesIn(site);
@@ -57,6 +91,7 @@ for (const file of pages) {
   for (const image of html.match(/<img\b[^>]*>/g) ?? []) {
     if (!/\balt[\s=>]/.test(image)) problem(where, `image without alt: ${image.slice(0, 80)}`);
   }
+  checkLinks(file, html, where);
 
   const structured = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((match) => {
     try {
