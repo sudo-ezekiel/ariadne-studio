@@ -30,6 +30,8 @@ async function draw(url, width, height, file, background) {
   await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   await page.send('Emulation.setDefaultBackgroundColorOverride', { color: background ?? { r: 0, g: 0, b: 0, a: 0 } });
   await page.goto(url, 700);
+  // The share image uses the site's web font; the shot waits until it has loaded.
+  await page.evaluate('document.fonts.ready.then(() => true)');
   await page.shot(file);
 }
 

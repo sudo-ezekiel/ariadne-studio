@@ -118,6 +118,13 @@ on the logo tile. Inside a step list the radius is 0 for everything except the r
 on the thread (rows, block squares, the Wait tile, insertion marks). Nothing in a list gets
 a tinted background, a coloured side stripe or a shadow. One primary button per region, never two side by side.
 
+The landing page in `site/` is the one exception to the type rules. It is always online, so it
+loads Host Grotesk and Geist Mono from `site/fonts/` (both under the Open Font License, served
+from the site itself, no third party). It also uses a darker `--ink-3` and a darker light
+`--thread-strong` than section 3 lists, so small text reaches a 4.5:1 contrast on every
+background of the page; `site/assets/site.css` gives the values. The studio and the docs keep
+the system fonts and the tokens above.
+
 ## 5. Voice
 
 Plain and specific. Sentence case everywhere, including buttons and headings. Buttons are

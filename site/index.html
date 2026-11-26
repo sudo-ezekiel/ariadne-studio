@@ -14,18 +14,16 @@
 <script>
 // Set the theme before the first paint. The docs keep their choice under the same key,
 // so light or dark picked on either page holds on both. Without a choice, follow the system.
-// Then fetch the hero's poster for that theme first.
+// The js class lets the stylesheet hide things that scripts will reveal; without scripts, everything shows.
 (() => {
+  const root = document.documentElement;
   let dark = matchMedia('(prefers-color-scheme: dark)').matches;
   try {
     const choice = localStorage.getItem('vitepress-theme-appearance');
     if (choice === 'light' || choice === 'dark') dark = choice === 'dark';
   } catch {}
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  const poster = document.createElement('link');
-  Object.assign(poster, { rel: 'preload', as: 'image', type: 'image/webp', fetchPriority: 'high' });
-  poster.href = dark ? 'media/record-poster-dark.webp' : 'media/record-poster.webp';
-  document.head.append(poster);
+  root.dataset.theme = dark ? 'dark' : 'light';
+  root.classList.add('js');
 })();
 </script>
 <!-- `pnpm site:url https://...` sets the public address here and everywhere else it is written. -->
@@ -62,8 +60,9 @@
   "alternateName": "Ariadne Studio",
   "applicationCategory": "DeveloperApplication",
   "applicationSubCategory": "Mobile test recorder",
-  "operatingSystem": "Linux",
+  "operatingSystem": "Windows, Linux",
   "description": "A local, no-code Maestro test recorder for Android. Click through your app and get plain Maestro YAML, a screenshot per step and a video of every run.",
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
   "softwareRequirements": "Android SDK platform-tools (adb), Java 17 or newer, Maestro CLI; Node.js 22.12 or newer for the npm package",
   "downloadUrl": "https://github.com/sudo-ezekiel/ariadne-studio/releases/latest",
   "url": "https://ariadne.sudo-ezekiel.com/",
@@ -167,486 +166,49 @@
   ]
 }
 </script>
-<style>
-/* The tokens copy docs/brand.md section 3, light then dark; change them there first */
-:root {
-  color-scheme: light;
-  --navy: #1c2b4a;
-  --navy-hover: #142038;
-  --navy-text: #1c2b4a;
-  --band: #1c2b4a;
-  --thread: #e8b43a;
-  --thread-strong: #c48a0e;
-  --thread-soft: #fdf3d0;
-  --sea: #1f6f9f;
-  --ink: #1a2233;
-  --ink-2: #5b6474;
-  --ink-3: #8a93a3;
-  --line: #dcdfe6;
-  --line-2: #ebedf2;
-  --paper: #f4f3ee;
-  --panel: #ffffff;
-  --panel-2: #f7f7f9;
-  --stage: #0f1627;
-  --pass: #1e7d3c;
-  --pass-soft: #e6f4ea;
-  --fail: #b3261e;
-  --fail-soft: #fdecea;
-  --warn: #9a5b00;
-  --warn-soft: #fdebd3;
-  --info: #1f6f9f;
-  --info-soft: #e8f2f9;
-  --block: #5b4b9a;
-  --block-soft: #f1eefa;
-  --block-line: #d9d2f0;
-  --on-dark: #ffffff;
-  --on-dark-2: #c3c9d6;
-  --dark-line: rgba(255, 255, 255, 0.14);
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --wrap: 1200px;
-  --gutter: 24px;
-  --section: 104px;
-  --radius-control: 6px;
-  --radius-card: 10px;
-}
-
-/* Dark lifts navy for buttons and text; the bands keep brand navy, a step above the paper */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --navy: #3d5a96;
-  --navy-hover: #4a69a8;
-  --navy-text: #9db6e8;
-  --band: #1c2b4a;
-  --thread-strong: #f0c45a;
-  --thread-soft: #3a3014;
-  --sea: #6cb4e0;
-  --ink: #e6e9ef;
-  --ink-2: #a9b1bf;
-  --ink-3: #7a8394;
-  --line: #343d4f;
-  --line-2: #2a3141;
-  --paper: #12161f;
-  --panel: #1a202b;
-  --panel-2: #232a37;
-  --stage: #080b12;
-  --pass: #5cc27a;
-  --pass-soft: #15301f;
-  --fail: #f2766b;
-  --fail-soft: #3a1a18;
-  --warn: #f0a640;
-  --warn-soft: #3a2a12;
-  --info: #6cb4e0;
-  --info-soft: #16293a;
-  --block: #a796e6;
-  --block-soft: #252040;
-  --block-line: #3e3566;
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
-
-body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--sans);
-  font-size: 17px;
-  line-height: 1.55;
-}
-
-/* Each title level is about twice the one below it, so a level is never mistaken for its neighbour */
-h1, h2, h3 { margin: 0; color: var(--ink); text-wrap: balance; }
-h1 { font-size: clamp(42px, 1.9rem + 3.9vw, 78px); font-weight: 800; line-height: 1; letter-spacing: -0.032em; }
-h2 { font-size: clamp(28px, 1.5rem + 1.2vw, 40px); font-weight: 750; line-height: 1.12; letter-spacing: -0.022em; }
-h3 { font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -0.008em; }
-
-p { margin: 0 0 12px; text-wrap: pretty; }
-
-a { color: var(--sea); text-underline-offset: 0.15em; }
-a:hover { color: var(--navy-text); }
-
-:focus-visible { outline: 3px solid var(--thread); outline-offset: 3px; }
-
-img { display: block; max-width: 100%; height: auto; }
-
-code {
-  font-family: var(--mono);
-  font-size: 0.9em;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-pre {
-  margin: 0;
-  background: var(--stage);
-  color: #e6e9f0;
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 20px 24px;
-  border-radius: var(--radius-card);
-  overflow-x: auto;
-}
-pre code {
-  font-size: inherit;
-  color: inherit;
-  overflow-wrap: normal;
-}
-
-.wrap { max-width: calc(var(--wrap) + 2 * var(--gutter)); margin: 0 auto; padding: 0 var(--gutter); }
-.wide { width: min(var(--wide), calc(100% - 2 * var(--gutter))); margin: 0 auto; }
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 0 20px;
-  border-radius: var(--radius-control);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-.btn-primary { background: var(--navy); color: #ffffff; border: 1px solid var(--navy); }
-.btn-primary:hover { background: var(--navy-hover); border-color: var(--navy-hover); color: #ffffff; }
-.btn-secondary { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
-.btn-secondary:hover { border-color: var(--ink-3); color: var(--ink); }
-.btn-small { height: 36px; padding: 0 14px; font-size: 14px; }
-
-/* Header: sticky on wide screens, two rows on a phone */
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
-}
-.header-inner {
-  display: flex;
-  align-items: center;
-  gap: 16px 32px;
-  min-height: 64px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--navy-text);
-  font-weight: 650;
-  font-size: 18px;
-  letter-spacing: -0.01em;
-  min-height: 40px;
-  text-decoration: none;
-}
-.brand:hover { color: var(--navy-text); }
-.brand img { border-radius: 6px; }
-.site-header nav { margin-left: auto; }
-.site-header ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 26px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.site-header ul a { color: var(--ink-2); text-decoration: none; font-size: 15px; font-weight: 500; }
-.site-header ul a:hover { color: var(--ink); text-decoration: underline; }
-.header-tools { display: flex; align-items: center; gap: 12px; }
-
-/* Light or dark: the button shows the theme it switches to */
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--panel);
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
-}
-.theme-toggle:hover { border-color: var(--ink-3); color: var(--ink); }
-.theme-toggle[hidden], .theme-toggle .icon-sun, [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
-[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
-
-/* Section rhythm */
-main > section { scroll-margin-top: 72px; }
-.section { padding: var(--section) 0 0; }
-.section-end { padding-bottom: var(--section); }
-
-/* The title stands alone on the left, its text sets on the same baseline to the right */
-.section-head {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 12px 56px;
-  align-items: baseline;
-  margin-bottom: 44px;
-}
-.section-head > h2:only-child { grid-column: 1 / -1; }
-.section-head p { color: var(--ink-2); margin: 0; font-size: 18px; max-width: 62ch; }
-
-.on-dark h2 { color: var(--on-dark); }
-.on-dark p { color: var(--on-dark-2); }
-
-/* Hero: text on paper, the studio straddling into the first navy band */
-.hero { padding-top: 64px; }
-.hero-sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px 56px;
-  margin-top: 28px;
-}
-.lead { font-size: 20px; line-height: 1.45; margin: 0; color: var(--ink-2); max-width: 66ch; }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; }
-
-.hero-band { position: relative; isolation: isolate; margin-top: 48px; padding-bottom: 56px; }
-.hero-band::before { content: ""; position: absolute; left: 0; right: 0; top: 46%; bottom: 0; background: var(--band); z-index: -1; }
-
-.stage-media {
-  position: relative;
-  margin: 0 auto;
-  padding: 8px;
-  background: var(--stage);
-  border: 1px solid var(--dark-line);
-  border-radius: var(--radius-card);
-}
-.stage-media video {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 7px;
-  background: var(--stage);
-}
-.stage-media figcaption { padding: 10px 4px 2px; color: var(--on-dark-2); font-size: 13.5px; }
-.hero-media { --wide: 1296px; }
-/* The poster follows the theme, so it is a background: the poster attribute cannot change with the theme button */
-.hero-media video { background: var(--stage) url("media/record-poster.webp") center / cover no-repeat; }
-[data-theme="dark"] .hero-media video { background-image: url("media/record-poster-dark.webp"); }
-
-.has-toggle { position: relative; }
-/* Sits on the caption's line, clear of the footage */
-.video-toggle {
-  position: absolute;
-  right: 12px;
-  bottom: 8px;
-  padding: 2px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.video-toggle:hover { background: rgba(255, 255, 255, 0.16); }
-.has-toggle figcaption { padding-right: 84px; }
-
-/* A picture beside what it shows */
-.split {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 48px;
-  align-items: start;
-}
-.split > * { min-width: 0; }
-.record-split { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: stretch; }
-
-/* The recorded flow in a window */
-.code-window {
-  display: flex;
-  flex-direction: column;
-  background: var(--stage);
-  border: 1px solid var(--dark-line);
-  border-radius: var(--radius-card);
-  overflow: hidden;
-}
-.code-bar {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--dark-line);
-  color: var(--on-dark-2);
-  font-size: 13px;
-}
-.code-bar strong { color: var(--on-dark); font-weight: 600; }
-.code-bar code { font-size: 12px; background: none; border: 0; padding: 0; color: var(--ink-3); }
-.code-window pre { flex: 1; border-radius: 0; }
-
-/* Short facts: a title and a line, ruled */
-.facts { list-style: none; margin: 0; padding: 0; }
-.facts li { padding: 18px 0; border-top: 1px solid var(--line); }
-.facts li:first-child { border-top: 0; padding-top: 0; }
-.facts li:last-child { padding-bottom: 0; }
-.facts h3 { margin-bottom: 6px; }
-.facts p { margin: 0; color: var(--ink-2); font-size: 16px; }
-
-/* A still in a frame */
-.shot { margin: 0; }
-.shot img {
-  width: 100%;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-}
-.shot figcaption { padding: 12px 4px 0; font-size: 13.5px; color: var(--ink-2); }
-/* A still in each theme. The hidden one is lazy and never in view, so it is never fetched */
-.only-dark, [data-theme="dark"] .only-light { display: none; }
-[data-theme="dark"] .only-dark { display: block; }
-
-/* Run: the band ends where the video does; the facts sit on paper */
-.band { background: var(--band); color: var(--on-dark); padding: var(--section) 0 40px; }
-.band .section-head { margin-bottom: 0; }
-.run-stage { position: relative; isolation: isolate; }
-.run-stage::before { content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 60%; background: var(--band); z-index: -1; }
-.run-media { --wide: 1400px; padding: 0; background: none; border: 0; }
-.run-media video { border-radius: var(--radius-card); border: 1px solid var(--dark-line); }
-.run-media figcaption { padding: 12px 84px 0 8px; color: var(--ink-2); }
-.run-media .video-toggle { bottom: -2px; border-color: var(--line); background: var(--panel); color: var(--navy-text); }
-.run-media .video-toggle:hover { border-color: var(--ink-3); background: var(--panel); }
-.run-below { padding-top: 56px; }
-
-/* Projects: two open columns, text first, the still at the foot */
-.features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; }
-.feature { display: flex; flex-direction: column; min-width: 0; }
-.feature h3 { margin-bottom: 8px; }
-.feature p { margin: 0; color: var(--ink-2); font-size: 16px; max-width: 52ch; }
-.feature .shot { margin-top: auto; padding-top: 24px; }
-
-/* FAQ: the heading stays while the questions open */
-.faq { background: var(--panel); border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
-.faq-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 48px 64px; align-items: start; }
-.faq-head { display: block; position: sticky; top: 96px; margin-bottom: 0; }
-.faq-head .more { margin: 16px 0 0; font-size: 16px; }
-.faq-list { margin: 0; }
-.faq details { border-top: 1px solid var(--line); }
-.faq details:last-child { border-bottom: 1px solid var(--line); }
-.faq summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 16px 4px;
-  margin: 0 -4px;
-  border-radius: var(--radius-control);
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.4;
-  cursor: pointer;
-  list-style: none;
-}
-.faq summary::-webkit-details-marker { display: none; }
-.faq summary:hover { color: var(--navy-text); }
-.faq summary::after {
-  content: "";
-  flex: none;
-  width: 9px;
-  height: 9px;
-  margin-right: 6px;
-  border-right: 2px solid var(--ink-2);
-  border-bottom: 2px solid var(--ink-2);
-  transform: translateY(-2px) rotate(45deg);
-  transition: transform 160ms ease;
-}
-.faq details[open] summary::after { transform: translateY(2px) rotate(-135deg); }
-.faq .answer { padding: 0 48px 20px 0; color: var(--ink-2); font-size: 16px; }
-.faq .answer p { margin: 0; }
-.faq .answer p + p { margin-top: 8px; }
-
-/* Get started: the two ways to run it, then what either one needs */
-.paths { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 48px; }
-.path { min-width: 0; padding-top: 18px; border-top: 2px solid var(--navy-text); }
-.path h3 { margin-bottom: 8px; }
-.path p { margin: 0; color: var(--ink-2); font-size: 16px; }
-.path p + p { margin-top: 10px; }
-.path pre { margin: 14px 0; font-size: 14px; padding: 14px 18px; }
-.path .actions { margin-top: 16px; }
-.path .fine { margin: 14px 0 0; font-size: 14px; color: var(--ink-2); }
-.needs-list { margin: 0; padding: 0; list-style: none; }
-.needs-list li { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
-
-/* Footer */
-.site-footer { margin-top: var(--section); background: var(--band); color: var(--on-dark-2); padding: 44px 0 52px; font-size: 14.5px; }
-.site-footer .brand { color: var(--on-dark); font-size: 17px; }
-.site-footer .brand:hover { color: var(--on-dark); }
-.footer-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
-.footer-links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 20px 0 24px; padding: 0; list-style: none; }
-.site-footer a { color: var(--on-dark); }
-.site-footer a:hover { color: var(--thread); }
-.trademark { font-size: 13.5px; margin: 0; color: rgba(255, 255, 255, 0.66); }
-
-@media (max-width: 1040px) {
-  :root { --section: 80px; }
-  .record-split { grid-template-columns: minmax(0, 1fr); }
-  .record-split .facts { max-width: 640px; }
-  .faq-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
-  .faq-head { position: static; }
-  .paths { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .path-needs { grid-column: 1 / -1; }
-}
-
-@media (max-width: 900px) {
-  .section-head, .split, .features { grid-template-columns: minmax(0, 1fr); }
-  .split { gap: 32px; }
-  .features { gap: 48px; }
-  .feature .shot { padding-top: 20px; }
-  .hero-band::before { top: 40%; }
-  .run-stage::before { bottom: 65%; }
-}
-
-@media (max-width: 720px) {
-  :root { --section: 56px; }
-  .site-header { position: static; -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--paper); }
-  .header-inner { flex-wrap: wrap; gap: 8px 16px; padding-top: 12px; padding-bottom: 12px; }
-  .site-header nav { order: 3; width: 100%; margin-left: 0; }
-  .site-header ul { gap: 4px 18px; }
-  .header-tools { margin-left: auto; }
-  main > section { scroll-margin-top: 16px; }
-
-  .hero { padding-top: 40px; }
-  h1 { font-size: clamp(34px, 9.6vw, 56px); }
-  .lead { font-size: 17px; }
-  .hero-band { margin-top: 32px; padding-bottom: 36px; }
-  .stage-media { padding: 5px; border-radius: 10px; }
-  .stage-media video { border-radius: 5px; }
-  .section-head { margin-bottom: 28px; }
-  .section-head p { font-size: 16.5px; }
-
-  pre { font-size: 11.5px; padding: 16px 14px; }
-  .code-bar { padding: 10px 14px; }
-  .code-bar code { display: none; }
-  .run-below { padding-top: 40px; }
-  .faq summary { font-size: 17px; }
-  .faq .answer { padding-right: 24px; font-size: 15.5px; }
-  .paths { grid-template-columns: minmax(0, 1fr); gap: 32px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .faq summary::after, .btn, .theme-toggle { transition: none; }
-}
-</style>
+<link rel="preload" href="fonts/host-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<!-- If the module never runs (it failed to load, or the browser has no modules), drop the js class so nothing stays hidden. -->
+<script type="module" src="assets/site.js" onerror="document.documentElement.classList.remove('js')"></script>
+<script nomodule>document.documentElement.classList.remove('js');</script>
 </head>
 <body>
 
-<header class="site-header">
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-tick" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cross" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 3.2V3a.5.5 0 0 0-.5-.5H3a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .5.5h.2"/></g></symbol>
+  <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.4M8 13.1v1.4M14.5 8h-1.4M2.9 8H1.5M12.6 3.4l-1 1M4.4 11.6l-1 1M12.6 12.6l-1-1M4.4 4.4l-1-1"/></g></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M4 1.8h5.2L12.5 5v9.2H4z"/><path d="M9 1.8V5.3h3.5"/></g></symbol>
+  <symbol id="i-key-back" viewBox="0 0 16 16"><path d="M11 3.5v9L4.5 8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-key-home" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.6" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-key-recents" viewBox="0 0 16 16"><rect x="3.8" y="3.8" width="8.4" height="8.4" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-key-vol-down" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"><path d="M2.5 6.2h2.3L8 3.6v8.8L4.8 9.8H2.5z"/><path d="M10.5 8h3.5"/></g></symbol>
+  <symbol id="i-key-vol-up" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"><path d="M2.5 6.2h2.3L8 3.6v8.8L4.8 9.8H2.5z"/><path d="M10.5 8h3.5M12.25 6.25v3.5"/></g></symbol>
+  <symbol id="i-key-power" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 2.5v5"/><path d="M5 4.6a4.6 4.6 0 1 0 6 0"/></g></symbol>
+  <symbol id="i-key-rotate" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 8a4.8 4.8 0 1 1-1.6-3.6"/><path d="M11.6 1.9v2.8H8.8"/></g></symbol>
+  <symbol id="i-key-enter" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3.5v4.2a1.3 1.3 0 0 1-1.3 1.3H3.5"/><path d="m6 6.5-2.5 2.5L6 11.5"/></g></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 16 16"><path fill="currentColor" d="M3 5.2h2.6a1.7 1.7 0 1 1 3.3 0h2.7v2.7a1.7 1.7 0 1 1 0 3.3v2.6H3z"/></symbol>
+  <symbol id="i-ag-back" viewBox="0 0 24 24"><path d="M19 12H5.5m5.5-6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ag-save" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ag-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-ag-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></g></symbol>
+  <symbol id="i-ag-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></g></symbol>
+  <symbol id="i-ag-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></g></symbol>
+  <symbol id="i-ag-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></g></symbol>
+  <symbol id="i-ag-status" viewBox="0 0 48 12"><g fill="currentColor"><path d="M2 10h2v-2H2zM5.5 10h2V6h-2zM9 10h2V4H9zM12.5 10h2V2h-2z"/><path d="M19.5 10.2 25 4.6a7.8 7.8 0 0 0-11 0z"/><rect x="30" y="2.5" width="14" height="7.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="31.6" y="4.1" width="9" height="4.3" rx=".6"/><rect x="44.6" y="4.6" width="1.4" height="3.3" rx=".5"/></g></symbol>
+</svg>
+
+<a class="skip-link" href="#main">Skip to the content</a>
+
+<header class="site-header" data-header>
   <div class="wrap header-inner">
-    <a class="brand" href="#top"><img src="img/icon.svg" width="26" height="26" alt=""><span>Ariadne</span></a>
-    <nav aria-label="Main">
+    <a class="brand" href="#top"><img src="img/icon.svg" width="28" height="28" alt=""><span>Ariadne</span></a>
+    <nav class="nav" aria-label="Main">
       <ul>
         <li><a href="#record">Record</a></li>
         <li><a href="#run">Run</a></li>
@@ -656,168 +218,524 @@ main > section { scroll-margin-top: 72px; }
       </ul>
     </nav>
     <div class="header-tools">
-      <button type="button" class="theme-toggle" hidden>
-        <svg class="icon-moon" viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z"/></svg>
-        <svg class="icon-sun" viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.4M8 13.1v1.4M14.5 8h-1.4M2.9 8H1.5M12.6 3.4l-1 1M4.4 11.6l-1 1M12.6 12.6l-1-1M4.4 4.4l-1-1"/></svg>
-      </button>
-      <a class="btn btn-primary btn-small" href="#get-started">Get started</a>
+      <a class="icon-btn" href="https://github.com/sudo-ezekiel/ariadne-studio" aria-label="Ariadne on GitHub"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg></a>
+      <button type="button" class="icon-btn theme-toggle" hidden><svg class="i icon-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="i icon-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+      <a class="btn btn-primary btn-sm header-cta" href="#get-started">Get started</a>
+      <button type="button" class="icon-btn menu-btn" aria-expanded="false" aria-controls="site-menu" aria-label="Menu" hidden><svg class="i icon-open" aria-hidden="true"><use href="#i-menu"/></svg><svg class="i icon-close" aria-hidden="true"><use href="#i-close"/></svg></button>
     </div>
+  </div>
+  <div class="menu-panel" id="site-menu" hidden>
+    <ul>
+      <li><a href="#record">Record</a></li>
+      <li><a href="#run">Run</a></li>
+      <li><a href="#projects">Projects</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="docs/">Docs</a></li>
+      <li><a class="btn btn-primary" href="#get-started">Get started</a></li>
+    </ul>
   </div>
 </header>
 
-<main>
+<nav class="rail" aria-label="Sections" data-rail>
+  <span class="rail-line" aria-hidden="true"><span class="rail-fill"></span></span>
+  <ol>
+    <li><a href="#top"><span class="rail-label">Top</span></a></li>
+    <li><a href="#record"><span class="rail-label">Record</span></a></li>
+    <li><a href="#run"><span class="rail-label">Run</span></a></li>
+    <li><a href="#projects"><span class="rail-label">Projects</span></a></li>
+    <li><a href="#footage"><span class="rail-label">Footage</span></a></li>
+    <li><a href="#faq"><span class="rail-label">FAQ</span></a></li>
+    <li><a href="#get-started" class="is-knot"><span class="rail-label">Get started</span></a></li>
+  </ol>
+</nav>
+
+<main id="main">
 
   <section id="top" class="hero">
-    <div class="wrap">
-      <h1>Record Maestro flows by using your app</h1>
-      <div class="hero-sub">
-        <p class="lead">Click through your Android app on a mirrored screen and Ariadne writes the Maestro flow as you go. Everything runs on your own computer.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="#get-started">Get started</a>
-          <a class="btn btn-secondary" href="docs/">Read the docs</a>
-        </div>
+    <div class="wrap hero-text">
+      <a class="pill" href="https://github.com/sudo-ezekiel/ariadne-studio"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>Open source under Apache-2.0</a>
+      <h1>Record Maestro flows <span class="thread-words">by using your app<span class="thread-line" aria-hidden="true"><svg viewBox="0 0 300 20" preserveAspectRatio="none" focusable="false"><path d="M1 4 C 60 15, 140 19, 212 13 S 282 3, 299 8" vector-effect="non-scaling-stroke"/></svg><span class="thread-ring"></span><span class="thread-knot"></span></span></span></h1>
+      <p class="lead">Click through your Android app on a mirrored screen and Ariadne writes the Maestro flow as you go. Everything runs on your own computer.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#get-started">Get started</a>
+        <a class="btn btn-secondary" href="docs/">Read the docs</a>
+      </div>
+      <div class="command">
+        <code><span class="command-prompt" aria-hidden="true">$ </span>npx ariadne-studio</code>
+        <button type="button" class="copy-btn" data-copy="npx ariadne-studio" aria-label="Copy the command"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="copy-done" aria-hidden="true">Copied</span></button>
       </div>
     </div>
-    <div class="hero-band">
-      <figure class="wide stage-media hero-media has-toggle">
-        <!-- With reduced motion no source matches, so only the poster shows and no video is fetched.
-             The sources follow the system theme; the theme button's script swaps them when the page's theme differs. -->
-        <video class="hero-video" autoplay muted loop playsinline width="1280" height="864" aria-label="Ariadne Studio with a calendar app mirrored on an Android emulator. A new event is typed and saved, each action appears as a step with its selector, a check is added, and the finished case opens its Maestro YAML.">
-          <source src="media/record-dark.webm" type="video/webm" data-for="dark" media="(prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark)">
-          <source src="media/record-dark.mp4" type="video/mp4" data-for="dark" media="(prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark)">
-          <source src="media/record.webm" type="video/webm" data-for="light" media="(prefers-reduced-motion: no-preference)">
-          <source src="media/record.mp4" type="video/mp4" data-for="light" media="(prefers-reduced-motion: no-preference)">
-        </video>
-        <button type="button" class="video-toggle" hidden>Pause</button>
-        <figcaption>Ariadne Studio recording a case in Fossify Calendar on an Android emulator. Device waits are shortened.</figcaption>
-      </figure>
-    </div>
+
+    <figure class="demo" data-studio-demo aria-labelledby="demo-caption">
+      <div class="demo-controls">
+        <button type="button" class="demo-chip" data-demo-pause hidden>Pause</button>
+        <button type="button" class="demo-chip" data-demo-yourself hidden>Record it yourself</button>
+        <button type="button" class="demo-chip" data-demo-again hidden>Watch it again</button>
+      </div>
+      <div class="demo-windows">
+
+        <div class="win win-studio" role="group" aria-label="Ariadne Studio, a working model">
+          <div class="win-bar">
+            <span class="win-brand"><img src="img/icon.svg" width="18" height="18" alt=""><strong>Ariadne</strong><span>Studio</span></span>
+            <span class="win-status"><span class="status-dot" aria-hidden="true"></span><span class="win-status-text">Connected to emulator-5554 · com.example.agenda</span></span>
+          </div>
+          <div class="studio">
+            <div class="stage-col">
+              <div class="rec-bar" data-rec-bar>
+                <p class="rec-state" data-rec-state><span class="rec-text">Not recording · com.example.agenda</span></p>
+                <p class="rec-hint" data-rec-hint role="status"></p>
+                <button type="button" class="btn btn-primary btn-sm" data-act="record">Start recording</button>
+              </div>
+              <div class="stage" data-stage>
+                <div class="phone" data-phone role="group" aria-label="Phone screen: the Agenda app">
+                  <div class="device">
+                    <div class="ag-status" aria-hidden="true"><span>9:41</span><svg class="ag-status-icons"><use href="#i-ag-status"/></svg></div>
+
+                    <div class="ag-screen ag-home" data-screen="home">
+                      <div class="ag-bar">
+                        <span class="ag-title">Today</span>
+                        <svg class="ag-bar-icon" aria-hidden="true"><use href="#i-ag-search"/></svg>
+                      </div>
+                      <p class="ag-day">Wednesday 25 November</p>
+                      <ul class="ag-events" data-events>
+                        <li><button type="button" class="ag-event"><span class="ag-time">08:00</span><span class="ag-event-title" data-node data-id="event_item_title" data-role="text">Dentist</span></button></li>
+                        <li><button type="button" class="ag-event"><span class="ag-time">09:00</span><span class="ag-event-title" data-node data-id="event_item_title" data-role="text">Team standup</span></button></li>
+                      </ul>
+                      <button type="button" class="ag-fab" data-node data-id="fab_new_event" data-name="New event" data-role="button" aria-label="New event"><svg aria-hidden="true"><use href="#i-ag-plus"/></svg></button>
+                      <p class="ag-snack" data-snack hidden>Event saved</p>
+                    </div>
+
+                    <div class="ag-screen ag-new" data-screen="new" hidden>
+                      <div class="ag-bar">
+                        <button type="button" class="ag-icon-btn" data-node data-id="back" data-name="Back" data-role="button" aria-label="Back"><svg aria-hidden="true"><use href="#i-ag-back"/></svg></button>
+                        <span class="ag-title">New event</span>
+                        <button type="button" class="ag-icon-btn" data-node data-id="save" data-name="Save" data-role="button" aria-label="Save"><svg aria-hidden="true"><use href="#i-ag-save"/></svg></button>
+                      </div>
+                      <div class="ag-form">
+                        <input class="ag-input ag-input-title" type="text" data-node data-field data-id="event_title" data-name="Title" data-role="field" placeholder="Title" aria-label="Title" autocomplete="off" spellcheck="false">
+                        <div class="ag-input-row">
+                          <input class="ag-input" type="text" data-node data-field data-id="event_location" data-name="Location" data-role="field" placeholder="Location" aria-label="Location" autocomplete="off" spellcheck="false">
+                          <svg class="ag-row-icon ag-pin" aria-hidden="true"><use href="#i-ag-pin"/></svg>
+                        </div>
+                        <div class="ag-rule"></div>
+                        <div class="ag-row">
+                          <svg class="ag-row-icon" aria-hidden="true"><use href="#i-ag-clock"/></svg>
+                          <span class="ag-row-text">All-day</span>
+                          <button type="button" class="ag-switch" role="switch" aria-checked="false" data-node data-id="all_day" data-name="All-day" data-role="switch" aria-label="All-day"></button>
+                        </div>
+                        <div class="ag-row ag-when"><span>Wed 25 Nov</span><span>08:00</span></div>
+                        <div class="ag-row ag-when"><span>Wed 25 Nov</span><span>09:00</span></div>
+                        <div class="ag-rule"></div>
+                        <button type="button" class="ag-row ag-row-btn" data-node data-name="10 minutes before" data-role="row"><svg class="ag-row-icon" aria-hidden="true"><use href="#i-ag-bell"/></svg><span class="ag-row-text">10 minutes before</span></button>
+                      </div>
+                    </div>
+
+                    <div class="ag-screen ag-launcher" data-screen="launcher" hidden>
+                      <p class="ag-clock">9:41</p>
+                      <p class="ag-date">Wednesday 25 November</p>
+                      <div class="ag-dock">
+                        <button type="button" class="ag-app" data-node data-name="Agenda" data-role="icon"><span class="ag-app-icon" aria-hidden="true">25</span><span>Agenda</span></button>
+                      </div>
+                    </div>
+
+                    <div class="ag-gesture" aria-hidden="true"></div>
+                  </div>
+                </div>
+                <p class="callout" data-callout hidden>Your turn. Click anything on the phone.</p>
+              </div>
+              <p class="stage-caption" data-caption>com.example.agenda</p>
+              <div class="keys" role="group" aria-label="Phone buttons">
+                <button type="button" class="key" data-key="Back"><svg class="i" aria-hidden="true"><use href="#i-key-back"/></svg><span>Back</span></button>
+                <button type="button" class="key" data-key="Home"><svg class="i" aria-hidden="true"><use href="#i-key-home"/></svg><span>Home</span></button>
+                <button type="button" class="key" aria-disabled="true" title="Off while recording: Maestro cannot replay this"><svg class="i" aria-hidden="true"><use href="#i-key-recents"/></svg><span>Recents</span></button>
+                <span class="key-sep" aria-hidden="true"></span>
+                <button type="button" class="key" data-key="Volume Down"><svg class="i" aria-hidden="true"><use href="#i-key-vol-down"/></svg><span>Vol down</span></button>
+                <button type="button" class="key" data-key="Volume Up"><svg class="i" aria-hidden="true"><use href="#i-key-vol-up"/></svg><span>Vol up</span></button>
+                <span class="key-sep" aria-hidden="true"></span>
+                <button type="button" class="key" data-key="Enter"><svg class="i" aria-hidden="true"><use href="#i-key-enter"/></svg><span>Enter</span></button>
+              </div>
+              <div class="controls">
+                <button type="button" class="check-toggle" data-act="check" aria-pressed="false"><span class="check-box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span>Check</button>
+                <span class="controls-hint">Then click what must be on the screen</span>
+              </div>
+            </div>
+
+            <div class="case-col">
+              <div class="case-head">
+                <p class="case-title">Create an event</p>
+                <p class="case-meta"><code>create-an-event</code> · com.example.agenda on emulator-5554</p>
+              </div>
+              <div class="case-steps" data-steps-scroll>
+                <ol class="thread steps" data-steps>
+                  <li class="step is-start" data-kind="start"><span class="mark" aria-hidden="true"></span><span class="kind">start</span><span class="what"><span class="line"><span class="words">Starts with a fresh start of com.example.agenda</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">2.8 s</span></span></span></span></li>
+                  <li class="step" data-kind="tap"><span class="mark">1</span><span class="kind">tap</span><span class="what"><span class="line"><span class="words">Tap "New event"</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">1.6 s</span></span></span><code class="sel">id: com.example.agenda:id/fab_new_event</code></span><span class="thumb" aria-hidden="true"></span></li>
+                  <li class="step" data-kind="type"><span class="mark">2</span><span class="kind">type</span><span class="what"><span class="line"><span class="words">Type "Dentist"</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">2.9 s</span></span></span></span><span class="thumb" aria-hidden="true"></span></li>
+                  <li class="step" data-kind="tap"><span class="mark">3</span><span class="kind">tap</span><span class="what"><span class="line"><span class="words">Tap "Location"</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">1.2 s</span></span></span><code class="sel">id: com.example.agenda:id/event_location</code></span><span class="thumb" aria-hidden="true"></span></li>
+                  <li class="step" data-kind="type"><span class="mark">4</span><span class="kind">type</span><span class="what"><span class="line"><span class="words">Type "Athens"</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">2.6 s</span></span></span></span><span class="thumb" aria-hidden="true"></span></li>
+                  <li class="step" data-kind="tap"><span class="mark">5</span><span class="kind">tap</span><span class="what"><span class="line"><span class="words">Tap "Save"</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">1.9 s</span></span></span><code class="sel">id: com.example.agenda:id/save</code></span><span class="thumb" aria-hidden="true"></span></li>
+                  <li class="step" data-kind="check"><span class="mark">6</span><span class="kind">check</span><span class="what"><span class="line"><span class="words">Check that "Dentist" is visible</span><span class="result is-pass"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Passed <span class="dur">1.2 s</span></span></span><code class="sel">id: com.example.agenda:id/event_item_title</code></span><span class="thumb" aria-hidden="true"></span></li>
+                </ol>
+              </div>
+              <div class="case-foot" data-case-foot>
+                <p class="saved"><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Saved "Create an event"</p>
+                <div class="foot-actions">
+                  <button type="button" class="btn btn-primary btn-sm" data-act="run">Run</button>
+                  <button type="button" class="btn btn-secondary btn-sm" data-act="restart">Record again</button>
+                  <p class="run-summary is-pass">Last run passed</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="win win-file" role="group" aria-label="The Maestro flow file">
+          <div class="win-bar">
+            <span class="file-name"><svg class="i" aria-hidden="true"><use href="#i-file"/></svg>flows/create-an-event.yaml</span>
+            <button type="button" class="copy-btn copy-btn-sm" data-copy-yaml aria-label="Copy the flow"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="copy-done" aria-hidden="true">Copied</span></button>
+          </div>
+          <pre class="yaml" data-yaml-scroll><code data-yaml><span class="ln"><span class="k">appId</span>: com.example.agenda</span>
+<span class="ln"><span class="k">name</span>: Create an event</span>
+<span class="ln"><span class="p">---</span></span>
+<span class="ln"><span class="p">- </span>launchApp</span>
+<span class="ln"><span class="p">- </span><span class="k">tapOn</span>:</span>
+<span class="ln">    <span class="k">id</span>: <span class="s">"com\\.example\\.agenda:id/fab_new_event"</span></span>
+<span class="ln"><span class="p">- </span><span class="k">inputText</span>: <span class="s">"Dentist"</span></span>
+<span class="ln"><span class="p">- </span><span class="k">tapOn</span>:</span>
+<span class="ln">    <span class="k">id</span>: <span class="s">"com\\.example\\.agenda:id/event_location"</span></span>
+<span class="ln"><span class="p">- </span><span class="k">inputText</span>: <span class="s">"Athens"</span></span>
+<span class="ln"><span class="p">- </span><span class="k">tapOn</span>:</span>
+<span class="ln">    <span class="k">id</span>: <span class="s">"com\\.example\\.agenda:id/save"</span></span>
+<span class="ln"><span class="p">- </span><span class="k">assertVisible</span>:</span>
+<span class="ln">    <span class="k">id</span>: <span class="s">"com\\.example\\.agenda:id/event_item_title"</span></span>
+</code></pre>
+        </div>
+
+        <span class="demo-pointer" data-pointer aria-hidden="true"></span>
+      </div>
+      <figcaption id="demo-caption" class="demo-caption">A working model of the studio: click the phone to record your own case. The studio itself does this with your app, on an emulator or a USB phone.</figcaption>
+      <p class="sr-only" aria-live="polite" data-live></p>
+    </figure>
   </section>
 
   <section id="record" class="section">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head reveal">
         <h2>Every tap becomes a step</h2>
-        <p>Connect an emulator or a USB phone and use your app as usual. Ariadne turns your clicks into Maestro YAML, one step at a time, each with a selector and a screenshot. A business analyst can record a test without writing code, and the flow runs with <code>maestro test</code> on a laptop or in CI.</p>
+        <p>Connect an emulator or a USB phone and use your app as usual. Ariadne <a href="docs/guides/recording">turns your clicks into Maestro YAML</a>, one step at a time, each with a selector and a screenshot. A business analyst can record a test without writing code, and the flow runs with <code>maestro test</code> on a laptop or <a href="docs/guides/ci">in CI</a>.</p>
       </div>
-      <div class="split record-split">
-        <ul class="facts">
-          <li>
+      <div class="bento-grid">
+
+        <article class="card bento reveal">
+          <div class="bento-stage" data-demo="selectors" aria-hidden="true">
+            <div class="vignette vignette-selectors">
+              <div class="ag-sheet">
+                <div class="ag-bar ag-bar-mini">
+                  <span class="ag-icon-btn"><svg><use href="#i-ag-back"/></svg></span>
+                  <span class="ag-title">New event</span>
+                  <span class="ag-icon-btn is-picked"><svg><use href="#i-ag-save"/></svg></span>
+                </div>
+                <div class="ag-row ag-row-mini"><svg class="ag-row-icon"><use href="#i-ag-bell"/></svg><span class="ag-row-text">10 minutes before</span></div>
+                <div class="ag-map">
+                  <svg viewBox="0 0 240 92" preserveAspectRatio="xMidYMid slice"><path d="M-10 64 C 40 50, 90 76, 140 52 S 220 30, 260 40" class="road"/><path d="M60 -10 C 70 30, 64 60, 86 110" class="road road-thin"/><path d="M170 -10 C 160 40, 190 70, 176 110" class="road road-thin"/></svg>
+                  <span class="ag-map-pin"><svg><use href="#i-ag-pin"/></svg></span>
+                </div>
+              </div>
+              <p class="readout"><code>id: com.example.agenda:id/save</code></p>
+            </div>
+          </div>
+          <div class="bento-text">
             <h3>Selectors picked for you</h3>
-            <p>Each step uses the element's resource id or visible text, escaped the way Maestro expects. Coordinates are the last resort, and the studio flags them.</p>
-          </li>
-          <li>
+            <p>Each step uses the element's <a href="docs/reference/selectors">resource id or visible text</a>, escaped the way Maestro expects. Coordinates are the last resort, and the studio flags them.</p>
+          </div>
+        </article>
+
+        <article class="card bento reveal">
+          <div class="bento-stage" data-demo="gestures" aria-hidden="true">
+            <div class="vignette vignette-gestures">
+              <div class="keys keys-full">
+                <span class="key"><svg class="i"><use href="#i-key-back"/></svg><span>Back</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-home"/></svg><span>Home</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-recents"/></svg><span>Recents</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-vol-down"/></svg><span>Vol down</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-vol-up"/></svg><span>Vol up</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-power"/></svg><span>Power</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-rotate"/></svg><span>Rotate</span></span>
+                <span class="key"><svg class="i"><use href="#i-key-enter"/></svg><span>Enter</span></span>
+              </div>
+              <ol class="thread steps steps-mini">
+                <li class="step"><span class="mark">1</span><span class="kind">swipe</span><span class="what"><span class="line"><span class="words">Swipe left</span></span></span></li>
+                <li class="step"><span class="mark">2</span><span class="kind">key</span><span class="what"><span class="line"><span class="words">Press Home</span></span></span></li>
+                <li class="step"><span class="mark">3</span><span class="kind">rotate</span><span class="what"><span class="line"><span class="words">Rotate to landscape</span></span></span></li>
+              </ol>
+            </div>
+          </div>
+          <div class="bento-text">
             <h3>Gestures and phone buttons</h3>
-            <p>Tap, type, swipe, long press and double tap, plus Back, Home, Volume, Power and Rotate. To change a case later, re-record from any step or add steps in the middle.</p>
-          </li>
-          <li>
+            <p>Tap, type, swipe, long press and double tap, plus Back, Home, Volume, Power and Rotate. To change a case later, <a href="docs/guides/edit-and-chain">re-record from any step or add steps in the middle</a>.</p>
+          </div>
+        </article>
+
+        <article class="card bento reveal">
+          <div class="bento-stage" data-demo="check" aria-hidden="true">
+            <div class="vignette vignette-check">
+              <span class="check-toggle is-on"><span class="check-box"><svg class="i"><use href="#i-tick"/></svg></span>Check</span>
+              <div class="ag-sheet">
+                <div class="ag-bar ag-bar-mini"><span class="ag-title">Today</span></div>
+                <div class="ag-event ag-event-mini"><span class="ag-time">08:00</span><span class="ag-event-title is-checked">Dentist</span></div>
+                <div class="ag-event ag-event-mini"><span class="ag-time">09:00</span><span class="ag-event-title">Team standup</span></div>
+              </div>
+              <ol class="thread steps steps-mini">
+                <li class="step" data-kind="check"><span class="mark">6</span><span class="kind">check</span><span class="what"><span class="line"><span class="words">Check that "Dentist" is visible</span></span></span></li>
+              </ol>
+            </div>
+          </div>
+          <div class="bento-text">
             <h3>Click to add a check</h3>
             <p>Turn on Check and click what should be on screen. When you finish recording, tick the end results you expect.</p>
-          </li>
-        </ul>
-        <div class="code-window">
-          <div class="code-bar"><strong>Create an event</strong><code>Maestro flow, as recorded</code></div>
-<pre><code>appId: org.fossify.calendar
-name: Create an event
----
-- launchApp
-- tapOn:
-    id: "org\\.fossify\\.calendar:id/calendar_fab"
-- tapOn:
-    id: "org\\.fossify\\.calendar:id/fab_event_label"
-- inputText: "Dentist"
-- tapOn:
-    id: "org\\.fossify\\.calendar:id/event_location"
-- inputText: "Athens"
-- tapOn:
-    id: "org\\.fossify\\.calendar:id/save"
-- assertVisible:
-    id: "org\\.fossify\\.calendar:id/event_item_title"</code></pre>
-        </div>
+          </div>
+        </article>
+
       </div>
     </div>
   </section>
 
-  <section id="run" class="section">
-    <div class="band on-dark">
+  <section id="run" class="section section-band">
+    <div class="band band-dark">
       <div class="wrap">
-        <div class="section-head">
+        <div class="section-head reveal">
           <h2>See which step failed and why</h2>
-          <p>The Maestro CLI runs your cases. Ariadne shows the result of each step beside the phone screen, with Maestro's message when a step fails.</p>
+          <p>The Maestro CLI <a href="docs/guides/run">runs your cases</a>. Ariadne shows the result of each step beside the phone screen, with Maestro's message when a step fails.</p>
         </div>
-      </div>
-    </div>
-    <div class="run-stage">
-      <figure class="wide stage-media run-media has-toggle">
-        <video class="clip" muted loop playsinline preload="none" poster="media/run-poster.webp" width="1920" height="1080" aria-label="A run of the Create an event case. The case's steps fill the left of the frame and tick off one by one, while a calendar app on the right creates the Dentist event.">
-          <source src="media/run.webm" type="video/webm" media="(prefers-reduced-motion: no-preference)">
-          <source src="media/run.mp4" type="video/mp4" media="(prefers-reduced-motion: no-preference)">
-        </video>
-        <button type="button" class="video-toggle" hidden>Pause</button>
-        <figcaption>The video Ariadne saved when it ran the case above.</figcaption>
-      </figure>
-    </div>
-    <div class="wrap run-below">
-      <div class="split">
-        <figure class="shot">
-          <img src="img/run-video-failed.webp" width="1920" height="1080" loading="lazy" alt="The last frame of a failed run video: the step that failed is marked with a cross and Maestro's message under it, the steps after it are marked not run, and the phone beside them shows the screen it stopped on">
-          <figcaption>The last frame of a failed run, with Maestro's message under the step and the screen it stopped on.</figcaption>
-        </figure>
-        <ul class="facts">
-          <li>
+
+        <div class="run-demo reveal" data-demo="run">
+          <div class="run-controls">
+            <button type="button" class="btn btn-primary btn-sm" data-run-play>Run</button>
+            <label class="switch"><input type="checkbox" role="switch" data-run-break><span class="switch-track" aria-hidden="true"></span>Take the Save button out of the app first</label>
+          </div>
+          <div class="run-body">
+            <div class="run-panel">
+              <div class="run-head">
+                <div>
+                  <p class="run-title">Create an event</p>
+                  <p class="run-sub">com.example.agenda on emulator-5554</p>
+                </div>
+                <p class="run-state is-pass" data-run-state>Passed in 14.2 s</p>
+              </div>
+              <ol class="run-steps" data-run-steps>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Start com.example.agenda</span><span class="run-dur">2.8 s</span></li>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Tap "New event"</span><span class="run-dur">1.6 s</span></li>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Type "Dentist"</span><span class="run-dur">2.9 s</span></li>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Tap "Location"</span><span class="run-dur">1.2 s</span></li>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Type "Athens"</span><span class="run-dur">2.6 s</span></li>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Tap "Save"</span><span class="run-dur">1.9 s</span></li>
+                <li class="is-pass"><span class="box" aria-hidden="true"><svg class="i"><use href="#i-tick"/></svg></span><span class="run-text">Check that "Dentist" is visible</span><span class="run-dur">1.2 s</span></li>
+              </ol>
+              <p class="run-brand"><img src="img/icon.svg" width="14" height="14" alt="">Ariadne, a recorder for Maestro</p>
+            </div>
+            <div class="run-phone" aria-hidden="true">
+              <div class="phone phone-static">
+                <div class="device">
+                  <div class="ag-status"><span>9:41</span><svg class="ag-status-icons"><use href="#i-ag-status"/></svg></div>
+                  <div class="ag-screen ag-home">
+                    <div class="ag-bar"><span class="ag-title">Today</span><svg class="ag-bar-icon"><use href="#i-ag-search"/></svg></div>
+                    <p class="ag-day">Wednesday 25 November</p>
+                    <ul class="ag-events">
+                      <li><span class="ag-event"><span class="ag-time">08:00</span><span class="ag-event-title">Dentist</span></span></li>
+                      <li><span class="ag-event"><span class="ag-time">09:00</span><span class="ag-event-title">Team standup</span></span></li>
+                    </ul>
+                    <span class="ag-fab"><svg><use href="#i-ag-plus"/></svg></span>
+                  </div>
+                  <div class="ag-gesture"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="facts">
+          <div class="fact reveal">
             <h3>Compare each screen with the recording</h3>
             <p>Ariadne takes a screenshot after every step and puts it next to the one you recorded. A screen that changed is marked "looks different", even when the run passed.</p>
-          </li>
-          <li>
+          </div>
+          <div class="fact reveal">
             <h3>Flaky cases are marked</h3>
-            <p>Run all retries a failed case once. If it passes the second time, it is marked flaky.</p>
-          </li>
-          <li>
+            <p><a href="docs/guides/run#run-all">Run all</a> retries a failed case once. If it passes the second time, it is marked flaky.</p>
+          </div>
+          <div class="fact reveal">
             <h3>Reports and test case documents</h3>
-            <p>A run report is a single HTML file with its pictures inside. Test case documents export to Excel, HTML or Markdown.</p>
-          </li>
-          <li>
+            <p>A run report is a single HTML file with its pictures inside. <a href="docs/guides/test-case-documents">Test case documents</a> export to Excel, HTML or Markdown.</p>
+          </div>
+          <div class="fact reveal">
             <h3>Optional run videos</h3>
-            <p>Turn them on in Settings. Videos are made on your computer and are not uploaded.</p>
-          </li>
-        </ul>
+            <p><a href="docs/guides/run-video">Turn them on in Settings</a>. Videos are made on your computer and are not uploaded.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <section id="projects" class="section section-end">
+  <section id="projects" class="section">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head reveal">
         <h2>Works with logins and existing Maestro projects</h2>
       </div>
-      <div class="features">
-        <article class="feature">
-          <h3>Start past the login screen</h3>
-          <p>A setup block is a Maestro flow that gets the app ready, such as logging in. Make it once in the Blocks tab, by using the app or filling in a form, and anyone can drag it into a recording. Test users stay in <code>.env</code>, out of the case files.</p>
-          <figure class="shot">
-            <img class="only-light" src="img/block-mid-recording.webp" width="1480" height="1000" loading="lazy" alt="A setup block run in the middle of a recording on a real app, shown as a violet row among the recorded steps">
-            <img class="only-dark" src="img/block-mid-recording-dark.webp" width="1480" height="1000" loading="lazy" alt="A setup block run in the middle of a recording on a real app, shown as a violet row among the recorded steps">
-          </figure>
+      <div class="project-grid">
+
+        <article class="card bento bento-large reveal">
+          <div class="bento-stage" data-demo="blocks" aria-hidden="true">
+            <div class="vignette vignette-blocks">
+              <div class="mini-panel">
+                <p class="mini-heading">Setup blocks</p>
+                <div class="block-item">
+                  <span class="block-mark"><svg><use href="#i-puzzle"/></svg></span>
+                  <span class="block-name">Log in</span>
+                  <span class="mini-btn">Add</span>
+                </div>
+                <p class="mini-heading">Before recording</p>
+                <ol class="thread steps steps-mini">
+                  <li class="step is-start"><span class="mark"></span><span class="kind">start</span><span class="what"><span class="line"><span class="words">Start from a fresh start of com.example.agenda</span></span></span></li>
+                  <li class="step is-block"><span class="mark mark-block"><svg><use href="#i-puzzle"/></svg></span><span class="kind">block</span><span class="what"><span class="line"><span class="words">Log in</span></span><span class="test-user">Test user <span class="mini-select">Supervisor</span></span></span></li>
+                </ol>
+              </div>
+              <div class="phone phone-static phone-mini">
+                <div class="device">
+                  <div class="ag-status"><span>9:41</span><svg class="ag-status-icons"><use href="#i-ag-status"/></svg></div>
+                  <div class="ag-screen ag-home">
+                    <div class="ag-bar"><span class="ag-title">Today</span><svg class="ag-bar-icon"><use href="#i-ag-search"/></svg></div>
+                    <p class="ag-signed">Signed in as supervisor@example.com</p>
+                    <p class="ag-day">Wednesday 25 November</p>
+                    <ul class="ag-events">
+                      <li class="ag-request"><span class="ag-event">2 requests to approve</span></li>
+                      <li><span class="ag-event"><span class="ag-time">09:00</span><span class="ag-event-title">Team standup</span></span></li>
+                    </ul>
+                    <span class="ag-fab"><svg><use href="#i-ag-plus"/></svg></span>
+                  </div>
+                  <div class="ag-gesture"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bento-text">
+            <h3>Start past the login screen</h3>
+            <p><a href="docs/guides/setup-blocks">A setup block</a> is a Maestro flow that gets the app ready, such as logging in. Make it once in the Blocks tab, by using the app or filling in a form, and anyone can drag it into a recording. <a href="docs/guides/test-users">Test users</a> stay in <code>.env</code>, out of the case files.</p>
+          </div>
         </article>
-        <article class="feature">
-          <h3>Add Ariadne to a Maestro project</h3>
-          <p>Run <code>npx ariadne-studio init</code> in your repository. Your subflows become setup blocks and recorded cases land in <code>.maestro/recorded</code> as plain flows. Add <code>recorded/*</code> to <code>flows:</code> in <code>config.yaml</code> and workspace runs include them.</p>
-          <figure class="shot">
-            <img class="only-light" src="img/existing-project.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
-            <img class="only-dark" src="img/existing-project-dark.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
-          </figure>
+
+        <article class="card bento bento-large reveal">
+          <div class="bento-stage" data-demo="init">
+            <figure class="terminal" aria-label="What npx ariadne-studio init prints in a repository with a .maestro folder">
+              <div class="terminal-bar"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span><em aria-hidden="true">~/agenda-app</em></div>
+<pre class="terminal-body" data-typed><span class="t-cmd"><span class="t-prompt">$ </span>npx ariadne-studio init</span>
+<span class="t-out">Found a Maestro workspace in .maestro (6 flow files, most of them for com.example.agenda).
+
+  created .ariadne/
+  created .ariadne/project.json
+  created .ariadne/cases/
+  created .ariadne/.gitignore
+  created .maestro/recorded/
+
+  appId:  com.example.agenda
+  flows:  ../.maestro/recorded (recorded cases are written here)
+  blocks: ../.maestro/subflows
+
+Next: ariadne-studio</span></pre>
+            </figure>
+          </div>
+          <div class="bento-text">
+            <h3>Add Ariadne to a Maestro project</h3>
+            <p>Run <code>npx ariadne-studio init</code> in your repository. <a href="docs/guides/existing-maestro-project">Your subflows become setup blocks</a> and recorded cases land in <code>.maestro/recorded</code> as plain flows. Add <code>recorded/*</code> to <code>flows:</code> in <code>config.yaml</code> and workspace runs include them.</p>
+          </div>
         </article>
+
       </div>
     </div>
   </section>
 
-  <section id="faq" class="section section-end faq">
-    <div class="wrap faq-grid">
-      <div class="section-head faq-head">
-        <h2>Common questions</h2>
-        <p class="more"><a href="docs/faq/general">More questions in the docs</a></p>
+  <section id="footage" class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <h2>Filmed in the studio on Fossify Calendar</h2>
+        <p>One case, Create an event, recorded and run on an Android emulator.</p>
       </div>
-      <div class="faq-list">
+      <div class="viewer reveal" data-tabs>
+        <div class="tabs" role="tablist" aria-label="Footage">
+          <button type="button" role="tab" id="tab-recording" aria-controls="panel-recording" aria-selected="true">Recording</button>
+          <button type="button" role="tab" id="tab-run-video" aria-controls="panel-run-video" aria-selected="false" tabindex="-1">Run video</button>
+          <button type="button" role="tab" id="tab-failed" aria-controls="panel-failed" aria-selected="false" tabindex="-1">Failed run</button>
+          <button type="button" role="tab" id="tab-report" aria-controls="panel-report" aria-selected="false" tabindex="-1">Run report</button>
+          <button type="button" role="tab" id="tab-document" aria-controls="panel-document" aria-selected="false" tabindex="-1">Test case document</button>
+          <button type="button" role="tab" id="tab-project" aria-controls="panel-project" aria-selected="false" tabindex="-1">A Maestro project</button>
+        </div>
+        <div class="viewer-panels">
+          <div class="viewer-panel is-active" role="tabpanel" id="panel-recording" aria-labelledby="tab-recording">
+            <figure>
+              <div class="media">
+                <video muted loop playsinline controls preload="none" width="1280" height="864" data-video="record" aria-label="Ariadne Studio with a calendar app mirrored on an Android emulator. A new event is typed and saved, each action appears as a step with its selector, a check is added, and the finished case opens its Maestro YAML.">
+                  <source src="media/record.webm" type="video/webm">
+                  <source src="media/record.mp4" type="video/mp4">
+                </video>
+                <button type="button" class="video-toggle" hidden>Pause</button>
+              </div>
+              <figcaption>Ariadne Studio recording a case in Fossify Calendar on an Android emulator. Device waits are shortened.</figcaption>
+            </figure>
+          </div>
+          <div class="viewer-panel" role="tabpanel" id="panel-run-video" aria-labelledby="tab-run-video">
+            <figure>
+              <div class="media">
+                <video muted loop playsinline controls preload="none" width="1920" height="1080" data-video="run" aria-label="A run of the Create an event case. The case's steps fill the left of the frame and tick off one by one, while a calendar app on the right creates the Dentist event.">
+                  <source src="media/run.webm" type="video/webm">
+                  <source src="media/run.mp4" type="video/mp4">
+                </video>
+                <button type="button" class="video-toggle" hidden>Pause</button>
+              </div>
+              <figcaption>The video Ariadne saved when it ran that case.</figcaption>
+            </figure>
+          </div>
+          <div class="viewer-panel" role="tabpanel" id="panel-failed" aria-labelledby="tab-failed">
+            <figure>
+              <div class="media">
+                <img src="img/run-video-failed.webp" width="1920" height="1080" loading="lazy" alt="The last frame of a failed run video: the step that failed is marked with a cross and Maestro's message under it, the steps after it are marked not run, and the phone beside them shows the screen it stopped on">
+              </div>
+              <figcaption>The last frame of a failed run, with Maestro's message under the step and the screen it stopped on.</figcaption>
+            </figure>
+          </div>
+          <div class="viewer-panel" role="tabpanel" id="panel-report" aria-labelledby="tab-report">
+            <figure>
+              <div class="media">
+                <img src="img/run-report.png" width="1200" height="900" loading="lazy" alt="A run report page: the case name and when it ran, the screen at the moment it failed, and a table of the steps with each one's result, how long it took and its screens">
+              </div>
+              <figcaption>A run report is one HTML file with its pictures inside.</figcaption>
+            </figure>
+          </div>
+          <div class="viewer-panel" role="tabpanel" id="panel-document" aria-labelledby="tab-document">
+            <figure>
+              <div class="media">
+                <img src="img/test-case-document.png" width="1480" height="1000" loading="lazy" alt="A test case document in HTML: the case name and its last run, the preconditions, and a table of steps with the action, the expected result and a picture of the screen after each step">
+              </div>
+              <figcaption>A test case document exported to HTML, with a picture of the screen after each step.</figcaption>
+            </figure>
+          </div>
+          <div class="viewer-panel" role="tabpanel" id="panel-project" aria-labelledby="tab-project">
+            <figure>
+              <div class="media">
+                <img class="only-light" src="img/existing-project.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
+                <img class="only-dark" src="img/existing-project-dark.webp" width="1480" height="1000" loading="lazy" alt="Ariadne Studio open on an existing Maestro workspace, with its subflows and recorded flows listed in the Files column">
+              </div>
+              <figcaption>The studio open on an existing Maestro workspace, with its subflows and recorded flows in the Files column.</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="section">
+    <div class="wrap faq-grid">
+      <div class="faq-head reveal">
+        <h2>Common questions</h2>
+        <p><a class="link-arrow" href="docs/faq/general">More questions in the docs</a></p>
+      </div>
+      <div class="faq-list reveal">
         <details>
           <summary><span>Is this the same as <code>maestro record</code>?</span></summary>
           <div class="answer"><p>No. <code>maestro record</code> makes a video of a flow you already have. Ariadne writes the flow from your clicks. It can also save a <a href="docs/guides/run-video">video of each run</a>, with the steps beside the phone, made on your own computer.</p></div>
@@ -852,7 +770,7 @@ name: Create an event
         </details>
         <details>
           <summary><span>Where do the tests live?</span></summary>
-          <div class="answer"><p>In a folder you choose. <code>flows/</code> holds the Maestro YAML, <code>cases/</code> the recorded steps, <code>evidence/</code> their screenshots, <code>runs/</code> the results of every run and <code>exports/</code> the documents. The Files sidebar in the studio shows all of it.</p></div>
+          <div class="answer"><p><a href="docs/guides/project-files">In a folder you choose</a>. <code>flows/</code> holds the Maestro YAML, <code>cases/</code> the recorded steps, <code>evidence/</code> their screenshots, <code>runs/</code> the results of every run and <code>exports/</code> the documents. The Files sidebar in the studio shows all of it.</p></div>
         </details>
         <details>
           <summary><span>Can developers edit the YAML by hand?</span></summary>
@@ -870,36 +788,45 @@ name: Create an event
        GitHub release carrying Ariadne-Studio-<version>-linux-x86_64.AppImage. The link goes
        to the latest release page because the file name changes with every version. The
        downloadUrl in the JSON-LD at the top of this file points at the same page. -->
-  <section id="get-started" class="section">
-    <div class="wrap">
-      <div class="section-head">
-        <h2>Get started</h2>
-        <p>The desktop app and the command line use the same project folders, so people on a team can pick either.</p>
-      </div>
-      <div class="paths">
-        <div class="path">
-          <h3>Desktop app</h3>
-          <p>For Windows and Linux. Download it from the latest release and start it.</p>
-          <div class="actions">
-            <a class="btn btn-primary" href="https://github.com/sudo-ezekiel/ariadne-studio/releases/latest">Download</a>
+  <section id="get-started" class="section section-band">
+    <div class="band band-navy">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Get started</h2>
+          <p>The desktop app and the command line use the same project folders, so people on a team can pick either.</p>
+        </div>
+        <div class="start-grid">
+          <div class="start-panel reveal" data-tabs>
+            <div class="tabs tabs-on-navy" role="tablist" aria-label="Ways to install">
+              <button type="button" role="tab" id="tab-desktop" aria-controls="panel-desktop" aria-selected="true">Desktop app</button>
+              <button type="button" role="tab" id="tab-cli" aria-controls="panel-cli" aria-selected="false" tabindex="-1">Command line</button>
+            </div>
+            <div class="start-panels">
+              <div class="start-tab is-active" role="tabpanel" id="panel-desktop" aria-labelledby="tab-desktop">
+                <p>For Windows and Linux. Download it from the latest release and start it.</p>
+                <p><a class="btn btn-light" href="https://github.com/sudo-ezekiel/ariadne-studio/releases/latest">Download</a></p>
+                <p class="fine">Not code signed, so Windows warns on first start. The Windows app has not been tried with a phone yet. There is no macOS build yet.</p>
+              </div>
+              <div class="start-tab" role="tabpanel" id="panel-cli" aria-labelledby="tab-cli">
+                <p>On Linux, with Node 22.12 or newer:</p>
+                <div class="command command-on-navy">
+                  <code><span class="command-prompt" aria-hidden="true">$ </span>npx ariadne-studio</code>
+                  <button type="button" class="copy-btn" data-copy="npx ariadne-studio" aria-label="Copy the command"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span class="copy-done" aria-hidden="true">Copied</span></button>
+                </div>
+                <p>It opens the studio in your browser.</p>
+              </div>
+            </div>
           </div>
-          <p class="fine">Not code signed, so Windows warns on first start. The Windows app has not been tried with a phone yet. There is no macOS build yet.</p>
-        </div>
-        <div class="path">
-          <h3>Command line</h3>
-          <p>On Linux, with Node 22.12 or newer:</p>
-<pre><code>npx ariadne-studio</code></pre>
-          <p>It opens the studio in your browser.</p>
-        </div>
-        <div class="path path-needs">
-          <h3>You need</h3>
-          <ul class="needs-list">
-            <li>A booted emulator or a USB phone</li>
-            <li><code>adb</code></li>
-            <li>Java 17 or newer</li>
-            <li>The Maestro CLI</li>
-          </ul>
-          <p class="fine"><strong>Device setup</strong> in the studio checks <code>adb</code>, Java and Maestro, and walks you through what is missing. Run videos also need <code>ffmpeg</code> to show the steps. Without it they show only the phone.</p>
+          <div class="needs reveal">
+            <h3>You need</h3>
+            <ul class="checklist">
+              <li><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>A booted emulator or a USB phone</li>
+              <li><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg><code>adb</code></li>
+              <li><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>Java 17 or newer</li>
+              <li><svg class="i" aria-hidden="true"><use href="#i-tick"/></svg>The Maestro CLI</li>
+            </ul>
+            <p class="fine"><a href="docs/guides/install"><strong>Device setup</strong></a> in the studio checks <code>adb</code>, Java and Maestro, and walks you through what is missing. Run videos also need <code>ffmpeg</code> to show the steps. Without it they show only the phone.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -909,87 +836,46 @@ name: Create an event
 
 <footer class="site-footer">
   <div class="wrap">
-    <div class="footer-top">
-      <a class="brand" href="#top"><img src="img/icon.svg" width="24" height="24" loading="lazy" alt=""><span>Ariadne</span></a>
-      <span>Walk through your app once. Ariadne retraces your steps on every run.</span>
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top"><img src="img/icon.svg" width="28" height="28" loading="lazy" alt=""><span>Ariadne</span></a>
+        <p>Walk through your app once. Ariadne retraces your steps on every run.</p>
+      </div>
+      <nav class="footer-col" aria-labelledby="footer-guides">
+        <p class="footer-heading" id="footer-guides">Guides</p>
+        <ul>
+          <li><a href="docs/guides/recording">Recording</a></li>
+          <li><a href="docs/guides/run">Running cases</a></li>
+          <li><a href="docs/guides/test-case-documents">Test case documents</a></li>
+          <li><a href="docs/guides/existing-maestro-project">Existing Maestro projects</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-col" aria-labelledby="footer-docs">
+        <p class="footer-heading" id="footer-docs">Docs</p>
+        <ul>
+          <li><a href="docs/guides/introduction">Introduction</a></li>
+          <li><a href="docs/guides/install">Install</a></li>
+          <li><a href="docs/guides/first-case">Record your first case</a></li>
+          <li><a href="docs/guides/compare">Compare the tools</a></li>
+        </ul>
+      </nav>
+      <nav class="footer-col" aria-labelledby="footer-project">
+        <p class="footer-heading" id="footer-project">Project</p>
+        <ul>
+          <li><a href="https://github.com/sudo-ezekiel/ariadne-studio">GitHub</a></li>
+          <li><a href="https://github.com/sudo-ezekiel/ariadne-studio/releases">Releases</a></li>
+          <li><a href="https://github.com/sudo-ezekiel/ariadne-studio/blob/main/CHANGELOG.md">Changelog</a></li>
+          <li><a href="https://www.npmjs.com/package/ariadne-studio">npm</a></li>
+        </ul>
+      </nav>
     </div>
-    <!-- Replace the repository URL once the repo is published. -->
-    <ul class="footer-links">
-      <li><a href="docs/">Docs</a></li>
-      <li><a href="#faq">FAQ</a></li>
-      <li><a href="https://github.com/sudo-ezekiel/ariadne-studio">GitHub</a></li>
-    </ul>
-    <p class="trademark">Maestro is a trademark of mobile.dev. Ariadne is an independent tool and is not affiliated with mobile.dev.</p>
+    <div class="footer-legal">
+      <p>Apache-2.0 licence.</p>
+      <p>Maestro is a trademark of mobile.dev. Ariadne is an independent tool and is not affiliated with mobile.dev.</p>
+    </div>
   </div>
 </footer>
 
-<script>
-// The theme button. The choice is stored the way VitePress stores it, so the docs agree:
-// picking the theme the system already has stores 'auto', and the page follows the system again.
-(() => {
-  const KEY = 'vitepress-theme-appearance';
-  const root = document.documentElement;
-  const system = matchMedia('(prefers-color-scheme: dark)');
-  const toggle = document.querySelector('.theme-toggle');
-  const hero = document.querySelector('.hero-video');
-  let choice = 'auto';
-  try { choice = localStorage.getItem(KEY) || 'auto'; } catch {}
-  const apply = () => {
-    const theme = choice === 'light' || choice === 'dark' ? choice : system.matches ? 'dark' : 'light';
-    root.dataset.theme = theme;
-    toggle.title = `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`;
-    toggle.setAttribute('aria-label', toggle.title);
-    // Only this theme's sources may match. A video already loading the other theme starts again.
-    const sources = [...hero.querySelectorAll('source')];
-    for (const source of sources) source.media = source.dataset.for === theme ? '(prefers-reduced-motion: no-preference)' : 'not all';
-    const playing = sources.find((source) => source.src === hero.currentSrc);
-    if (playing && playing.dataset.for !== theme) hero.load();
-  };
-  toggle.addEventListener('click', () => {
-    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-    choice = next === (system.matches ? 'dark' : 'light') ? 'auto' : next;
-    // With storage off (some private windows) the choice lasts until reload.
-    try { localStorage.setItem(KEY, choice); } catch {}
-    apply();
-  });
-  system.addEventListener('change', apply);
-  // The docs open in the same browser, often in another tab.
-  addEventListener('storage', (event) => {
-    if (event.key !== KEY) return;
-    choice = event.newValue || 'auto';
-    apply();
-  });
-  apply();
-  toggle.hidden = false;
-})();
-
-// A looping video needs a way to stop it. With reduced motion no source matches, so there is nothing to play.
-(() => {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  for (const frame of document.querySelectorAll('.has-toggle')) {
-    const video = frame.querySelector('video');
-    const toggle = frame.querySelector('.video-toggle');
-    const autoplay = video.autoplay;
-    let paused = false;
-    toggle.hidden = false;
-    toggle.addEventListener('click', () => {
-      paused = !video.paused;
-      if (paused) video.pause();
-      else video.play();
-      // The theme button reloads the hero in the other theme; this keeps it paused or playing.
-      if (autoplay) video.autoplay = !paused;
-      toggle.textContent = paused ? 'Play' : 'Pause';
-    });
-    // The clip further down only loads and plays once it is in view.
-    if (video.classList.contains('clip')) {
-      new IntersectionObserver(([entry]) => {
-        if (paused) return;
-        if (entry.isIntersecting) video.play();
-        else video.pause();
-      }, { threshold: 0.4 }).observe(video);
-    }
-  }
-})();
-</script>
+<p class="sr-only" aria-live="polite" data-page-status></p>
 </body>
 </html>
